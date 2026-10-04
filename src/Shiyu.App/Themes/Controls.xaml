@@ -319,6 +319,13 @@
       Win11 语汇里读作"禁用"，§4.5）。焦点 = Accent 1 DIP 描边——文本
       输入的焦点态就是描边本身，不另画矩形环（Win11 习惯）。占位符走
       InputProps.Placeholder 附加属性，三套各自的浮层实现就此归一。
+
+      Padding 只用一次（用户实录 2026-10-05：光标落在占位字中间）：WPF 在
+      运行时把 TextBox 的 Padding 交给 PART_ContentHost（盖过模板里写的
+      本地值），正文在里面再缩进 2 DIP。模板若再拿 Padding 排一次版，正文
+      就比占位多缩进一个 Padding——所以模板不再用 Padding 排正文，占位照着
+      同样的两段（Padding + 2）走，光标正好落在占位第一个字前。
+      光标用 Accent：黑色 1 像素的光标贴着灰色占位字几乎看不见。
     -->
     <Style TargetType="TextBox">
         <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}"/>
@@ -327,7 +334,7 @@
         <Setter Property="Background" Value="{DynamicResource Brush.SurfaceInput}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.StrokeStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CaretBrush" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource Brush.Accent}"/>
         <Setter Property="SelectionBrush" Value="{DynamicResource Brush.Accent}"/>
         <Setter Property="MinHeight" Value="{DynamicResource Control.Height}"/>
         <Setter Property="Padding" Value="10,0"/>
@@ -339,16 +346,19 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}">
-                        <Grid Margin="{TemplateBinding Padding}">
+                        <Grid>
                             <!-- VerticalContentAlignment 直通 ScrollViewer：
-                                 单行居中、多行置顶由使用点声明。 -->
+                                 单行居中、多行置顶由使用点声明；占位跟着走，
+                                 多行框的占位与第一行对齐。 -->
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                            <TextBlock x:Name="Placeholder"
-                                       Text="{TemplateBinding local:InputProps.Placeholder}"
-                                       Foreground="{DynamicResource Brush.TextSecondary}"
-                                       IsHitTestVisible="False" Visibility="Collapsed"
-                                       VerticalAlignment="Center"/>
+                            <Border Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                <TextBlock x:Name="Placeholder" Margin="2,0,0,0"
+                                           Text="{TemplateBinding local:InputProps.Placeholder}"
+                                           Foreground="{DynamicResource Brush.TextSecondary}"
+                                           Visibility="Collapsed"
+                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -376,7 +386,7 @@
         <Setter Property="Background" Value="{DynamicResource Brush.SurfaceInput}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.StrokeStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CaretBrush" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource Brush.Accent}"/>
         <Setter Property="SelectionBrush" Value="{DynamicResource Brush.Accent}"/>
         <Setter Property="MinHeight" Value="{DynamicResource Control.Height}"/>
         <Setter Property="Padding" Value="10,0"/>
@@ -388,8 +398,8 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}">
+                        <!-- Padding 由 WPF 施加在正文上，模板不再用一次（见 TextBox 注释）。 -->
                         <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
-                                      Margin="{TemplateBinding Padding}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -412,8 +422,11 @@
       模式共用同一框）：高 32 真胶囊（圆角 = 高度/2 = Radius.Pill），
       左放大镜 16，占位次级色，聚焦描边转 Accent 1 DIP；右端可放
       键帽/清除钮（InputProps.RightGutter 让出文字空间）。
+      版式由模板里的放大镜与边距给出，Padding 归零：继承来的 10 会被 WPF
+      交给 PART_ContentHost，正文就比占位右移 12 DIP（见 TextBox 注释）。
     -->
     <Style x:Key="SearchBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Setter Property="Padding" Value="0"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
@@ -432,10 +445,12 @@
                             <Border DockPanel.Dock="Right" Width="{TemplateBinding local:InputProps.RightGutter}"/>
                             <Grid VerticalAlignment="Center" Margin="0,6,0,6">
                                 <ScrollViewer x:Name="PART_ContentHost" Focusable="False"/>
-                                <TextBlock x:Name="Placeholder"
-                                           Text="{TemplateBinding local:InputProps.Placeholder}"
-                                           Foreground="{DynamicResource Brush.TextSecondary}"
-                                           IsHitTestVisible="False" Visibility="Collapsed"/>
+                                <Border Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                    <TextBlock x:Name="Placeholder" Margin="2,0,0,0"
+                                               Text="{TemplateBinding local:InputProps.Placeholder}"
+                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                               Visibility="Collapsed"/>
+                                </Border>
                             </Grid>
                         </DockPanel>
                     </Border>
@@ -464,14 +479,18 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}">
-                        <Grid Margin="{TemplateBinding Padding}">
+                        <!-- Padding 只交给 WPF 施加在正文上（见 TextBox 注释）；
+                             单位后缀借同一个 Padding 退开右缘。 -->
+                        <Grid>
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="UnitLabel" Text="{TemplateBinding Unit}"
-                                       Foreground="{DynamicResource Brush.TextSecondary}"
-                                       Margin="8,0,0,0" HorizontalAlignment="Right"
-                                       VerticalAlignment="Center" IsHitTestVisible="False"/>
+                            <Border Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                <TextBlock x:Name="UnitLabel" Text="{TemplateBinding Unit}"
+                                           Foreground="{DynamicResource Brush.TextSecondary}"
+                                           Margin="8,0,0,0" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center"/>
+                            </Border>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>

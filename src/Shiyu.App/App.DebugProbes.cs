@@ -1,5 +1,11 @@
 #if DEBUG
 using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Shiyu.App;
 
@@ -73,6 +79,107 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 caret（用户实录 2026-10-05：空搜索框里光标落在占位第一、二个字
+    /// 之间，而且不明显）。WPF 在运行时把 TextBox 的 Padding 交给 PART_ContentHost，
+    /// 正文再缩进 2 DIP；模板若再拿 Padding 排一次，正文就比占位多缩进一个 Padding。
+    /// 打开窄条、管理窗、设置（快捷键页：空框有「未设置」占位）和一扇样张窗
+    /// （密码框、数字框、多行框），逐框把几何写进 caret.log，探针脚本据此判定。
+    /// </summary>
+    private async void ProbeCaretGeometry(AppShell shell)
+    {
+        shell.ToggleBar?.Invoke();
+        shell.ShowLibrary?.Invoke();
+        _modules!.Settings.ShowAt("hotkey.capture");
+
+        var samples = new StackPanel { Margin = new Thickness(16) };
+        samples.Children.Add(new PasswordBox { Password = "probe" });
+        var number = new NumberBox { Unit = "ms", Text = "500", Margin = new Thickness(0, 8, 0, 8) };
+        number.SetResourceReference(FrameworkElement.StyleProperty, "NumberBox");
+        samples.Children.Add(number);
+        var multiLine = new TextBox
+        {
+            AcceptsReturn = true,
+            Height = 90,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalContentAlignment = VerticalAlignment.Top,
+            Padding = new Thickness(10, 6, 10, 6),
+        };
+        InputProps.SetPlaceholder(multiLine, "probe placeholder");
+        samples.Children.Add(multiLine);
+        new Window
+        {
+            Title = "caret-samples",
+            Width = 420,
+            Height = 320,
+            Left = 40,
+            Top = 40,
+            ShowActivated = false,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Content = samples,
+        }.Show();
+
+        for (var round = 0; round < 6; round++)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        var accent = (FindResource("Brush.Accent") as SolidColorBrush)?.Color;
+        var searchStyle = FindResource("SearchBox");
+        var log = new StringBuilder();
+        void Line(Window window, string kind, bool empty, Rect caret, Point placeholder, double origin, Thickness border, Thickness padding, Brush caretBrush)
+            => log.AppendLine(FormattableString.Invariant(
+                $"box|{window.GetType().Name}|{kind}|empty={empty}|caret={caret.X:F1},{caret.Y:F1}|placeholder={placeholder.X:F1},{placeholder.Y:F1}|origin={origin:F1}|expect={border.Left + padding.Left + 2:F1}|accent={(caretBrush as SolidColorBrush)?.Color == accent}"));
+
+        foreach (Window window in Windows)
+        {
+            foreach (var box in Descendants(window).OfType<TextBox>())
+            {
+                var hasPlaceholder = !string.IsNullOrEmpty(InputProps.GetPlaceholder(box));
+                if ((!hasPlaceholder && box is not NumberBox) || !box.IsVisible || box.Template is null)
+                {
+                    continue;
+                }
+
+                var caret = box.GetRectFromCharacterIndex(0);
+                var shown = box.Template.FindName("Placeholder", box) as FrameworkElement;
+                var empty = hasPlaceholder && box.Text.Length == 0 && shown is { IsVisible: true };
+                var at = empty ? shown!.TranslatePoint(new Point(0, 0), box) : new Point(double.NaN, double.NaN);
+                var kind = box.Style == searchStyle ? "SearchBox" : box.GetType().Name;
+                Line(window, kind, empty, caret, at, caret.X, box.BorderThickness, box.Padding, box.CaretBrush);
+            }
+
+            foreach (var box in Descendants(window).OfType<PasswordBox>())
+            {
+                if (!box.IsVisible || box.Template is null)
+                {
+                    continue;
+                }
+
+                // No caret query on a PasswordBox: where its render scope starts is where the text does.
+                var host = box.Template.FindName("PART_ContentHost", box) as ScrollViewer;
+                var origin = (host?.Content as FrameworkElement)?.TranslatePoint(new Point(0, 0), box).X ?? double.NaN;
+                Line(window, "PasswordBox", false, Rect.Empty, new Point(double.NaN, double.NaN), origin, box.BorderThickness, box.Padding, box.CaretBrush);
+            }
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "caret.log"), log.ToString());
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var deeper in Descendants(child))
+            {
+                yield return deeper;
+            }
+        }
+    }
+
+    /// <summary>
     /// 探针的呼出通道（票 15）：热键一颗都没注册，所以窗口只能这样开——
     /// <c>SHIYU_PROBE_CMD=bar|panel|library|settings|quickbar|reverse</c> 启动即直接
     /// 显示对应窗口，走的是和热键完全相同的内部方法。
@@ -96,6 +203,11 @@ public partial class App
         {
             case "bar":
                 shell.ToggleBar?.Invoke();
+                break;
+
+            // 光标与占位同一起点、光标用 Accent（用户实录 2026-10-05）。
+            case "caret":
+                ProbeCaretGeometry(shell);
                 break;
 
             // 把列表翻到底后重开、外部写、粘贴呼出：都必须回到最新的那条
