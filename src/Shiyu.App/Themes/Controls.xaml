@@ -310,6 +310,55 @@
         </Setter>
     </Style>
 
+    <!--
+      ToolTip（隐式，用户需求 2026-10-05）：全应用的悬停提示换成拾语自己的样子——
+      小圆角（Radius.Control）、LayerFlyout 底 + Border 1 DIP 描边、Type.Caption 正文色字；
+      颜色全走 DynamicResource，浅色/深色主题随换随变。长句在 320 DIP 处折行。
+      系统投影是方的，关掉，自己在背后垫一层柔和投影（ToolTip 的弹出层本来就允许
+      透明，外围留 8 DIP 给它；投影画在单独一层，不罩住文字）。托盘图标的悬停文字由
+      Windows 自己画，不在此列。
+    -->
+    <Style TargetType="ToolTip">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="{DynamicResource Type.Caption}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.LayerFlyout}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Grid Margin="8">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource Radius.Control}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Direction="270"
+                                                  Color="#000000" Opacity="0.16"/>
+                            </Border.Effect>
+                        </Border>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource Radius.Control}"
+                                Padding="{TemplateBinding Padding}"
+                                MaxWidth="320">
+                            <ContentPresenter>
+                                <ContentPresenter.Resources>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- =====================================================================
          输入族。
          ===================================================================== -->
@@ -412,6 +461,34 @@
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      SelectableText（用户需求 2026-10-05：反向输入框的译文能用鼠标选取复制）：
+      读起来就是一段字——只读 TextBox 去掉框与底，鼠标拖选、Ctrl+C、右键菜单都是
+      TextBox 自带的。正文的 2 DIP 内缩是 WPF 自己加的（见 TextBox 注释），用的地方
+      左边距少给 2，与同位置的 TextBlock 对齐。
+    -->
+    <Style x:Key="SelectableText" TargetType="TextBox">
+        <Setter Property="IsReadOnly" Value="True"/>
+        <Setter Property="IsReadOnlyCaretVisible" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Disabled"/>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

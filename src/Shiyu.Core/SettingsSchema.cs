@@ -294,6 +294,12 @@ public static class SettingsSchema
                     Keywords: ["提示词", "prompt", "模板", "口语", "正式", "优化", "vibe coding", "润色", "风格", "语气", "人设", "反向输入", "输入框默认"],
                     Icon: "E70F",
                     FullBleed: true)),
+            new SettingsSection("translate.results", "译文",
+                new SettingsItem(
+                    "translate.auto-copy", "自动复制译文", SettingsControl.Toggle,
+                    Hint: "翻译完成后，译文自动复制到剪贴板并存入历史，在窄条里就能找到。反向输入框贴回后，译文也留在剪贴板上，不再还原成原来的内容。提示词优化的结果不在此列。",
+                    Keywords: ["译文", "复制", "自动", "剪贴板", "历史", "窄条", "保存", "存入", "反向输入"],
+                    Icon: "E8C8")),
             new SettingsSection("translate.trigger", "拖选",
                 new SettingsItem(
                     "hotkeys.selection-badge", "拖选后出翻译徽标", SettingsControl.Toggle,

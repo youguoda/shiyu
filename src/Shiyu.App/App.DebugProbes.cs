@@ -166,6 +166,79 @@ public partial class App
         File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "caret.log"), log.ToString());
     }
 
+    /// <summary>
+    /// 探针命令 tooltip（用户需求 2026-10-05：全应用的悬停提示换成拾语的样式——小圆角、
+    /// 跟随浅色/深色主题）。在设置窗里挑提示文字最长的那个元素，照它的提示开一个真的
+    /// ToolTip（不动鼠标），量外观；再把主题切到深色量一次——颜色走 DynamicResource
+    /// 才会跟着变。两次各渲一张 PNG 进数据目录，供人眼看。
+    /// </summary>
+    private async void ProbeTooltipLook(AppShell shell)
+    {
+        _modules!.Settings.Show();
+        for (var round = 0; round < 6; round++)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        var log = new StringBuilder();
+        var target = Windows.OfType<SettingsWindow>()
+            .SelectMany(window => Descendants(window).OfType<FrameworkElement>())
+            .Where(element => element.IsVisible && element.ToolTip is string)
+            .OrderByDescending(element => ((string)element.ToolTip).Length)
+            .FirstOrDefault();
+
+        if (target is not null)
+        {
+            var tip = new ToolTip
+            {
+                Content = target.ToolTip,
+                PlacementTarget = target,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            };
+            tip.IsOpen = true;
+
+            async Task Note(string phase)
+            {
+                for (var round = 0; round < 6; round++)
+                {
+                    await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                }
+
+                // The face is the bordered layer; the shadow layer behind it has no stroke.
+                var face = Descendants(tip).OfType<Border>().FirstOrDefault(border => border.BorderThickness.Left > 0);
+                string Hex(object? brush) => (brush as SolidColorBrush)?.Color.ToString() ?? "none";
+                log.AppendLine(FormattableString.Invariant(
+                    $"tip|{phase}|bg={Hex(face?.Background)}|bgExpect={Hex(FindResource("Brush.LayerFlyout"))}|stroke={Hex(face?.BorderBrush)}|strokeExpect={Hex(FindResource("Brush.Border"))}|radius={face?.CornerRadius.TopLeft}|radiusExpect={((CornerRadius)FindResource("Radius.Control")).TopLeft}|font={tip.FontSize}|fontExpect={FindResource("Type.Caption")}|systemShadow={tip.HasDropShadow}|width={tip.ActualWidth:F0}"));
+
+                var scale = 1.5;
+                var width = Math.Max(1, tip.ActualWidth);
+                var height = Math.Max(1, tip.ActualHeight);
+                var sheet = new DrawingVisual();
+                using (var context = sheet.RenderOpen())
+                {
+                    context.DrawRectangle((Brush)FindResource("Brush.Background"), null, new Rect(0, 0, width, height));
+                    context.DrawRectangle(new VisualBrush(tip), null, new Rect(0, 0, width, height));
+                }
+
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+                bitmap.Render(sheet);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var stream = File.Create(Path.Combine(DebugOverrides.ProbeDirectory!, $"tooltip-{phase}.png"));
+                encoder.Save(stream);
+            }
+
+            await Note("light");
+            shell.TryUpdateSettings(settings => settings with { Theme = Shiyu.Core.AppTheme.Dark });
+            await Note("dark");
+            tip.IsOpen = false;
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "tooltip.log"), log.ToString());
+    }
+
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
@@ -208,6 +281,18 @@ public partial class App
             // 光标与占位同一起点、光标用 Accent（用户实录 2026-10-05）。
             case "caret":
                 ProbeCaretGeometry(shell);
+                break;
+
+            // 悬停提示是拾语的样子、跟随主题（用户需求 2026-10-05）。
+            case "tooltip":
+                ProbeTooltipLook(shell);
+                break;
+
+            // 反向输入框的译文能用鼠标选取复制（用户需求 2026-10-05）。配 SHIYU_FAKE_BACKEND=1。
+            case "reverse-select":
+                // Long enough to wrap: the line pitch is only measurable on two lines.
+                _modules!.ReverseInput.ProbeSelectableOutput(
+                    "hello probe, this sentence runs long enough to wrap onto a second line of the reverse box");
                 break;
 
             // 把列表翻到底后重开、外部写、粘贴呼出：都必须回到最新的那条

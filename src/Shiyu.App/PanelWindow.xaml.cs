@@ -126,6 +126,9 @@ public partial class PanelWindow : Window
     private readonly Func<ITranslationBackend> _backend;
     private readonly Action<string, string>? _saveTranslation;
 
+    /// <summary>不出声地存一条译文（「自动复制译文」用）：返回是否真的写了新条目。</summary>
+    private readonly Func<string, string, bool>? _keepTranslation;
+
     /// <summary>按选中文本现造词典端口；null 表示这段文本不吃词典卡。</summary>
     private readonly Func<string, IDictionaryApi?>? _dictionary;
 
@@ -204,7 +207,8 @@ public partial class PanelWindow : Window
         SpeechSynthesis? speech = null,
         Func<bool>? backendReady = null,
         Action? openSettings = null,
-        Func<bool>? enableFreeEngine = null)
+        Func<bool>? enableFreeEngine = null,
+        Func<string, string, bool>? keepTranslation = null)
     {
         InitializeComponent();
 
@@ -212,6 +216,7 @@ public partial class PanelWindow : Window
         _clipboard = clipboard;
         _backend = backend;
         _saveTranslation = saveTranslation;
+        _keepTranslation = keepTranslation;
         _dictionary = dictionary;
         _speech = speech;
         _backendReady = backendReady;
@@ -469,7 +474,33 @@ public partial class PanelWindow : Window
 
             UpdateFooterState();
             UpdateHint();
+
+            // 「自动复制译文」（用户需求 2026-10-05）：只在一次翻译真正译完时——失败、取消、
+            // 提示词优化之类改写类的结果都不算。放在 UpdateFooterState 之后：它会把按钮
+            // 改成"已复制/已存入"，不能再被刷回去。
+            if (session.State == TranslationState.Finished
+                && template.Kind == PromptTemplateKind.Translate
+                && _settings.AutoCopyTranslation)
+            {
+                AutoKeep(session.Text);
+            }
         });
+    }
+
+    /// <summary>
+    /// 译完即复制并存入历史，按钮的样子与手动点过一样：复制钮短暂说「已复制」，存入钮
+    /// 变成「已存入」——再点也不会存第二条（翻译模块也会挡掉与最新一条相同的重复）。
+    /// </summary>
+    private void AutoKeep(string translated)
+    {
+        if (translated.Trim().Length == 0)
+        {
+            return;
+        }
+
+        CopyTranslation();
+        _keepTranslation?.Invoke(_original, translated);
+        MarkSaved();
     }
 
     /// <summary>
@@ -949,6 +980,12 @@ public partial class PanelWindow : Window
         }
 
         _saveTranslation(_original, translated);
+        MarkSaved();
+    }
+
+    /// <summary>存入钮落定为「已存入」：手动点与自动复制译文共用。</summary>
+    private void MarkSaved()
+    {
         SaveButton.IsEnabled = false;
         SaveLabel.Text = "已存入";
         // 票 27：轻反馈让屏幕阅读器也听见（Polite——不打断）。
@@ -956,7 +993,10 @@ public partial class PanelWindow : Window
         AutomationProperties.SetLiveSetting(SaveButton, AutomationLiveSetting.Polite);
     }
 
-    private void OnCopy(object sender, RoutedEventArgs e)
+    private void OnCopy(object sender, RoutedEventArgs e) => CopyTranslation();
+
+    /// <summary>复制当前译文并让复制钮说一会儿真话：手动点与自动复制译文共用。</summary>
+    private void CopyTranslation()
     {
         if (_session is null || _session.Text.Length == 0)
         {

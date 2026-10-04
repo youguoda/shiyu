@@ -80,7 +80,10 @@ internal sealed class TranslationModule
                 // 引导卡上的「用免费引擎」（票 41）：点击就是同意，在最新设置上增量写一项；
                 // 写失败时 TryUpdateSettings 已向托盘说了人话，翻译方式没变，返回 false。
                 enableFreeEngine: () => shell.TryUpdateSettings(
-                    latest => latest with { TranslationBackend = TranslationBackendKind.Free }));
+                    latest => latest with { TranslationBackend = TranslationBackendKind.Free }),
+
+                // 「自动复制译文」（用户需求 2026-10-05）：译完即存，不出声。
+                keepTranslation: KeepTranslation);
             await _panel.TranslateAsync(text, Displayed);
         }
         catch (Exception failure)
@@ -149,25 +152,48 @@ internal sealed class TranslationModule
                 TimeSpan.FromSeconds(8));
 
     /// <summary>
-    /// Files a kept translation. The link is made only when the original was
-    /// itself recorded — a selection captured straight off the screen never
-    /// entered history, and inventing a link would be pointing at nothing.
+    /// The panel's 「存入历史」: files the translation and says so once.
     /// </summary>
     public void SaveTranslationToHistory(string original, string translated)
     {
-        var shell = _shell!;
-
-        if (shell.Pipeline is null)
+        if (_shell!.Pipeline is null)
         {
             return;
+        }
+
+        KeepTranslation(original, translated);
+        _shell.TellUser("译文已存入历史。");
+    }
+
+    /// <summary>
+    /// Files a kept translation, silently — 「自动复制译文」 keeps every result
+    /// (用户需求 2026-10-05), and a sentence each time would be noise. The link
+    /// is made only when the original was itself recorded — a selection captured
+    /// straight off the screen never entered history, and inventing a link
+    /// would be pointing at nothing. A result identical to the newest entry is
+    /// not filed twice: switching template or retrying can land the same text
+    /// again, and the auto path plus a later click on the button would too.
+    /// </summary>
+    /// <returns>Whether a new entry was written.</returns>
+    public bool KeepTranslation(string original, string translated)
+    {
+        var shell = _shell!;
+
+        if (shell.Pipeline is null || string.IsNullOrWhiteSpace(translated))
+        {
+            return false;
+        }
+
+        if (shell.Store.MostRecent() is { Kind: EntryKind.Text } newest && newest.Text == translated)
+        {
+            return false;
         }
 
         var linked = shell.Store.Recent(limit: 200)
             .FirstOrDefault(entry => entry.Text == original && entry.TranslatedFrom is null)
             ?.Id;
 
-        shell.Pipeline.RecordTranslation(translated, linked);
-        shell.TellUser("译文已存入历史。");
+        return shell.Pipeline.RecordTranslation(translated, linked);
     }
 
     /// <summary>面板先关，朗读服务随行——原 OnExit 中间的两步。</summary>

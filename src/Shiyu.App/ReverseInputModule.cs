@@ -24,6 +24,22 @@ internal sealed class ReverseInputModule
         shell.SettingsChanged += settings => _window?.ApplySettings(settings);
     }
 
+#if DEBUG
+    /// <summary>探针命令 reverse-select 的入口（见 ReverseInputWindow.ProbeSelectableOutput）。</summary>
+    internal async void ProbeSelectableOutput(string text)
+    {
+        Show();
+        if (_window is null)
+        {
+            return;
+        }
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = await _window.ProbeSelectableOutput(text, System.IO.Path.Combine(directory, "reverse-select.png"));
+        System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "reverse-select.log"), log + "done" + Environment.NewLine);
+    }
+#endif
+
     /// <summary>
     /// 热键、托盘与探针共用的呼出。装配守卫同窄条：没有可写剪贴板与取词平台时，回贴无从谈起，安静返回。
     /// 一切失败都收敛成一句托盘提示——热键处理器里逃出去的异常不该带走进程。
@@ -44,7 +60,9 @@ internal sealed class ReverseInputModule
                 BuildBackend,
                 new ReversePaste(new WindowsReversePasteClipboard(shell.MessageWindow, shell.Writer), shell.Capture),
                 () => shell.OpenSettingsAt?.Invoke("service.preset"),
-                shell.TellUser);
+                shell.TellUser,
+                // 「自动复制译文」（用户需求 2026-10-05）：经 shell 找翻译模块存，与面板同一处。
+                (original, translated) => shell.KeepTranslation?.Invoke(original, translated));
             _window.Summon();
         }
         catch (Exception failure)

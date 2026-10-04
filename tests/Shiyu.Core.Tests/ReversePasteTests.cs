@@ -139,6 +139,20 @@ public class ReversePasteTests
     }
 
     [Fact]
+    public void With_auto_copy_on_the_translation_stays_and_no_restore_is_scheduled()
+    {
+        // 用户需求 2026-10-05「自动复制译文」：贴完译文留在剪贴板上——它成了用户要
+        // 留下的东西，不再是用完即还的运输。
+        var rig = new Rig();
+
+        var result = rig.Paste.Send("[EN] 你好", keep: true);
+
+        Assert.Equal(ReversePasteOutcome.Pasted, result.Outcome);
+        Assert.Null(result.Pending);
+        Assert.Equal("[EN] 你好", rig.Clipboard.Current);
+    }
+
+    [Fact]
     public void The_clipboard_is_put_back_when_nothing_touched_it_meanwhile()
     {
         var rig = new Rig();

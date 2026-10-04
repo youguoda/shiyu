@@ -184,6 +184,19 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void The_auto_copy_switch_is_off_until_the_user_turns_it_on()
+    {
+        // 「自动复制译文」会改写用户的剪贴板：升级上来的设置文件没有这一项，必须读成关。
+        Assert.True(AppSettings.TryParse("{}", out var fresh));
+        Assert.False(fresh.AutoCopyTranslation);
+
+        Assert.True(AppSettings.TryParse(
+            System.Text.Json.JsonSerializer.Serialize(new AppSettings { AutoCopyTranslation = true }),
+            out var on));
+        Assert.True(on.AutoCopyTranslation);
+    }
+
+    [Fact]
     public void The_hover_preview_switch_defaults_on_and_round_trips()
     {
         Assert.True(AppSettings.TryParse("{}", out var fresh));

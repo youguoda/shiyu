@@ -92,6 +92,13 @@ internal sealed class AppShell
     public Action<string, Action?>? ShowPanel { get; set; }
 
     public Action<string, DeferredCapture?>? ShowBadge { get; set; }
+
+    /// <summary>
+    /// 不出声地存一条译文（原文、译文）：「自动复制译文」开着时反向输入框贴回后用
+    /// （用户需求 2026-10-05）。存法与面板「存入历史」同一处（翻译模块）。
+    /// </summary>
+    public Action<string, string>? KeepTranslation { get; set; }
+
     public Action<string>? OpenSettingsAt { get; set; }
     public Action? ShowLibrary { get; set; }
     public Action? ShowSettings { get; set; }

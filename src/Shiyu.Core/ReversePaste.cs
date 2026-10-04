@@ -48,7 +48,7 @@ public readonly record struct SettleResult(RestoreVerdict Verdict, bool Restored
 /// 前台窗口的恢复（<c>ForegroundWindow</c>）在它之前、由界面做；发键复用窄条粘贴模式那条路
 /// （<see cref="SelectionCapture.PasteCurrentClipboard"/>——已经处理了修饰键残留）。
 /// 窄条粘贴不还原，因为把内容留在剪贴板上是剪贴板管理器的本分；这里的结果只是"运输"，
-/// 不该占掉用户原来的剪贴板。
+/// 不该占掉用户原来的剪贴板——除非用户开了「自动复制译文」，见 <see cref="Send"/> 的 keep。
 /// </summary>
 public sealed class ReversePaste(IReversePasteClipboard clipboard, SelectionCapture capture)
 {
@@ -58,7 +58,11 @@ public sealed class ReversePaste(IReversePasteClipboard clipboard, SelectionCapt
     /// </summary>
     public static readonly TimeSpan RestoreDelay = TimeSpan.FromMilliseconds(400);
 
-    public ReversePasteResult Send(string text)
+    /// <param name="keep">
+    /// 「自动复制译文」开着（用户需求 2026-10-05）：贴完之后译文留在剪贴板上，不安排还原——
+    /// 此时它不再只是"运输"，而是用户要留下的东西。写入失败时的立刻还原照旧。
+    /// </param>
+    public ReversePasteResult Send(string text, bool keep = false)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -91,7 +95,7 @@ public sealed class ReversePaste(IReversePasteClipboard clipboard, SelectionCapt
 
         return new ReversePasteResult(
             ReversePasteOutcome.Pasted,
-            backup is null ? null : new PendingRestore(backup, sequence));
+            keep || backup is null ? null : new PendingRestore(backup, sequence));
     }
 
     /// <summary>

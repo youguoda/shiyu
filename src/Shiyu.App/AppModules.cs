@@ -56,6 +56,7 @@ internal sealed class AppModules
         shell.TranslateClipboard = modules.Selection.TranslateClipboard;
         shell.ShowReverseInput = modules.ReverseInput.Show;
         shell.ShowPanel = modules.Translation.ShowPanel;
+        shell.KeepTranslation = (original, translated) => modules.Translation.KeepTranslation(original, translated);
         shell.ShowBadge = modules.Selection.ShowBadge;
         shell.DragSelected = modules.Selection.OnDragSelected;
         shell.OpenSettingsAt = modules.Settings.ShowAt;

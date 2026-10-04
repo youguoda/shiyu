@@ -59,12 +59,16 @@ internal partial class ReverseInputWindow : Window
     private PendingRestore? _pendingRestore;
     private Popup? _templateList;
 
+    /// <summary>不出声地存一条译文（原文、译文）：「自动复制译文」开着时贴回后用。</summary>
+    private readonly Action<string, string>? _keepTranslation;
+
     public ReverseInputWindow(
         AppSettings settings,
         Func<ITranslationBackend> backend,
         ReversePaste paste,
         Action openSettings,
-        Action<string> tell)
+        Action<string> tell,
+        Action<string, string>? keepTranslation = null)
     {
         InitializeComponent();
 
@@ -73,6 +77,7 @@ internal partial class ReverseInputWindow : Window
         _paste = paste;
         _openSettings = openSettings;
         _tell = tell;
+        _keepTranslation = keepTranslation;
         _template = PromptTemplates.ResolveReverseDefault(settings);
 
         Backdrop.AttachShell(this, Shell, () => BackdropKind.Acrylic);
@@ -420,6 +425,15 @@ internal partial class ReverseInputWindow : Window
         // 而不是上一次的译文。
         FlushPendingRestore();
 
+        // 「自动复制译文」（用户需求 2026-10-05）：只管翻译——看实际发给后端的模板，改写类
+        // （提示词优化等）的结果照旧只是运输。开着时译文不出声地存入历史（窄条里就能找到），
+        // 贴完也留在剪贴板上、不还原。贴不贴得成都存：用户要的是这段译文。
+        var keep = _settings.AutoCopyTranslation && _session.Template.Kind == PromptTemplateKind.Translate;
+        if (keep)
+        {
+            _keepTranslation?.Invoke(_session.Text, text);
+        }
+
         if (target.IsSomething && !target.Restore())
         {
             _tell(_paste.Leave(text)
@@ -428,7 +442,7 @@ internal partial class ReverseInputWindow : Window
             return;
         }
 
-        var result = _paste.Send(text);
+        var result = _paste.Send(text, keep);
         switch (result.Outcome)
         {
             case ReversePasteOutcome.ClipboardUnavailable:
@@ -504,14 +518,28 @@ internal partial class ReverseInputWindow : Window
         OutputText.Inlines.Clear();
         var output = _session.Output;
 
-        if (output.Length > 0)
+        // 旧输出淡显：次级色（读得清、又明显不是"现在的答案"）。
+        var foreground = _session.OutputFaded ? "Brush.TextSecondary" : "Brush.Text";
+
+        // 结算之后换成可选取的 OutputBox（用户需求 2026-10-05：译文能用鼠标选取复制）。
+        // 流式中仍画 TextBlock——光标块只能内联在它里面，流着的字也没人去选。
+        var selectable = !_session.Running && output.Length > 0;
+
+        if (output.Length > 0 && !selectable)
         {
-            // 旧输出淡显：次级色（读得清、又明显不是"现在的答案"）。
             var run = new Run(output);
-            run.SetResourceReference(
-                TextElement.ForegroundProperty, _session.OutputFaded ? "Brush.TextSecondary" : "Brush.Text");
+            run.SetResourceReference(TextElement.ForegroundProperty, foreground);
             OutputText.Inlines.Add(run);
         }
+
+        // 同一段字不重设：每次状态变化都会走到这里，重设会抹掉用户正在拖的选区。
+        if (selectable && OutputBox.Text != output)
+        {
+            OutputBox.Text = output;
+        }
+
+        OutputBox.SetResourceReference(ForegroundProperty, foreground);
+        OutputBox.Visibility = selectable ? Visibility.Visible : Visibility.Collapsed;
 
         if (_session.Running)
         {
@@ -546,7 +574,9 @@ internal partial class ReverseInputWindow : Window
             ErrorActions.Visibility = Visibility.Collapsed;
         }
 
-        OutputScroll.Visibility = OutputText.Visibility == Visibility.Visible || failed
+        OutputScroll.Visibility = OutputText.Visibility == Visibility.Visible
+            || OutputBox.Visibility == Visibility.Visible
+            || failed
             ? Visibility.Visible
             : Visibility.Collapsed;
 

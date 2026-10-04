@@ -41,7 +41,10 @@
 
             <!-- 输出：译文 / 整理好的提示词（18/31，第一视觉位）。等新结果期间旧输出淡显，
                  流式中尾部挂静态 accent 光标块（2×18，与面板同一个，票 22；不另做闪烁动画）。
-                 失败态用 TranslationUserErrorMapper 的人话（与面板一致），并附"去设置"。 -->
+                 失败态用 TranslationUserErrorMapper 的人话（与面板一致），并附"去设置"。
+                 结算之后换成 OutputBox：同样的字、同样的位置，能用鼠标选取、Ctrl+C 复制
+                 （用户需求 2026-10-05）；流式中仍是 TextBlock——光标块只能内联在它里面，
+                 流着的字也没人去选。 -->
             <ScrollViewer x:Name="OutputScroll" Margin="0,8,0,0" MaxHeight="520"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Visibility="Collapsed">
@@ -51,6 +54,13 @@
                                LineHeight="{DynamicResource Line.Content}"
                                LineStackingStrategy="BlockLineHeight"
                                TextWrapping="Wrap"/>
+                    <!-- 左边距 2 = TextBlock 的 4 减去 WPF 给 TextBox 正文加的 2 DIP 内缩。 -->
+                    <TextBox x:Name="OutputBox" Style="{DynamicResource SelectableText}"
+                             Margin="2,0" Visibility="Collapsed"
+                             FontSize="{DynamicResource Type.Content}"
+                             TextBlock.LineHeight="{DynamicResource Line.Content}"
+                             TextBlock.LineStackingStrategy="BlockLineHeight"
+                             AutomationProperties.Name="译文（可选取复制）"/>
                     <local:InfoBar x:Name="ErrorBar" Visibility="Collapsed"
                                    Severity="Danger" IsClosable="False"/>
                     <StackPanel x:Name="ErrorActions" Visibility="Collapsed" Orientation="Horizontal"

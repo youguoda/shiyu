@@ -200,6 +200,14 @@ public sealed record AppSettings
     /// </summary>
     public bool BarCardTooltips { get; init; } = true;
 
+    /// <summary>
+    /// 自动复制译文（用户需求 2026-10-05）：一次翻译结算后，译文自动上剪贴板并存入历史，
+    /// 在窄条里就能找到——面板译完即存；反向输入框贴回后译文留在剪贴板上，不再还原成
+    /// 原来的内容。只管翻译：提示词优化等改写类的结果照旧只是"运输"。默认关：自动改写
+    /// 用户的剪贴板，得由用户自己点头。
+    /// </summary>
+    public bool AutoCopyTranslation { get; init; }
+
     /// <summary>Set once the first-run guide has run or been skipped; it never returns on its own.</summary>
     public bool OnboardingCompleted { get; init; }
 
