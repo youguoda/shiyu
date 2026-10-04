@@ -140,7 +140,7 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
     /// The CF_HDROP file list, when the clipboard carries one. Requires the
     /// clipboard to already be open.
     /// </summary>
-    private static IReadOnlyList<string> ReadFileDrop()
+    internal static IReadOnlyList<string> ReadFileDrop()
     {
         var handle = NativeMethods.GetClipboardData(NativeMethods.CfHdrop);
         if (handle == IntPtr.Zero)
@@ -251,7 +251,7 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
     }
 
     /// <summary>Requires the clipboard to already be open.</summary>
-    private static bool IsExcludedByMarker()
+    internal static bool IsExcludedByMarker()
     {
         if (NativeMethods.IsClipboardFormatAvailable(ExcludeFromMonitorsFormat))
         {
@@ -264,7 +264,7 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
     }
 
     /// <summary>Requires the clipboard to already be open.</summary>
-    private static uint? ReadDword(uint format)
+    internal static uint? ReadDword(uint format)
     {
         if (!NativeMethods.IsClipboardFormatAvailable(format))
         {
@@ -294,7 +294,7 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
     }
 
     /// <summary>Requires the clipboard to already be open.</summary>
-    private static string? ReadUnicodeText()
+    internal static string? ReadUnicodeText()
     {
         var handle = NativeMethods.GetClipboardData(NativeMethods.CfUnicodeText);
         if (handle == IntPtr.Zero)
@@ -322,14 +322,14 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
     /// The copy's HTML fragment, when the source published one. Only the
     /// fragment is kept — the header is transport, not content.
     /// </summary>
-    private static string? ReadFormatted()
+    internal static string? ReadFormatted()
     {
         var bytes = ReadBytes(HtmlFormat);
         return bytes is null ? null : ClipboardHtml.ExtractFragment(bytes);
     }
 
     /// <summary>Requires the clipboard to already be open.</summary>
-    private static string? ReadString(uint format)
+    internal static string? ReadString(uint format)
     {
         var bytes = ReadBytes(format);
         return bytes is null ? null : System.Text.Encoding.UTF8.GetString(bytes).TrimEnd('\0');

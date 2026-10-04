@@ -201,6 +201,18 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
+    // --- 前台兜底（票 43，ForegroundReclaim 的 Win32 一一对应）---
+
+    /// <summary>ASFW_ANY：允许任何进程调用 SetForegroundWindow。</summary>
+    internal const uint AsfwAny = 0xFFFFFFFF;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool AllowSetForegroundWindow(uint processId);
+
+    /// <summary>把一个线程的输入处理机制挂到另一个线程上（或解挂）；挂不上返回 false。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+
     /// <summary>
     /// GetGUIThreadInfo's answer (票 26 的插入符锚点): only the caret fields
     /// matter here. rcCaret is in the CLIENT coordinates of hwndCaret.
@@ -260,6 +272,17 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool IsClipboardFormatAvailable(uint format);
 
+    /// <summary>
+    /// 枚举剪贴板上现有的格式（票 43 的快照）：传 0 取第一个，之后传上一个的 id，返回 0 为止。
+    /// 要求剪贴板已打开。枚举只列名字，不会让剪贴板的所有者去渲染延迟格式。
+    /// </summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint EnumClipboardFormats(uint format);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern int GetClipboardFormatNameW(
+        uint format, System.Text.StringBuilder name, int maxCount);
+
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern UIntPtr GlobalSize(IntPtr handle);
 
@@ -290,6 +313,12 @@ internal static class NativeMethods
     internal const ushort VkRWin = 0x5C;
     internal const ushort VkC = 0x43;
     internal const ushort VkV = 0x56;
+
+    /// <summary>
+    /// F24：几乎没有软件响应。前台兜底发它，是为了让本进程成为"刚产生输入的进程"，
+    /// 满足 SetForegroundWindow 的许可——而不像 Alt 那样会激活菜单栏（票 43）。
+    /// </summary>
+    internal const ushort VkF24 = 0x87;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct MouseInput
