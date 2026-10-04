@@ -23,6 +23,15 @@ public readonly record struct ForegroundWindow(IntPtr Handle)
     public bool IsForeground => IsSomething && NativeMethods.GetForegroundWindow() == Handle;
 
     /// <summary>
+    /// 这个窗口是不是拾语自己的进程里的。托盘菜单刚收起的那一刻，前台可能还是拾语的消息窗口：
+    /// 把它当成"用户原来所在的窗口"记下来，回贴时就是往自己身上贴。
+    /// </summary>
+    public bool BelongsToThisProcess
+        => IsSomething
+            && NativeMethods.GetWindowThreadProcessId(Handle, out var process) != 0
+            && process == (uint)Environment.ProcessId;
+
+    /// <summary>
     /// Brings the remembered window back to the front. Windows only allows
     /// this from a process that currently owns the foreground — which, having
     /// just shown the quick bar, Shiyu does.

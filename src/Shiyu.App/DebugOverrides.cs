@@ -47,9 +47,24 @@ internal static class DebugOverrides
     public static bool DebugTickCrash =>
         Environment.GetEnvironmentVariable("SHIYU_DEBUG_TICK_CRASH") == "1";
 
-    /// <summary>探针的呼出通道（票 15）：bar|panel|library|settings|quickbar。</summary>
+    /// <summary>探针的呼出通道（票 15）：bar|panel|library|settings|quickbar|reverse。</summary>
     public static string? ProbeCommand =>
         Environment.GetEnvironmentVariable("SHIYU_PROBE_CMD");
+
+    /// <summary>
+    /// 反向输入框用确定性的假后端（票 43）：返回 "[EN] " + 原文，不碰网络。端到端探针靠它得到
+    /// 可断言的输出。
+    /// </summary>
+    public static bool FakeBackend =>
+        Environment.GetEnvironmentVariable("SHIYU_FAKE_BACKEND") == "1";
+
+    /// <summary>
+    /// 探针模式下照常监听剪贴板（票 43）。探针默认不监听——用户的复制不能进探针的数据库——但
+    /// "回贴的写入与还原不产生历史条目"要在端到端里核对，就得让监听在场；这只在探针自己的目录里
+    /// 记录探针自己放上去的合成文字。
+    /// </summary>
+    public static bool ProbeClipboard =>
+        Environment.GetEnvironmentVariable("SHIYU_PROBE_CLIPBOARD") == "1";
 
     /// <summary>让设置窗直接落到某个设置项（既有深链）。</summary>
     public static string? ProbeItem =>
@@ -82,6 +97,8 @@ internal static class DebugOverrides
     public static bool OpenUpdate => false;
     public static bool DebugTickCrash => false;
     public static string? ProbeCommand => null;
+    public static bool FakeBackend => false;
+    public static bool ProbeClipboard => false;
     public static string? ProbeItem => null;
     public static string? ProbeText => null;
 #endif

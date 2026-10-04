@@ -211,7 +211,7 @@ internal partial class BarWindow
         return row;
     }
 
-    private static Border MenuSurface(StackPanel panel)
+    internal static Border MenuSurface(StackPanel panel)
     {
         // The WithPopupFont wrapper carries the font: a popup lives in its own
         // HWND with no property inheritance from the bar, and its text would
@@ -235,7 +235,7 @@ internal partial class BarWindow
     /// nor Border nor StackPanel is a Control, so the font rides on a
     /// ContentControl wrapper, which every child inherits from.
     /// </summary>
-    private static ContentControl WithPopupFont(FrameworkElement content)
+    internal static ContentControl WithPopupFont(FrameworkElement content)
     {
         return new ContentControl
         {
@@ -257,7 +257,7 @@ internal partial class BarWindow
     /// in physical pixels against the work area of the monitor it is on, and
     /// shifted in device-independent units.
     /// </summary>
-    private static void FlipIntoWorkArea(Popup popup)
+    internal static void FlipIntoWorkArea(Popup popup)
     {
         if (popup.Child is not FrameworkElement content
             || PresentationSource.FromVisual(content) is not { } source

@@ -116,6 +116,7 @@ public sealed class ReverseInputSession(TimeProvider clock)
 
     private DateTimeOffset? _debounceAt;
     private bool _wantCommit;
+    private bool _composing;
     private DateTimeOffset _shownAt;
 
     private static readonly ReverseInputStep CancelStep = new(CancelRun: true);
@@ -282,9 +283,32 @@ public sealed class ReverseInputSession(TimeProvider clock)
         _lastOutput = string.Empty;
         _debounceAt = null;
         _wantCommit = false;
+        _composing = false;
         _shownAt = clock.GetUtcNow();
 
         return cancel ? CancelStep : default;
+    }
+
+    /// <summary>
+    /// 输入法正在组字（拼音还没选字上屏）。WPF 的 TextBox.Text 含着组字中的拼音——"nihao" 还没选字就被
+    /// 译了，既白费又闪一下乱码；用户盯着候选词看的那几百毫秒，不算"手停了"。组字期间不排防抖，
+    /// 结束时（选字上屏、或被取消）重新计 300ms。
+    /// </summary>
+    public void SetComposing(bool composing)
+    {
+        if (_composing == composing)
+        {
+            return;
+        }
+
+        _composing = composing;
+        _debounceAt = null;
+
+        if (!composing && Template.Kind == PromptTemplateKind.Translate
+            && Current() is { } current && !Covered(current.Key))
+        {
+            _debounceAt = clock.GetUtcNow() + Debounce;
+        }
     }
 
     /// <summary>输入框的文字变了。</summary>
@@ -313,8 +337,9 @@ public sealed class ReverseInputSession(TimeProvider clock)
             cancel = true;
         }
 
-        // 翻译类：手停 300ms 才跑；已经有对着它的无错请求（在跑或已完成）就不再排。
-        if (Template.Kind == PromptTemplateKind.Translate && !Covered(current.Key))
+        // 翻译类：手停 300ms 才跑；已经有对着它的无错请求（在跑或已完成）就不再排；
+        // 输入法组字期间不排（见 SetComposing）。
+        if (Template.Kind == PromptTemplateKind.Translate && !_composing && !Covered(current.Key))
         {
             _debounceAt = clock.GetUtcNow() + Debounce;
         }

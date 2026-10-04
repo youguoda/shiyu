@@ -197,6 +197,84 @@ public class ReverseInputSessionTests
         Assert.Equal(string.Empty, session.Output);
     }
 
+    // --- 输入法组字 ----------------------------------------------------------------------
+
+    [Fact]
+    public void While_the_ime_is_composing_the_wait_does_not_run_out()
+    {
+        // WPF 的 TextBox.Text 含着组字中的拼音："nihao" 还没选字就被译了，既白费又闪一下乱码。
+        // 用户盯着候选词看的那几百毫秒，不算"手停了"。
+        var (session, clock) = Open();
+        session.SetComposing(true);
+        session.TextChanged("nihao");
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(default, session.Tick());
+        Assert.False(session.Running);
+    }
+
+    [Fact]
+    public void When_the_composition_ends_the_wait_starts_over_on_the_committed_text()
+    {
+        var (session, clock) = Open();
+        session.SetComposing(true);
+        session.TextChanged("nihao");
+        clock.Advance(TimeSpan.FromSeconds(2));
+        session.Tick();
+
+        // 选字上屏：文字变成"你好"，组字结束。重新计 300ms。
+        session.SetComposing(false);
+        session.TextChanged("你好");
+
+        Assert.Equal(Debounce, session.TimeUntilTick());
+        clock.Advance(Debounce);
+        Assert.Equal("你好", session.Tick().Run!.Request.Text);
+    }
+
+    [Fact]
+    public void A_composition_that_ends_without_changing_the_text_still_re_arms_the_wait()
+    {
+        // 组字被取消（Esc）回到原样，没有最后一次 TextChanged：结束时自己重新计时。
+        var (session, clock) = Open();
+        Finish(session, TypeAndRun(session, clock, "你好"), "Hello");
+        session.TextChanged("你好吗");
+        session.SetComposing(true);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        session.Tick();
+
+        session.SetComposing(false);
+
+        Assert.Equal(Debounce, session.TimeUntilTick());
+    }
+
+    [Fact]
+    public void Composing_makes_no_difference_to_a_rewrite_which_never_runs_by_itself()
+    {
+        var (session, clock) = Open(PromptTemplates.PromptOptimize);
+        session.SetComposing(true);
+        session.TextChanged("xiegejiaoben");
+
+        session.SetComposing(false);
+
+        Assert.Null(session.TimeUntilTick());
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(default, session.Tick());
+    }
+
+    [Fact]
+    public void Opening_again_forgets_a_composition_that_was_cut_short()
+    {
+        var (session, clock) = Open();
+        session.SetComposing(true);
+
+        session.Open(PromptTemplates.Standard, templatesApply: true);
+        session.TextChanged("你好");
+        clock.Advance(Debounce);
+
+        Assert.NotNull(session.Tick().Run);
+    }
+
     // --- 去重 --------------------------------------------------------------------------
 
     [Fact]

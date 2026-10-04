@@ -272,6 +272,30 @@ public class ReversePasteTests
         Assert.Equal("[EN] 你好", rig.Clipboard.Current);
     }
 
+    [Fact]
+    public void When_the_way_back_to_the_window_is_lost_the_text_is_left_on_the_clipboard_without_a_keystroke()
+    {
+        // 回不到原窗口时不敢发 Ctrl+V（会贴进别的窗口）：只写进剪贴板，让用户手动贴；
+        // 不还原——此刻用户要的恰恰是它。
+        var rig = new Rig();
+
+        Assert.True(rig.Paste.Leave("[EN] 你好"));
+
+        Assert.Equal(["write"], rig.Calls);
+        Assert.Equal("[EN] 你好", rig.Clipboard.Current);
+    }
+
+    [Fact]
+    public void Leaving_a_blank_text_touches_nothing_and_a_failed_write_says_so()
+    {
+        var rig = new Rig();
+        Assert.False(rig.Paste.Leave("  "));
+        Assert.Empty(rig.Calls);
+
+        rig.Clipboard.WriteFails = true;
+        Assert.False(rig.Paste.Leave("[EN] 你好"));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

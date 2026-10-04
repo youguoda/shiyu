@@ -206,6 +206,7 @@ public partial class App : Application
         _modules?.Settings.Shutdown();
         _modules?.Update.Shutdown();
         _modules?.Bar.Shutdown();
+        _modules?.ReverseInput.Shutdown();
         _modules?.Translation.Shutdown();
         _modules?.Selection.Shutdown();
         _shell?.Dispose();

@@ -1,0 +1,103 @@
+<Window x:Class="Shiyu.App.ReverseInputWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Shiyu.App"
+        Title="拾语 · 反向输入" Width="520" SizeToContent="Height" MinHeight="80" MaxHeight="800"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" WindowStartupLocation="Manual" Topmost="True"
+        FontSize="{DynamicResource Type.Body}"
+        TextElement.FontFamily="{DynamicResource Font.Ui}"
+        TextElement.Foreground="{DynamicResource Brush.Text}"
+        PreviewKeyDown="OnPreviewKeyDown"
+        Deactivated="OnLostFocus"
+        SizeChanged="OnWindowSizeChanged">
+    <!--
+      反向输入框（票 43）：热键在当前输入框旁呼出，打中文，出英文（或按提示词模板改写），
+      Enter 贴回原处。与面板相反，它接受焦点——它要接收键盘输入（同窄条粘贴模式，ADR-0007）；
+      所以没有 WS_EX_NOACTIVATE，失焦即隐藏（显示后 300ms 内的失焦除外，防止刚弹出就被
+      自己触发关掉）。
+
+      外壳同浮层家族（§4.7，票 20）：只画材质底，圆角 8、轮廓与投影归 DWM；DWM 拒收时由
+      Backdrop.AttachShell 落自绘描边+阴影与 12 DIP 透明边距。
+
+      高度：输入框随内容长高（52→180），整窗钳在 80–800；窗口位置与"翻到上方后向上长"
+      在代码里按 ReverseInputPlacement（Core）算。
+    -->
+    <Border x:Name="Shell" CornerRadius="{DynamicResource Radius.Overlay}"
+            Background="{DynamicResource Brush.SurfaceMaterial}" BorderThickness="0">
+        <StackPanel Margin="12">
+
+            <!-- 输入框：隐式 TextBox 样式（SurfaceInput 底、聚焦转 Accent 描边）。多行：
+                 Enter 是"往前走一步"，Shift+Enter 换行（PreviewKeyDown 里拦 Enter）。
+                 IME：组字中的按键以 Key.ImeProcessed 到达，Enter/Esc/Tab 一律交给输入法。 -->
+            <TextBox x:Name="InputBox" AcceptsReturn="True" TextWrapping="Wrap"
+                     MinHeight="52" MaxHeight="180" Padding="10,10"
+                     VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
+                     FontSize="{DynamicResource Type.Content}"
+                     AutomationProperties.Name="反向输入：要贴回去的文字"
+                     ToolTip="Enter 往前走一步 · Shift+Enter 换行 · Tab 切换方向 · Ctrl+E 切换模板 · Esc 关闭"
+                     TextChanged="OnInputChanged"/>
+
+            <!-- 输出：译文 / 整理好的提示词（18/31，第一视觉位）。等新结果期间旧输出淡显，
+                 流式中尾部挂静态 accent 光标块（2×18，与面板同一个，票 22；不另做闪烁动画）。
+                 失败态用 TranslationUserErrorMapper 的人话（与面板一致），并附"去设置"。 -->
+            <ScrollViewer x:Name="OutputScroll" Margin="0,8,0,0" MaxHeight="520"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="OutputText" Margin="4,0"
+                               FontSize="{DynamicResource Type.Content}"
+                               LineHeight="{DynamicResource Line.Content}"
+                               LineStackingStrategy="BlockLineHeight"
+                               TextWrapping="Wrap"/>
+                    <local:InfoBar x:Name="ErrorBar" Visibility="Collapsed"
+                                   Severity="Danger" IsClosable="False"/>
+                    <StackPanel x:Name="ErrorActions" Visibility="Collapsed" Orientation="Horizontal"
+                                Margin="0,8,0,0">
+                        <Button x:Name="ErrorSettingsButton" Style="{DynamicResource FlyoutButton}"
+                                Click="OnOpenSettings" Cursor="Hand"
+                                ToolTip="打开设置的服务页"
+                                AutomationProperties.Name="去设置">
+                            <TextBlock Text="去设置" Foreground="{DynamicResource Brush.Accent}"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- 底栏：方向 chip · 模板 chip（左）；Enter 此刻会做什么（右）。两枚 chip 都是
+                 浮层里的中性文字钮（FlyoutButton 配次级文字色）：静止态只有一处 accent，
+                 就是流式中的光标块（ADR-0012 #13）。名字随状态更新（a11y）。
+                 模板 chip 点开完整列表（含不在 Ctrl+E 循环里的）；免费引擎下没有 prompt，隐藏。 -->
+            <DockPanel Margin="0,8,0,0" LastChildFill="True">
+                <TextBlock x:Name="HintText" DockPanel.Dock="Right" VerticalAlignment="Center"
+                           Margin="12,0,4,0" TextTrimming="CharacterEllipsis"
+                           FontSize="{DynamicResource Type.Caption}"
+                           Foreground="{DynamicResource Brush.TextTertiary}"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="DirectionChip" Style="{DynamicResource FlyoutButton}"
+                            Height="{DynamicResource Control.Height}" Padding="8,0"
+                            Cursor="Hand" Click="OnDirectionChipClick"
+                            AutomationProperties.Name="方向">
+                        <TextBlock x:Name="DirectionLabel" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </Button>
+                    <Button x:Name="TemplateChip" Style="{DynamicResource FlyoutButton}"
+                            Height="{DynamicResource Control.Height}" Padding="8,0" Margin="2,0,0,0"
+                            Cursor="Hand" Click="OnTemplateChipClick"
+                            AutomationProperties.Name="提示词模板">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="TemplateName" MaxWidth="96" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            <TextBlock Text="&#xE70D;" Margin="6,0,0,0" VerticalAlignment="Center"
+                                       FontFamily="{DynamicResource Font.Icon}"
+                                       FontSize="{DynamicResource Size.IconS}"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </StackPanel>
+    </Border>
+</Window>

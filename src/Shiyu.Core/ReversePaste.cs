@@ -95,6 +95,12 @@ public sealed class ReversePaste(IReversePasteClipboard clipboard, SelectionCapt
     }
 
     /// <summary>
+    /// 回不到原窗口、不敢发 Ctrl+V 时（会贴进别的窗口）：只把译文写进剪贴板，让用户手动贴。
+    /// 不还原——此刻用户要的恰恰是它。
+    /// </summary>
+    public bool Leave(string text) => !string.IsNullOrWhiteSpace(text) && clipboard.Write(text);
+
+    /// <summary>
     /// <see cref="RestoreDelay"/> 之后调用：序列号没变才还原，带排除标记的、有写不回去的格式的不还。
     /// </summary>
     public SettleResult Settle(PendingRestore pending)
