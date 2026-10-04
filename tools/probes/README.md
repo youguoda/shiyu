@@ -92,3 +92,34 @@ PowerShell 5 对无 BOM 的非 ASCII `.ps1` 会按系统 ANSI 读出乱码，中
   窗口的实际缩放由「测得宽度 / DIP 宽度」推导，不信 `GetDpiForWindow`（跨进程会报错值）。
 - 窗口出现后会被挪到主屏固定位置再测量：窄条/面板类浮层默认开在光标旁，多屏机器上光标可能在任何一块屏。
 - 输入法会跟着激活的搜索框在探针进程名下挂一个状态窗口（`FyPY_Status`），与探针窗口无关，宽度过滤天然排除。
+
+## 免费引擎网络探针（票 41 / ADR-0013）
+
+`probe-free-engines.ps1` 与上面那组视觉探针**不是一回事**：它是纯 PowerShell，**不启动拾语、不读它的数据**，
+只对免费引擎依赖的两个**非正式**网页接口发真实请求——必应翻译页面（取会话）与 `ttranslatev3`、腾讯交互翻译
+`transmart.qq.com/api/imt`。接口随时可能变形，这是发版前自己发现的办法（发布检查清单里有对应一行）。
+
+```powershell
+# 发版前的那一遍：直连，全部检查（约 17 个请求）
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-free-engines.ps1 -Route Direct
+
+# 直连 + 走系统代理各一遍（Route 缺省就是 Both）；代理那一遍可以只做冒烟，3 个请求
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-free-engines.ps1 -Route SystemProxy -Quick
+
+# 只取一次必应页面并存下来（HTML 夹具的来源；页面里有一枚真令牌，别原样提交）
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-free-engines.ps1 -Route Direct -SessionOnly -SavePage out.html
+```
+
+- **两条路径**：`Direct` 用 `HttpClientHandler.UseProxy = $false`；`SystemProxy` 用默认 handler（Windows 系统代理 /
+  `HTTP(S)_PROXY`）。本机开着 127.0.0.1:7890 之类的代理时两条路径的结果真的不一样（经代理访问 www.bing.com 会
+  跳到 cn；谷歌 gtx 直连超时、经代理首发 429），没开代理的大陆用户看到的是直连的结果。
+- **检查项**：`bing:session`（页面能解析出令牌 / IG / 第一个 data-iid，TTL 是毫秒）、`bing:<源>-><目标>`（每种目标语言
+  一条，同时校验译文的文字系统，所以"200 OK 但语言不对"不算过）、`tencent:<源>-><目标>`（同上，第一条用 `auto`
+  源语言）、`info:tencent-auto`（TranSmart 接不接受 `auto`）、`info:tencent-empty`（`text_list` 里的空行是否原位返回）。
+  语言码表是 `FreeEngineLanguages` 的副本，两边要一起改。
+- **输出**：每项一行 `PASS / FAIL / SKIP`，带耗时（毫秒）；末尾汇总并报告发出的请求数。有 FAIL 时退出码为 1
+  （与上面的视觉探针不同——这条要能当发版闸门用）。**离线**（没有任何可用网络接口）时 SKIP，退出码 0；
+  网络在、接口连不上则是 FAIL——用户那边也是同样的结果。
+- **别刷接口**：这是别人的服务器。完整一遍约 17 个请求（`auto` 被拒时 18），同一个目标引擎连续两次失败就不再问
+  （剩下的项记 SKIP）；不要放进循环或定时任务。
+- 与上面的视觉探针一样，脚本只含 ASCII：中文测试句在运行时用码位拼出来。

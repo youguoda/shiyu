@@ -13,6 +13,11 @@
 ## 构建与产物
 
 - [ ] `dotnet test Shiyu.sln` 全绿（当前基线 466+）
+- [ ] 免费引擎探针（直连）通过：
+      `powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-free-engines.ps1 -Route Direct`
+      ——必应与腾讯是非正式网页接口，随时可能变（edge.microsoft.com/translate/auth 就是
+      一夜之间 404 的），要在发版前自己发现，而不是等用户来报（票 41、ADR-0013）。
+      离线时是 SKIP，不算通过；红了先看是哪一家的哪一步，说明见 tools/probes/README.md
 - [ ] release 构建来自 CI，不来自本地 bin 拷贝
 - [ ] 产物附 SHA256SUMS
 - [ ] 更新通道（票 28）的 feed 指向新版本，老版本升级路径实测一次
