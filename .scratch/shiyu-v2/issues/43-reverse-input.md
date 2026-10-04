@@ -122,45 +122,113 @@ Enter 把结果贴回原来的输入框，Esc 关闭。它解决的是"回英文
 
 **Blocked by:** 42（提示词模板层）。34 已完成。
 
-**Status:** ready-for-agent（WIP 闸门：issue-tracker.md 规定 ready-for-human 超过 5 张时不开
-新的功能票，2026-10-04 计数 v3 有 15 张；开工前需降到 5 张以内，或由用户豁免）
+**Status:** ready-for-human（实现完成，等探针运行与人工验收；WIP 闸门已由用户豁免，见 Comments 末行）
 
-- [ ] ReverseInputWindow：在插入符旁呼出、激活并聚焦、失焦隐藏（300ms 宽限）、随内容长高、
+- [x] ReverseInputWindow：在插入符旁呼出、激活并聚焦、失焦隐藏（300ms 宽限）、随内容长高、
       翻到上方时向上长
-- [ ] Core 状态机 `ReverseInputSession`（由 `TimeProvider` 驱动，测试用 `TestClock`）：300ms 防抖、
+- [x] Core 状态机 `ReverseInputSession`（由 `TimeProvider` 驱动，测试用 `TestClock`）：300ms 防抖、
       序号 + 取消、相同请求去重、翻译类的 wantCommit、改写类"跑完停下等第二次 Enter"、改写类
       不自动跑
-- [ ] 反向方向判定（汉字 ×5 规则）+ 单测：纯中文、纯英文、"帮我 fix 这个 bug in login.ts"判为
+- [x] 反向方向判定（汉字 ×5 规则）+ 单测：纯中文、纯英文、"帮我 fix 这个 bug in login.ts"判为
       中→英、空串
-- [ ] 改写类的输出语言（默认英文 / 中文）与 Tab 循环
-- [ ] IME：组字中的 Enter、Esc、Tab 不触发动作（`Key.ImeProcessed`）
-- [ ] 模板：Ctrl+E 共用 `TemplateCycle` 循环；chip 弹出完整列表；`ReverseInputTemplateId` 默认
+- [x] 改写类的输出语言（默认英文 / 中文）与 Tab 循环
+- [x] IME：组字中的 Enter、Esc、Tab 不触发动作（`Key.ImeProcessed`）
+- [x] 模板：Ctrl+E 共用 `TemplateCycle` 循环；chip 弹出完整列表；`ReverseInputTemplateId` 默认
       口语，设置控件加"输入框默认"一列；运行时切换不写设置；免费引擎下隐藏
-- [ ] 回贴：复用 `ForegroundWindow.Restore()` + `SelectionCapture.Paste`；前台兜底进
+- [x] 回贴：复用 `ForegroundWindow.Restore()` + `SelectionCapture.Paste`；前台兜底进
       `ForegroundWindow`（F24、不发 Alt、前台已对就什么都不发）
-- [ ] 条件还原：快照文本/HTML/RTF/文件；序列号判定；带排除标记不还原；有写不回的格式不还原；
+- [x] 条件还原：快照文本/HTML/RTF/文件；序列号判定；带排除标记不还原；有写不回的格式不还原；
       写入与还原不产生历史条目、不弹徽标（测试）
-- [ ] 热键：`HotkeyAction.ReverseInput` 接入 HotkeyPlan、HotkeyModule、KeyMap、设置快捷键页、
+- [x] 热键：`HotkeyAction.ReverseInput` 接入 HotkeyPlan、HotkeyModule、KeyMap、设置快捷键页、
       托盘；Hint 写明 Microsoft 365 的 Alt+Q 冲突
-- [ ] E2E 探针：
+- [ ] E2E 探针（已写好：`tools/probes/probe-reverse.ps1`；本代理不启动拾语，没有运行，待主控）：
       - 新增 `SHIYU_PROBE_CMD=reverse`。探针模式不注册全局热键，所以要用命令直接打开反向
         输入框；打开前先把记事本置于前台，做法参照现有的 bar 探针。
       - 用 DEBUG 覆盖装一个确定性的假后端，例如返回 `[EN] ` + 原文。
       - 流程：剪贴板先放一段已知文字 → 打开反向输入框 → 输入"你好" → 等输出 → Enter →
         UIA 读回记事本，应含 `[EN] 你好`。
       - 断言：剪贴板回到原来那段文字；历史条目数不变。
-- [ ] a11y：输入框、方向 chip、模板 chip 都有名字；探针 a11y 扫描零无名件
-- [ ] CONTEXT.md：
+- [ ] a11y：输入框、方向 chip、模板 chip 都有名字；探针 a11y 扫描零无名件（名字都设了，随状态更新；
+      扫描在 `probe-reverse.ps1` 里，未运行，待主控）
+- [x] CONTEXT.md：
       - 术语表补"反向输入框"。建议释义："热键在当前输入框旁呼出的小框：打中文，出英文
         （或按提示词模板改写），Enter 贴回原处。与面板相反，它接受焦点。"
       - 「已定原则」第二条，"我要写出去"的入口补上反向输入框。
-- [ ] 全量测试绿
-- [ ] 人工验收项进清单：
+- [x] 全量测试绿
+- [ ] 人工验收项进清单（条目已写进实现代理的回报，待主控落进 docs/manual-test-v6.md）：
       - 在微信或浏览器的输入框里打中文回帖 → 口语英文贴回原处；
       - 在 Cursor 的输入框里用「提示词优化」打一句中文需求 → 第一次 Enter 出结果 → 第二次
         Enter 贴回英文提示词；
       - 设置里看得到"Alt+Q 在 Office 里会被占用"的提示；
       - 中文输入法组字时按 Enter，只上屏、不贴回。
+
+## 实现记录
+
+### 2026-10-04（分支 v3/reverse43）
+
+- **提交**（自 68a79c2 起，另有一条收工提交：CONTEXT.md 与本记录）：「Core——反向输入框的判定、状态机、回贴与摆放」「Windows——前台兜底
+  （F24）与剪贴板快照/还原」「ReverseInputWindow——接受焦点的反向输入框」「热键
+  HotkeyAction.ReverseInput 接入注册方案、托盘与设置」「「提示词模板」控件加"输入框默认"一列」
+  「探针 probe-reverse.ps1」。
+- **测试**：1263（1260 + 3）→ 1510（1507 + 3），新增 247 条（其中改写了既有的 HotkeyPlan 枚举类不变量
+  测试，见下）：方向判定、会话状态机（含防抖边界、序号与取消、去重、wantCommit、改写类两次 Enter、
+  方向与模板切换、组字、失焦宽限）、运行器、回贴次序与还原判定（含格式分类的真实样本）、前台兜底序列
+  （含"绝不发 Alt"）、摆放与长高（与 BadgePlacement 逐点对照）、反向默认模板与 Reconcile、热键方案
+  （15 对冲突）、设置 schema、剪贴板写入的结构闸门。
+- **做了什么**：
+  - Core：`ReverseDirection`（汉字 ×5，独立函数，`LanguageGuess` 一字未动）、`ReverseInputSession`
+    （纯状态机，界面喂事件、拿回 `ReverseInputStep`）、`ReverseInputRunner`（跑成 `TranslationSession`、
+    结局按序号交回）、`ReversePaste` + `ClipboardRestore`（快照格式分类、排除标记、序列号判定）、
+    `ForegroundReclaim`（前台兜底序列，平台接口里发键的口子只有 F24）、`ReverseInputPlacement`
+    （复用 `BadgePlacement`，补"翻到上方后保持底边向上长"与 80–800 钳制）。
+  - Windows：`ForegroundWindow.Restore()` 改走兜底序列（窄条粘贴模式顺带受益）；
+    `WindowsReversePasteClipboard`（快照只读写得回去的内容、带排除标记的连内容都不读；写入与还原
+    全经 `WindowsClipboardWriter`）；`ClipboardWriteGateTests` 从结构上钉住"剪贴板写入只在写入器里"。
+  - App：`ReverseInputWindow`（接受焦点、插入符旁、长高、IME、chip、模板列表、回贴）、
+    `ReverseInputModule`、热键/托盘/设置接线、设置里「提示词模板」加"输入框默认"一列、探针。
+- **票面没写透、实现时定的几处**：
+  1. 回贴写入走 `WindowsClipboardWriter.SetText` + 立刻读序列号 + `SelectionCapture.PasteCurrentClipboard`，
+     而不是 `SelectionCapture.Paste(text)`：二者做的事一样（`Paste` 就是写入 + 发键，修饰键残留的处理在
+     同一个 `SendPasteKeystroke` 里），但前者能在写入与发键之间读到"写入后的序列号"，不被发键后别的
+     程序的写入混淆。
+  2. 去重与请求的文字取首尾去空白之后的：打完一个词顺手敲的空格不算新请求。
+  3. 方向 chip 在"改写类且正文没写 `{target}`"时隐藏、Tab 不动（与面板头部同一条规则：不写 `{target}`
+     就由提示词自己决定输出语言，方向没有可切的东西）。
+  4. 输入法组字期间不排防抖（Core 的 `SetComposing`）：WPF 的 `TextBox.Text` 含着组字中的拼音，
+     "nihao" 还没选字就被译掉既白费又闪一下乱码。票面只要求 Enter/Esc/Tab 交给输入法，这是顺带补的。
+  5. 热键再按一次（框开着）是收起：与 Esc 同（回到原窗口、不贴）。
+  6. 托盘菜单呼出时前台还在回到原应用的路上：等 150ms 再呼出；前台仍是拾语自己的窗口则不记（回贴
+     时不去"恢复"它）。
+  7. 回不到原窗口（`Restore` 之后前台仍不是目标）不敢发 Ctrl+V（会贴进别的窗口）：译文只留在剪贴板上、
+     不还原，托盘说一声（Core 的 `ReversePaste.Leave`）。
+  8. 格式分类只把"已知携带内容而写不回去"的认作写不回去（图片、位图、图元文件、音频、虚拟文件、
+     剪切的文件列表），其余认不出的私有格式当辅助格式——否则浏览器、IDE、Office 复制文本时附的一堆私有
+     格式会让"还原"永远不发生。代价：个别应用的私有格式在还原时丢掉，原内容仍在拾语历史里。
+  9. 反向默认模板被删（引用失效）回落为**标准**而不是口语：沿用票 42"引用失效一律回落标准"，
+     `DeleteCustom` 把设置里的 `ReverseInputTemplateId` 也写干净；删除确认框按面板的、输入框的、
+     两者都是分别写明。
+  10. 探针模式默认不监听剪贴板，"历史条目数不变"在探针里会是空断言；为此加了 DEBUG 旋钮
+      `SHIYU_PROBE_CLIPBOARD=1`（探针里照常监听），并让播种工具有只读的 `--count` 模式。
+  11. 「提示词模板」控件三列合计 260（原 192），列宽各收窄一点；原来的"设为默认"列头改叫"面板默认"。
+- **未验证（本代理不启动拾语，没有实机）与复验方法**：
+  - 窗口外观与排布、插入符旁出现（各种应用的插入符取不取得到）、翻到上方后向上长、输入框长到 180、
+    整窗到 800 时的滚动；`SHIYU_PROBE_CMD=reverse` 看一眼，再人工点一遍。
+  - 接受焦点是否稳：呼出后直接能打字；点别处即隐；刚弹出 300ms 内不会被自己关掉；激活被前台锁挡下时
+    自我抢前台的兜底。
+  - **IME**：组字中 Enter/Esc/Tab 交给输入法（`Key.ImeProcessed`）；组字期间不触发翻译依赖
+    `TextCompositionManager` 的 Start/Update/Input 事件在 WPF `TextBox` 上的实际行为——若不如预期，
+    退回"组字中也会发请求"，无害但浪费。用微软拼音、搜狗各试一次。
+  - 前台兜底在真实场景下（被前台锁挡住）的行为；Alt+Q 松开 Alt 后目标程序的菜单栏会不会被激活。
+  - 回贴：第一个字会不会丢（丢了就加 Xtranslate 的 60ms 等待）；400ms 还原对慢应用（Electron、
+    远程桌面）是否太早（太早会贴出旧内容，加大 `ReversePaste.RestoreDelay`）；Enter 的抬起事件落到目标
+    程序有没有副作用（多一个换行、被提交）。
+  - **已知局限**：目标窗口以管理员权限运行时，UIPI 会静默吞掉 Ctrl+V（`SendInput` 不报错），而 400ms 后
+    剪贴板被还原——译文既没贴上、也不在剪贴板里。要处理得判断目标进程是否提权，本票没做。
+  - 条件还原的各种剪贴板内容（文本、富文本、文件、图片、带排除标记）。
+  - 面板在场时呼出反向输入框：面板的作用域 Esc 是全局热键，会先把 Esc 吞给面板——先关面板。
+  - 托盘"反向输入"行：150ms 等待够不够。
+  - 设置页：三列布局、说明文字有没有被挤；快捷键页新项与 Hint；"恢复全部默认"。
+  - 探针 `probe-reverse.ps1`（含 a11y 扫描）整条没有运行；语法已用 PowerShell 解析器检过。
 
 ## Comments
 
@@ -181,3 +249,4 @@ Enter 把结果贴回原来的输入框，Esc 关闭。它解决的是"回英文
      - 等待期的光标沿用面板的静态光标块。
   5. 依赖从 34（已完成）改为 42。
 - **2026-10-04** 改号 40 → 43，消除与 `40-barwindow-split.md` 的撞号；票 42 里的引用随之更新。
+- 2026-10-04 0.9.1 正式版发布后，用户要求执行本票，豁免 WIP 闸门。
