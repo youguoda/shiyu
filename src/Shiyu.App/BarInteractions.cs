@@ -410,18 +410,33 @@ internal partial class BarWindow
                 break;
 
             case EntryKind.Image:
-                // The thumbnail backfills from a background decode (O-36), so
-                // a drag begun inside that first instant may still find null —
-                // the bytes are fetched on the spot rather than letting the
-                // drag quietly produce nothing.
-                if ((card.Thumbnail ?? DecodeThumbnailNow(card.Id)) is BitmapSource picture)
+                // 拖出优先给原图（保留期内的存档文件）；原图被清理了才退到
+                // 缩略图——320px 的缩略图拖进编辑器是半张图。附带文件格式
+                // 让资源管理器/文件夹也能接（位图格式它们不收）。
+                // 不再附带文本：图片条目的 Text 是「图片 W×H」这类标签串，
+                // 落进搜索框就是一行废话（用户实录 2026-10-05）。
+                BitmapSource? picture = null;
+                string? originalFile = null;
+                if (_store.Get(card.Id) is { } imageEntry
+                    && imageEntry.OriginalPath is { Length: > 0 } path
+                    && File.Exists(path))
                 {
-                    data.SetImage(picture);
-                    data.SetText(card.Text, TextDataFormat.UnicodeText);
+                    originalFile = path;
+                    picture = LoadImageFile(path);
                 }
-                else
+
+                picture ??= card.Thumbnail ?? DecodeThumbnailNow(card.Id);
+                if (picture is null)
                 {
                     return;
+                }
+
+                data.SetImage(picture);
+                if (originalFile is not null)
+                {
+                    var drop = new System.Collections.Specialized.StringCollection();
+                    drop.Add(originalFile);
+                    data.SetFileDropList(drop);
                 }
 
                 break;
@@ -447,6 +462,30 @@ internal partial class BarWindow
 
     /// <summary>Sent upward so the tray can say what the card cannot.</summary>
     public event Action<string>? DeadDragNotice;
+
+    /// <summary>
+    /// The archived original, decoded at full size for a drag-out. OnLoad +
+    /// freeze so the payload never keeps the file open past the drop.
+    /// </summary>
+    private static BitmapSource? LoadImageFile(string path)
+    {
+        try
+        {
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bitmap.UriSource = new Uri(path, UriKind.Absolute);
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch (Exception)
+        {
+            // expected: 原图文件在存在性检查与解码之间被保留清理删掉——
+            // 拖出退回缩略图，不为一条正在过期的记录崩窗口。
+            return null;
+        }
+    }
 
     private void OpenUri(BarCard card)
     {
