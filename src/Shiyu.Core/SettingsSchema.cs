@@ -158,9 +158,15 @@ public static class SettingsSchema
                     Unit: "条",
                     Icon: "E8B7"),
                 new SettingsItem(
-                    "look.preview-hover", "悬停预览延迟", SettingsControl.Number, Min: 0, Max: 2000,
-                    Hint: "鼠标在卡片上停留多少毫秒后弹出完整预览；0 表示关闭悬停预览（按住空格仍可预览）。",
-                    Keywords: ["预览", "悬停", "停留", "空格", "完整", "延迟"],
+                    "look.preview-on-hover", "悬停自动预览", SettingsControl.Toggle,
+                    Hint: "鼠标在卡片上停一会儿就弹出完整预览；关闭后只在按住空格时预览。",
+                    Keywords: ["预览", "悬停", "自动", "鼠标", "空格", "完整"],
+                    Icon: "E7B3"),
+                new SettingsItem(
+                    "look.preview-hover", "悬停预览延迟", SettingsControl.Number, Min: 100, Max: 2000,
+                    Hint: "鼠标在卡片上停留多少毫秒后弹出完整预览。",
+                    Parent: "look.preview-on-hover",
+                    Keywords: ["预览", "悬停", "停留", "完整", "延迟"],
                     Unit: "毫秒",
                     Icon: "E823"),
                 new SettingsItem(

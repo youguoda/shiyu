@@ -87,6 +87,15 @@ public sealed class PreviewPolicy
         Clock = clock;
     }
 
+    /// <summary>
+    /// The policy a settings snapshot asks for. With 悬停自动预览 off the dwell
+    /// is zero — hovering opens nothing, and Space still opens the panel,
+    /// owned by the key. With it on, the dwell is at least a millisecond, so
+    /// a zero that slipped past loading can never quietly mean "off".
+    /// </summary>
+    public static PreviewPolicy For(AppSettings settings, Func<long> clock)
+        => new(settings.PreviewOnHover ? Math.Max(1, settings.PreviewHoverDelayMs) : 0, clock);
+
     /// <summary>Monotonic milliseconds; injected so tests can move time.</summary>
     public Func<long> Clock { get; }
 

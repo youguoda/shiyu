@@ -140,7 +140,7 @@ internal partial class BarWindow : Window
             _connector?.Close();
         };
 
-        _previewPolicy = new PreviewPolicy(settings.PreviewHoverDelayMs, () => Environment.TickCount64);
+        _previewPolicy = PreviewPolicy.For(settings, () => Environment.TickCount64);
         _refreshPolicy = new BarRefreshPolicy(settings.LightweightWhenHidden);
 
         // 在不在条里，决定一条外部写要不要把列表带回最新（见 StoreChanged）。
@@ -208,7 +208,7 @@ internal partial class BarWindow : Window
 
         // A changed dwell or a disabled hover takes effect on the next event;
         // a preview already up keeps its own rules until it closes.
-        _previewPolicy = new PreviewPolicy(settings.PreviewHoverDelayMs, () => Environment.TickCount64);
+        _previewPolicy = PreviewPolicy.For(settings, () => Environment.TickCount64);
         _refreshPolicy.ApplySettings(settings.LightweightWhenHidden);
         ArmPreviewTick();
         ApplyTopmost(settings.BarAlwaysOnTop);

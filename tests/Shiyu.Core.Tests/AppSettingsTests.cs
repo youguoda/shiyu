@@ -184,6 +184,32 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void The_hover_preview_switch_defaults_on_and_round_trips()
+    {
+        Assert.True(AppSettings.TryParse("{}", out var fresh));
+        Assert.True(fresh.PreviewOnHover);
+        Assert.Equal(500, fresh.PreviewHoverDelayMs);
+
+        Assert.True(AppSettings.TryParse(
+            System.Text.Json.JsonSerializer.Serialize(
+                new AppSettings { PreviewOnHover = false, PreviewHoverDelayMs = 700 }),
+            out var off));
+        Assert.False(off.PreviewOnHover);
+        Assert.Equal(700, off.PreviewHoverDelayMs);
+    }
+
+    [Fact]
+    public void A_stored_zero_delay_comes_back_as_the_hover_switch_turned_off()
+    {
+        // Before the switch, "0" was how hover previews were turned off: the
+        // choice survives as the switch, and the delay gets its default back
+        // for the day the switch goes on again.
+        Assert.True(AppSettings.TryParse("""{ "PreviewHoverDelayMs": 0 }""", out var migrated));
+        Assert.False(migrated.PreviewOnHover);
+        Assert.Equal(500, migrated.PreviewHoverDelayMs);
+    }
+
+    [Fact]
     public void TryParse_refuses_malformed_json_rather_than_defaulting_silently()
     {
         Assert.False(AppSettings.TryParse("{ this is not json", out var fromJunk));

@@ -354,4 +354,47 @@ public class PreviewPolicyTests
         policy.Scrolled();
         Assert.Null(policy.TimeUntilDecision());
     }
+
+    // --- the hover switch (悬停自动预览，用户需求 2026-10-05) ---------------------
+
+    [Fact]
+    public void With_hover_previews_off_resting_opens_nothing_but_space_still_does()
+    {
+        var time = new Clock();
+        var policy = PreviewPolicy.For(new AppSettings { PreviewOnHover = false }, time.Get);
+
+        Assert.False(policy.HoverEnabled);
+        Assert.Equal(PreviewCommand.None, policy.HoverEnter(1));
+        time.Advance(5000);
+        Assert.Equal(PreviewCommand.None, policy.Tick());
+        Assert.False(policy.IsOpen);
+
+        // Nothing pending either: a bar with hover off asks for no timer.
+        Assert.Null(policy.TimeUntilDecision());
+
+        Assert.Equal(PreviewCommand.Open, policy.SpaceDown(1));
+    }
+
+    [Fact]
+    public void With_hover_previews_on_the_dwell_is_the_settings_delay()
+    {
+        var time = new Clock();
+        var policy = PreviewPolicy.For(
+            new AppSettings { PreviewOnHover = true, PreviewHoverDelayMs = 300 }, time.Get);
+
+        policy.HoverEnter(1);
+        time.Advance(299);
+        Assert.Equal(PreviewCommand.None, policy.Tick());
+        time.Advance(1);
+        Assert.Equal(PreviewCommand.Open, policy.Tick());
+    }
+
+    [Fact]
+    public void A_switch_that_says_on_is_never_turned_off_by_a_zero_delay()
+    {
+        var policy = PreviewPolicy.For(
+            new AppSettings { PreviewOnHover = true, PreviewHoverDelayMs = 0 }, () => 0);
+
+        Assert.True(policy.HoverEnabled);
+    }
 }

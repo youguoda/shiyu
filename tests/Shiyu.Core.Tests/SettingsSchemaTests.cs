@@ -36,6 +36,7 @@ public class SettingsSchemaTests
             ["bar.text-lines"] = "bar",
             ["bar.image-height"] = "bar",
             ["bar.file-count"] = "bar",
+            ["look.preview-on-hover"] = "bar",
             ["look.preview-hover"] = "bar",
             ["bar.card-tooltips"] = "bar",
             ["bar.actions"] = "bar",
@@ -289,6 +290,19 @@ public class SettingsSchemaTests
         var takeover = Items().Single(item => item.Id == "winv.takeover");
         Assert.Equal("hotkey.quickbar", takeover.Parent);
         Assert.Equal("hotkeys", SettingsSchema.FindPageOf(takeover.Id)!.Id);
+    }
+
+    [Fact]
+    public void The_hover_delay_folds_under_the_hover_preview_switch()
+    {
+        // 用户需求 2026-10-05：悬停自动预览是开关，延迟只在开着时有意义——
+        // 关掉开关，延迟那行随之收起，不再靠"填 0"表达关闭。
+        var delay = Items().Single(item => item.Id == "look.preview-hover");
+        Assert.Equal("look.preview-on-hover", delay.Parent);
+        Assert.True(delay.Min > 0, "zero no longer means off; the switch does");
+        Assert.Equal(
+            SettingsControl.Toggle,
+            Items().Single(item => item.Id == "look.preview-on-hover").Control);
     }
 
     [Fact]

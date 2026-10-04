@@ -172,10 +172,21 @@ public sealed record AppSettings
     public bool RecordFiles { get; init; } = true;
 
     /// <summary>
+    /// Whether resting the pointer on a card opens its full preview by itself
+    /// （悬停自动预览，用户需求 2026-10-05）. Off, the preview opens only while
+    /// Space is held — the switch the user asked for in place of "type a zero
+    /// into the delay". On by default: the hover beat is how most people
+    /// discover the panel exists.
+    /// </summary>
+    public bool PreviewOnHover { get; init; } = true;
+
+    /// <summary>
     /// How long the pointer must rest on a card before the full preview
-    /// appears, in milliseconds. Zero disables hover previews — hold Space
-    /// still works. The default is a deliberate beat: fast enough to feel
-    /// like an answer, slow enough that a pass-through never summons it.
+    /// appears, in milliseconds — read only while <see cref="PreviewOnHover"/>
+    /// is on. The default is a deliberate beat: fast enough to feel like an
+    /// answer, slow enough that a pass-through never summons it. A stored zero
+    /// is the old way of saying "no hover previews"; loading turns it into the
+    /// switch (see <see cref="TryParse"/>).
     /// </summary>
     public int PreviewHoverDelayMs { get; init; } = 500;
 
@@ -430,6 +441,19 @@ public sealed record AppSettings
                 || parsed.BarActions.SequenceEqual(HoverActions.FormerDefaultWithoutGroup))
             {
                 parsed = parsed with { BarActions = HoverActions.All };
+            }
+
+            // Before the hover switch existed, a delay of zero was how hover
+            // previews were turned off. Keep that choice, as the switch it now
+            // is, and give the delay back its default for the day the switch
+            // goes on again.
+            if (parsed.PreviewHoverDelayMs <= 0)
+            {
+                parsed = parsed with
+                {
+                    PreviewOnHover = false,
+                    PreviewHoverDelayMs = new AppSettings().PreviewHoverDelayMs,
+                };
             }
 
             // A protected key comes back exactly as it was stored — the marker
