@@ -71,7 +71,7 @@ internal partial class BarWindow
             Kind = entry.Kind,
             Text = entry.Text,
             Preview = collapsed.Length > 500 ? collapsed[..500] + "…" : collapsed,
-            DragHint = "双击粘贴到原来的窗口；Enter 粘贴选中项；按住左键拖出：文本入编辑器（带格式）、图片入聊天窗、文件入资源管理器",
+            Teaching = PreviewTeaching.For(entry.Kind),
             ShowToolTip = _settings.BarCardTooltips,
             // 类型标签只带信息量（§6.1/U-16）：纯文本/无子类型的译文之外的
             // 空白留给空串——模板据 KindLabelVisibility 整组隐藏。

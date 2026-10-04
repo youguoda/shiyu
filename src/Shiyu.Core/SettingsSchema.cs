@@ -171,8 +171,8 @@ public static class SettingsSchema
                     Icon: "E823"),
                 new SettingsItem(
                     "bar.card-tooltips", "悬停教学提示", SettingsControl.Toggle,
-                    Hint: "悬停预览面板底部的一行拖放教学（双击粘贴、拖出等）；关闭后预览不再显示教学行。",
-                    Keywords: ["提示", "悬停", "教学", "拖放", "拖出", "预览"],
+                    Hint: "预览面板底部的一行操作提示：双击、Enter 粘贴，拖出到哪里；关闭后预览不再显示这一行。",
+                    Keywords: ["提示", "悬停", "教学", "拖放", "拖出", "预览", "双击"],
                     Icon: "E823")),
             new SettingsSection("bar.actions", "悬停动作",
                 new SettingsItem(

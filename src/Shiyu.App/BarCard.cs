@@ -20,8 +20,12 @@ internal sealed class BarCard : INotifyPropertyChanged
 
     public string Preview { get; init; } = string.Empty;
 
-    /// <summary>How to drag out; the preview panel carries it as its teach row.</summary>
-    public string DragHint { get; init; } = string.Empty;
+    /// <summary>
+    /// What the preview panel's teach row shows for this card: key caps with
+    /// short actions, the drag step naming this kind's own destination
+    /// (<see cref="PreviewTeaching"/>).
+    /// </summary>
+    public IReadOnlyList<TeachStep> Teaching { get; init; } = [];
 
     /// <summary>
     /// The card-hint setting (bar.card-tooltips): controls the preview panel's

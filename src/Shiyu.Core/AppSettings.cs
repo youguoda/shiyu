@@ -191,10 +191,12 @@ public sealed record AppSettings
     public int PreviewHoverDelayMs { get; init; } = 500;
 
     /// <summary>
-    /// Whether hovering a card shows its tooltip (full text + drag teaching)
-    /// during the beat before the preview opens. On by default — the drag
-    /// hint is the only place that interaction is taught; users who find the
-    /// tip noisy turn it off, and the hover preview is unaffected either way.
+    /// Whether the preview panel ends with its teach row（悬停教学提示）: key
+    /// caps for double-click and Enter, and where this card's drag lands
+    /// (<see cref="PreviewTeaching"/>). The card tooltip that once carried it
+    /// is retired. On by default — the row is the only place those gestures
+    /// are taught; users who know them turn it off, and the preview itself is
+    /// unaffected either way.
     /// </summary>
     public bool BarCardTooltips { get; init; } = true;
 

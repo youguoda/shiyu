@@ -287,6 +287,29 @@
         </Setter>
     </Style>
 
+    <!--
+      KeyCap.Quiet（预览教学行，用户需求 2026-10-05）：与 KeyCap 同一副骨架
+      （H18、圆角 4、Type.KeyCap SemiBold），换成浅 accent 底 + accent 字。
+      按住 Ctrl 浮出的实心帽说"现在按"，常驻的教学帽说"记得有"——同一家族，
+      不抢正文的眼。
+    -->
+    <Style x:Key="KeyCap.Quiet" TargetType="ContentControl" BasedOn="{StaticResource KeyCap}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="Padding" Value="5,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Border CornerRadius="{DynamicResource Radius.Control}"
+                            Background="{DynamicResource Brush.Selected}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- =====================================================================
          输入族。
          ===================================================================== -->

@@ -75,13 +75,31 @@
 
             <!-- 教学行（2026-10-05 从卡片气泡迁来）：系统 ToolTip 的关闭
                  行为留过两次"空壳"实录，气泡整体退役；拖放教学常驻预览
-                 尾行，看得更久，bar.card-tooltips 关闭时整行隐藏。 -->
-            <Border x:Name="TeachHost" Grid.Row="2" Margin="0,8,0,0"
+                 尾行，看得更久，bar.card-tooltips 关闭时整行隐藏。
+                 同日改版（用户需求：更匹配这个应用的 UI）：一整句灰字换成
+                 一行键帽 + 短动作（PreviewTeaching），帽用 KeyCap.Quiet；
+                 一行放得下由 Measure 保证，行高是常量 TeachRowHeight。 -->
+            <Border x:Name="TeachHost" Grid.Row="2" Margin="0,10,0,0"
                     BorderBrush="{DynamicResource Brush.Divider}" BorderThickness="0,1,0,0"
-                    Padding="0,6,0,0" Visibility="Collapsed">
-                <TextBlock x:Name="TeachText" TextWrapping="Wrap"
-                           FontSize="{DynamicResource Type.Caption}"
-                           Foreground="{DynamicResource Brush.TextTertiary}"/>
+                    Padding="0,8,0,0" Visibility="Collapsed">
+                <ItemsControl x:Name="TeachRow" Focusable="False" IsTabStop="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                                <ContentControl Style="{StaticResource KeyCap.Quiet}" Content="{Binding Key}"/>
+                                <TextBlock Text="{Binding Action}" Margin="5,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontSize="{DynamicResource Type.Caption}"
+                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Border>
         </Grid>
     </Border>

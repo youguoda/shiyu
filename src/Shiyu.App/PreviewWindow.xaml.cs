@@ -264,9 +264,10 @@ internal partial class PreviewWindow : Window
     /// <summary>
     /// The panel's final size, from <see cref="PreviewSizing"/> with the
     /// caller-measured text numbers. Images hand in their stored pixels; files
-    /// their row count. The teach row (2026-10-05) rides under every kind, so
-    /// its wrapped height joins the estimate — without it the panel opened
-    /// short and clipped the row against its bottom edge.
+    /// their row count. The teach row rides under every kind: it adds its one
+    /// line of fixed height, and a panel narrower than the row widens to fit
+    /// it (never past MaxWidth) — so the row neither wraps nor clips, and the
+    /// estimate can never come out short again (the 2026-10-05 clipped row).
     /// </summary>
     private (double Width, double Height) Measure(BarCard card)
     {
@@ -279,16 +280,43 @@ internal partial class PreviewWindow : Window
             _ => TextSize(card, lineHeight),
         };
 
-        if (card.ShowToolTip && card.DragHint is { Length: > 0 })
+        if (ShowsTeaching(card))
         {
-            var box = PreviewSizing.MaxWidth - PreviewSizing.ChromeHorizontal;
-            var hint = Formatted(card.DragHint, DesignTokens.TypeCaption, constrain: box);
-            // 8 margin above the divider + 1 divider + 6 padding + the lines,
-            // plus a rounding row: an estimate a hair tall beats a clipped row.
-            size = (size.Width, size.Height + 15 + Math.Ceiling(hint.Height / DesignTokens.LineForCaption) * DesignTokens.LineForCaption + DesignTokens.LineForCaption);
+            var width = Math.Min(
+                PreviewSizing.MaxWidth,
+                Math.Max(size.Width, TeachRowWidth(card.Teaching) + PreviewSizing.ChromeHorizontal));
+            size = (width, size.Height + TeachRowHeight);
         }
 
         return size;
+    }
+
+    private static bool ShowsTeaching(BarCard card) => card.ShowToolTip && card.Teaching.Count > 0;
+
+    /// <summary>
+    /// The teach row's height: 10 margin above the divider + 1 divider + 8
+    /// padding + one 18 DIP key-cap line. A constant, because the row never
+    /// wraps — <see cref="Measure"/> widens the panel instead.
+    /// </summary>
+    private const double TeachRowHeight = 10 + 1 + 8 + 18;
+
+    /// <summary>
+    /// The row's natural width, worked out like the text is: per step a cap
+    /// (its label plus 5 + 5 padding, at least 18 wide), 5 to the action, the
+    /// action, 14 to the next step. The arithmetic measures the regular face;
+    /// the caps are SemiBold, a hair wider — 2 DIP per cap covers it.
+    /// </summary>
+    private static double TeachRowWidth(IReadOnlyList<TeachStep> steps)
+    {
+        var width = 0.0;
+        foreach (var step in steps)
+        {
+            var cap = Formatted(step.Key, DesignTokens.TypeKeyCap, constrain: PreviewSizing.MaxWidth).Width;
+            var action = Formatted(step.Action, DesignTokens.TypeCaption, constrain: PreviewSizing.MaxWidth).Width;
+            width += Math.Max(18, cap + 10 + 2) + 5 + action + 14;
+        }
+
+        return width;
     }
 
     private (double Width, double Height) TextSize(BarCard card, double lineHeight)
@@ -335,9 +363,9 @@ internal partial class PreviewWindow : Window
 
     private void Fill(BarCard card)
     {
-        KindText.Text = card.Kind == EntryKind.Image && card.PixelWidth > 0
-            ? $"{card.KindText} · {card.PixelWidth}×{card.PixelHeight}"
-            : card.KindText;
+        // The card's label already carries an image's pixel size ("图片 ·
+        // 800×500"); appending it here again printed it twice.
+        KindText.Text = card.KindText;
         WhenText.Text = card.WhenText;
 
         TextHost.Visibility = card.Kind == EntryKind.Text ? Visibility.Visible : Visibility.Collapsed;
@@ -348,12 +376,10 @@ internal partial class PreviewWindow : Window
         FilesBody.Children.Clear();
         _fileRows.Clear();
 
-        // 拖放教学行（2026-10-05 迁入）：气泡退役后的唯一教学位，由
-        // bar.card-tooltips 决定显隐——设置关掉就是一点提示都不剩。
-        TeachText.Text = card.DragHint;
-        TeachHost.Visibility = card.ShowToolTip && card.DragHint is { Length: > 0 }
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        // 教学行（2026-10-05 迁入，同日改为键帽 + 短动作）：气泡退役后的唯一
+        // 教学位，由 bar.card-tooltips 决定显隐——设置关掉就是一点提示都不剩。
+        TeachRow.ItemsSource = card.Teaching;
+        TeachHost.Visibility = ShowsTeaching(card) ? Visibility.Visible : Visibility.Collapsed;
 
         if (card.Kind == EntryKind.Image)
         {
