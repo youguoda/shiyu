@@ -378,6 +378,16 @@ internal partial class BarWindow : Window
         _browser.Query = string.Empty;
         UpdateFilterChrome();
 
+        // 会话从"全部历史"开始也意味着从最新的那条开始：滚动与选择一并
+        // 归零。常驻模式按设计记住滚动（用户上次翻到哪儿，重开还在哪儿），
+        // 但那条记忆不能跟进粘贴模式——带着底部位置出现，用户看到的是
+        // 最旧的条目（验收 B2 实录 2026-10-05）。
+        if (_cards.Count > 0)
+        {
+            Cards.ScrollIntoView(_cards[0]);
+            Select(_cards[0]);
+        }
+
         RunRefresh(_refreshPolicy.Shown());
         PlaceBeside(anchor);
         ShowFocused();
