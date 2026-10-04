@@ -79,9 +79,19 @@ $Program = @'
 using System.IO.Compression;
 using Shiyu.Core;
 
+// Read-only mode (ticket 43): how many entries does the history hold right now?
+// probe-reverse.ps1 asserts the reverse input box leaves it unchanged. Reading
+// never reseeds; run it only after the probe app has exited.
+if (args.Length == 2 && args[0] == "--count")
+{
+    using var counted = EntryStore.Open(Path.Combine(args[1], "history.db"));
+    Console.WriteLine($"count={counted.Count()}");
+    return 0;
+}
+
 if (args.Length < 1)
 {
-    Console.Error.WriteLine("usage: shiyu_seedtool <data-dir>");
+    Console.Error.WriteLine("usage: shiyu_seedtool <data-dir> | --count <data-dir>");
     return 2;
 }
 
