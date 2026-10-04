@@ -1479,8 +1479,8 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 父项的"开着"：开关看开关；热键看有没有键；分段看是否停在第一位
-    /// （翻译方式的第一位是暂不可选的公共通道）。子项随它露面或收起。
+    /// 父项的"开着"：开关看开关；热键看有没有键；分段看 <see cref="SegmentedParentOn"/>
+    /// （翻译方式只有自备密钥才有下面四行）。子项随它露面或收起。
     /// </summary>
     private void ApplyParentVisibility()
     {
@@ -1498,12 +1498,22 @@ public partial class SettingsWindow : Window
             {
                 SettingsControl.Toggle => parentState.Toggle,
                 SettingsControl.Hotkey => parentState.Text.Trim().Length > 0,
-                SettingsControl.Segmented => parentState.Choice != 0,
+                SettingsControl.Segmented => SegmentedParentOn(parent.Id, parentState.Choice),
                 _ => true,
             };
             row.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         }
     }
+
+    /// <summary>
+    /// 分段父项的"开着"。翻译方式只有选了自备密钥，下面预设/地址/模型/凭据四行才有
+    /// 意义——公共通道（未上线）与免费引擎（零配置，票 41）都用不着它们，选中时收起，
+    /// 免得"免费引擎"底下摆着一排要填的东西。其它分段父项沿用旧规则：不在第一位就开着。
+    /// </summary>
+    private static bool SegmentedParentOn(string parentId, int choice)
+        => parentId == "service.backend-kind"
+            ? choice == (int)TranslationBackendKind.OwnKey
+            : choice != 0;
 
     // --- search and deep links ------------------------------------------------------
 
@@ -1816,7 +1826,7 @@ public partial class SettingsWindow : Window
         {
             SettingsControl.Toggle => state.Toggle,
             SettingsControl.Hotkey => state.Text.Trim().Length > 0,
-            SettingsControl.Segmented => state.Choice != 0,
+            SettingsControl.Segmented => SegmentedParentOn(parent!.Id, state.Choice),
             _ => true,
         };
 

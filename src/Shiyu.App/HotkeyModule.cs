@@ -40,6 +40,10 @@ internal sealed class HotkeyModule
             RegisterHotkeys();
             ApplyWinVTakeover();
             ApplySelectionBadge();
+
+            // 新注册表装好之后才告诉持有作用域热键的窗口（票 41）：面板在场时它的 Esc
+            // 随旧注册表一起被注销了，要在这张新表上重挂。排在这里，次序是构造出来的。
+            shell.NoteHotkeysRebuilt();
         };
     }
 

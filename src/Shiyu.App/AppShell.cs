@@ -57,6 +57,16 @@ internal sealed class AppShell
     /// <summary>单一变更广播（O-20）：各模块订阅自己的 Apply，宿主装配完成时 <see cref="Connect"/>。</summary>
     public event Action<AppSettings>? SettingsChanged;
 
+    /// <summary>
+    /// 热键注册表刚被整体重建、新热键已经装好（票 41）。面板持有的作用域 Esc 靠它在新
+    /// 注册表上重挂——重挂必须排在重建之后：订阅 SettingsChanged 的话次序全靠订阅序，
+    /// 而这个事件由热键模块在重建完成那一刻才发，次序是构造出来的，不是约定出来的。
+    /// </summary>
+    public event Action? HotkeysRebuilt;
+
+    /// <summary>热键模块在注册表重建完成后调用。</summary>
+    public void NoteHotkeysRebuilt() => HotkeysRebuilt?.Invoke();
+
     /// <summary>上一次已应用的设置：靠它分辨"数据位置是否刚被改过"。</summary>
     private AppSettings _applied = new();
 

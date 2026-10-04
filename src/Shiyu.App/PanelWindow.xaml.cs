@@ -137,7 +137,17 @@ public partial class PanelWindow : Window
     /// <summary>「去配置」深链：打开设置的服务页，面板自身让开。</summary>
     private readonly Action? _openSettings;
 
-    private IDisposable? _escape;
+    /// <summary>
+    /// 「用免费引擎」：把翻译方式写成免费引擎（票 41），写成功返回 true。点击就是
+    /// 同意——没有任何静默切换；null 表示"不归我管"（测试与旧调用）。
+    /// </summary>
+    private readonly Func<bool>? _enableFreeEngine;
+
+    /// <summary>
+    /// 面板上屏期间持有的作用域 Esc。每次写设置热键注册表都会整体重建，旧注册表带着它
+    /// 一起被注销，所以它是一个可重挂的持有（<see cref="ReclaimEscape"/>），而不是一次性的句柄。
+    /// </summary>
+    private readonly ScopedHold _escape;
     private CancellationTokenSource? _inFlight;
     private TranslationSession? _session;
     private string _original = string.Empty;
@@ -174,7 +184,8 @@ public partial class PanelWindow : Window
         Func<string, IDictionaryApi?>? dictionary = null,
         SpeechSynthesis? speech = null,
         Func<bool>? backendReady = null,
-        Action? openSettings = null)
+        Action? openSettings = null,
+        Func<bool>? enableFreeEngine = null)
     {
         InitializeComponent();
 
@@ -186,6 +197,12 @@ public partial class PanelWindow : Window
         _speech = speech;
         _backendReady = backendReady;
         _openSettings = openSettings;
+        _enableFreeEngine = enableFreeEngine;
+
+        // 取的是"当下"的注册表（_hotkeys 每次现取）：重挂时它已是重建之后的新注册表。
+        _escape = new ScopedHold(() => _hotkeys().TryRegisterScoped(
+            new Hotkey(HotkeyModifiers.None, 0x1B, "关闭面板"),
+            () => Dispatcher.Invoke(Dismiss)));
         _target = settings.TargetLanguage;
         _source = settings.SourceLanguage;
 
@@ -309,6 +326,40 @@ public partial class PanelWindow : Window
 
         // 设置窗要落到焦点上，无激活的面板留在原地只会挡视线。
         Dismiss();
+    }
+
+    /// <summary>
+    /// 引导卡上的「用免费引擎」（票 41）：把翻译方式写成免费引擎，然后就地重译这段文本。
+    /// 点击就是同意——文本发往哪里已在这张卡上写明，没有任何静默切换；写设置失败时
+    /// 托盘已经说了人话、翻译方式没变，卡就留着。
+    ///
+    /// 写设置会广播 SettingsChanged、让热键注册表重建——面板的 Esc 随之在新注册表上
+    /// 重挂（<see cref="ReclaimEscape"/>），所以点完按钮后 Esc 仍能关面板。
+    /// </summary>
+    private async void OnUseFreeEngine(object sender, RoutedEventArgs e)
+    {
+        // async void 逃出去的异常是进程级崩溃（O-05）：与重试、换向同一条纪律。
+        try
+        {
+            if (_enableFreeEngine?.Invoke() != true)
+            {
+                return;
+            }
+
+            SetupCard.Visibility = Visibility.Collapsed;
+            ContentScroll.Visibility = Visibility.Visible;
+
+            // 与 TranslateAsync 的主路径同一个次序：词典查询与翻译并行发出，卡排在译文之后渲染。
+            var cardRun = _cardRun;
+            var cardTask = FetchDictionaryCard(_original);
+            await RunTranslation();
+            await RenderCardWhenCurrent(cardTask, cardRun);
+        }
+        catch (Exception failure)
+        {
+            Log.Event(LogEvent.TranslationFailed, failure, ("freeEngine", 1));
+            ShowError(TranslationUserErrorMapper.Describe(failure, failure.Message));
+        }
     }
 
     private async Task RunTranslation()
@@ -744,7 +795,7 @@ public partial class PanelWindow : Window
     {
         var busy = LoadingSkeleton.Visibility == Visibility.Visible
             || _session is { State: TranslationState.Streaming };
-        HintText.Text = (busy, _escape is null) switch
+        HintText.Text = (busy, !_escape.IsHeld) switch
         {
             (true, true) => "正在翻译 · Esc 取消",
             (true, false) => "正在翻译",
@@ -939,19 +990,34 @@ public partial class PanelWindow : Window
     /// </summary>
     private void HoldEscape()
     {
-        _escape ??= _hotkeys().TryRegisterScoped(
-            new Hotkey(HotkeyModifiers.None, 0x1B, "关闭面板"),
-            () => Dispatcher.Invoke(Dismiss));
+        _escape.Hold();
 
         // Escape being unavailable costs the user a click on the close button;
         // it is not worth refusing to show a translation over.
         UpdateHint();
     }
 
-    private void ReleaseEscape()
+    private void ReleaseEscape() => _escape.Release();
+
+    /// <summary>
+    /// 热键注册表整体重建之后，面板在场就在新注册表上重挂 Esc（票 41）。每次写设置都会
+    /// 触发重建，旧注册表带着面板的 Esc 一起被注销，而 <see cref="HoldEscape"/> 不会
+    /// 自己重挂——面板里点「用免费引擎」会让这变成常规路径；面板开着时去设置窗改任何
+    /// 一项本来就会触发。
+    ///
+    /// 顺序有两处要求：必须排在热键模块重建<b>之后</b>（由 AppShell.HotkeysRebuilt 事件保证，
+    /// 它在重建完成才发）；必须先放旧作用域、再取新的（<see cref="ScopedHold.Reacquire"/>）。
+    /// 面板不在场时什么都不做：下一次 TranslateAsync 的 HoldEscape 自会取新注册表。
+    /// </summary>
+    public void ReclaimEscape()
     {
-        _escape?.Dispose();
-        _escape = null;
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        _escape.Reacquire();
+        UpdateHint();
     }
 
     private void Dismiss()
