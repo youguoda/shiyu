@@ -1299,6 +1299,7 @@ public partial class SettingsWindow : Window
                         QuickBarHotkey = "Ctrl+Shift+V",
                         BarHotkey = "Ctrl+Shift+B",
                         LibraryHotkey = string.Empty,
+                        ReverseInputHotkey = new AppSettings().ReverseInputHotkey,
                     },
                     AppPaths.SettingsFile);
                 _baseline = latest;

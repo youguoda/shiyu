@@ -284,8 +284,8 @@ public static class SettingsSchema
             new SettingsSection("translate.templates", "提示词模板",
                 new SettingsItem(
                     "translate.templates", "提示词模板", SettingsControl.Custom,
-                    Hint: "决定面板怎样处理当下这段文字：标准、口语、正式是翻译，换个语气；提示词优化把随手写的需求整理成给 AI 编程助手的提示词。只对自备密钥的大模型生效。",
-                    Keywords: ["提示词", "prompt", "模板", "口语", "正式", "优化", "vibe coding", "润色", "风格", "语气", "人设"],
+                    Hint: "决定面板与反向输入框怎样处理当下这段文字：标准、口语、正式是翻译，换个语气；提示词优化把随手写的需求整理成给 AI 编程助手的提示词。「面板默认」管面板启动时用哪个，「输入框默认」管反向输入框。只对自备密钥的大模型生效。",
+                    Keywords: ["提示词", "prompt", "模板", "口语", "正式", "优化", "vibe coding", "润色", "风格", "语气", "人设", "反向输入", "输入框默认"],
                     Icon: "E70F",
                     FullBleed: true)),
             new SettingsSection("translate.trigger", "拖选",
@@ -332,7 +332,12 @@ public static class SettingsSchema
                     "hotkey.library", "打开管理窗", SettingsControl.Hotkey,
                     Hint: "打开历史管理窗口；默认不设。",
                     Keywords: ["管理", "管理窗", "历史", "快捷键"],
-                    Icon: "E8B7")),
+                    Icon: "E8B7"),
+                new SettingsItem(
+                    "hotkey.reverse", "反向输入", SettingsControl.Hotkey,
+                    Hint: "在当前输入框旁呼出一个小框：打中文，出英文（或按提示词模板改写），Enter 贴回原处。注意：在 Microsoft 365（Word、Excel、PowerPoint、Outlook）里 Alt+Q 是「跳到搜索框」，这是应用内快捷键，拾语注册后会悄悄把它盖掉、并不会报冲突——常用 Office 的话，在这里改键即可。",
+                    Keywords: ["反向输入", "反向", "输入框", "回帖", "回复", "写英文", "翻译", "快捷键", "alt+q", "office", "搜索框"],
+                    Icon: "E70F")),
             new SettingsSection("hotkeys.cheatsheet", "窗口内按键",
                 new SettingsItem(
                     "hotkeys.cheatsheet", "按键速查", SettingsControl.Custom,

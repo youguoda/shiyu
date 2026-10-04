@@ -19,6 +19,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-bar.ps1
 输出是每个检查一行的 `PASS / FAIL / SKIP(原因)` 表，末尾有总数。
 退出码恒为 0——红绿要看表，不看进程码。
 
+### 不在 `run-all` 里的探针：`probe-reverse.ps1`（票 43）
+
+反向输入框的端到端流程会往一个真的记事本里贴字、并把剪贴板换掉几秒，所以它**不进 `run-all`**，
+要单独跑、且只在没人用电脑时跑（光标在动就整条 `SKIP`；`-Force` 强行跑）：
+
+```powershell
+dotnet build src\Shiyu.App\Shiyu.App.csproj -c Debug
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-reverse.ps1
+```
+
+流程：剪贴板放一段已知文字 → 记事本（临时文件）置于前台 → 以 `SHIYU_PROBE_CMD=reverse` 开探针实例
+（假后端 + 监听剪贴板）→ 往框里输入两个汉字 → 等输出 `[EN] ` + 原文 → 向框投递 Enter →
+UIA 读回记事本，应含该输出；剪贴板应回到原来那段文字；历史条目数应与播种时一致（回贴的写入与
+还原不产生历史条目）；框内全部可交互元素有名字。已有记事本在跑、或剪贴板里是图片/文件时整条 `SKIP`，
+绝不碰用户的那一份。
+
+副作用：用户真实的拾语实例会把探针的几次剪贴板写入当成普通复制，在真实历史里留下至多两条探针
+文字（删掉即可）；Windows 11 的记事本可能把贴进去的未保存文字留成下次启动时恢复的标签页，不保存关掉。
+
 ### 结果怎么读
 
 - `defect:*` 的 **FAIL 是好事**：它表示评审（`docs/review/2026-10-01-ui-design.md`）列出的已知视觉缺陷
@@ -33,8 +52,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\probes\probe-bar.ps1
 - `SHIYU_DATA_DIR=<目录>`：数据目录与 `settings.json` 全部指向该目录（绝不读写用户真实设置）；
   单实例互斥量改为 `Shiyu-probe-<目录哈希>`，与用户的 `Local\Shiyu` 永不相撞（同目录的探针之间仍互斥）。
   同时**不注册热键、不装 Win+V/划词钩子、不监听剪贴板、不查更新、不弹首用引导**——用户实例不受任何影响。
-- `SHIYU_PROBE_CMD=bar|panel|library|settings|quickbar`：启动即直接打开对应窗口（走与热键相同的内部方法）。
+- `SHIYU_PROBE_CMD=bar|panel|library|settings|quickbar|reverse`：启动即直接打开对应窗口（走与热键相同的内部方法）。
   `SHIYU_PROBE_ITEM` 让设置窗直接深链到某个设置项；`SHIYU_PROBE_TEXT` 给面板喂要翻译的句子。
+- 反向输入框（票 43）的两个 DEBUG 旋钮，只给 `probe-reverse.ps1` 用：
+  `SHIYU_FAKE_BACKEND=1` 装确定性的假后端（返回 `[EN] ` + 原文，不碰网络）；
+  `SHIYU_PROBE_CLIPBOARD=1` 让探针里照常监听剪贴板（探针默认不监听），端到端核对"回贴的写入与还原
+  不产生历史条目"要它在场。`Start-ProbeApp` 的 `-ExtraEnv @{ ... }` 参数负责只在启动那一刻设置它们。
 
 `run-all.ps1` 开头有两项并存验证：由脚本自己握住 `Local\Shiyu` 互斥量再启动探针（模拟用户实例在场），
 以及同目录双探针互斥（用户实例在跑时会自动 SKIP 这一项，避免广播唤起真窗口）。

@@ -71,6 +71,7 @@ public class SettingsSchemaTests
             ["hotkey.capture"] = "hotkeys",
             ["hotkey.clipboard"] = "hotkeys",
             ["hotkey.library"] = "hotkeys",
+            ["hotkey.reverse"] = "hotkeys",
             ["hotkeys.cheatsheet"] = "hotkeys",
             ["hotkeys.reset"] = "hotkeys",
 
@@ -338,5 +339,49 @@ public class SettingsSchemaTests
         var (bindings, problems) = HotkeyPlan.Build(new AppSettings());
         Assert.Empty(problems);
         Assert.DoesNotContain(bindings, b => b.Action == HotkeyAction.Library);
+    }
+
+    [Fact]
+    public void The_reverse_input_hotkey_lives_on_the_hotkeys_page_and_warns_about_Microsoft_365()
+    {
+        // 票 43：Alt+Q 在 Microsoft 365（Word、Excel、PowerPoint、Outlook）里是"跳到搜索框"。
+        // 那是应用内快捷键，RegisterHotKey 不会报冲突，注册后会悄悄把它盖掉——所以 Hint 要写明，
+        // 并告诉用户可以自己改键。
+        var item = Items().Single(i => i.Id == "hotkey.reverse");
+
+        Assert.Equal(SettingsControl.Hotkey, item.Control);
+        Assert.Equal("hotkeys", SettingsSchema.FindPageOf(item.Id)!.Id);
+        Assert.Equal("反向输入", item.Label);
+        Assert.Contains("Microsoft 365", item.Hint);
+        Assert.Contains("Alt+Q", item.Hint);
+        Assert.Contains("改键", item.Hint);
+    }
+
+    [Fact]
+    public void The_reverse_input_hotkey_can_be_found_by_searching_for_what_it_does()
+    {
+        foreach (var query in new[] { "反向输入", "回帖", "输入框", "Alt+Q" })
+        {
+            Assert.Contains(SettingsSearch.Find(query), hit => hit.Item.Id == "hotkey.reverse");
+        }
+    }
+
+    [Fact]
+    public void The_templates_card_says_it_serves_the_reverse_input_too_and_names_both_defaults()
+    {
+        // 「提示词模板」控件的说明里不能还只说"面板"：反向输入框（票 43）也读它，
+        // 并且有自己的默认（"输入框默认"那一列）。
+        var item = Items().Single(i => i.Id == "translate.templates");
+
+        Assert.Contains("反向输入框", item.Hint);
+        Assert.Contains("面板默认", item.Hint);
+        Assert.Contains("输入框默认", item.Hint);
+        Assert.Contains("反向输入", string.Join(' ', item.KeywordList));
+    }
+
+    [Fact]
+    public void Searching_for_the_reverse_input_default_lands_on_the_templates_card()
+    {
+        Assert.Contains(SettingsSearch.Find("输入框默认"), hit => hit.Item.Id == "translate.templates");
     }
 }

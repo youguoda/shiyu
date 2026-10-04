@@ -9,6 +9,7 @@ internal sealed class AppModules
 {
     public required SelectionModule Selection { get; init; }
     public required TranslationModule Translation { get; init; }
+    public required ReverseInputModule ReverseInput { get; init; }
     public required SettingsModule Settings { get; init; }
     public required BarModule Bar { get; init; }
     public required HotkeyModule Hotkeys { get; init; }
@@ -28,6 +29,7 @@ internal sealed class AppModules
         {
             Selection = new SelectionModule(),
             Translation = new TranslationModule(),
+            ReverseInput = new ReverseInputModule(),
             Settings = new SettingsModule(),
             Bar = new BarModule(),
             Hotkeys = new HotkeyModule(),
@@ -43,6 +45,7 @@ internal sealed class AppModules
         shell.Connect();
         modules.Bar.Attach(shell);
         modules.Translation.Attach(shell);
+        modules.ReverseInput.Attach(shell);
         shell.SettingsChanged += shell.ApplyPipelineSettings;
         modules.Hotkeys.Attach(shell);
 
@@ -51,6 +54,7 @@ internal sealed class AppModules
         shell.ShowQuickPaste = modules.Bar.ShowQuickPaste;
         shell.TranslateSelection = modules.Selection.TranslateSelection;
         shell.TranslateClipboard = modules.Selection.TranslateClipboard;
+        shell.ShowReverseInput = modules.ReverseInput.Show;
         shell.ShowPanel = modules.Translation.ShowPanel;
         shell.ShowBadge = modules.Selection.ShowBadge;
         shell.DragSelected = modules.Selection.OnDragSelected;

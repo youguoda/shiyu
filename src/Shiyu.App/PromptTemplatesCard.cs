@@ -9,16 +9,16 @@ using Shiyu.Core;
 namespace Shiyu.App;
 
 /// <summary>
-/// 设置·翻译下的「提示词模板」（票 42）。每个模板一行，两个开关——"设为默认"与
-/// "出现在切换里"：前者决定面板启动时用哪个模板，后者决定它在面板的模板按钮（以及日后
-/// 反向输入框的 Ctrl+E）循环里出不出现，两者互相独立。
+/// 设置·翻译下的「提示词模板」（票 42）。每个模板一行，三个开关——"面板默认"、"输入框默认"与
+/// "出现在切换里"：前两者分别决定面板与反向输入框（票 43）启动时用哪个模板，后者决定它在面板的
+/// 模板按钮与反向输入框的 Ctrl+E 共用的循环里出不出现，三者互相独立。
 ///
 /// 内置模板在前、只读，带「复制为自建」；之后是自建的，可以新建、编辑、删除。编辑框
 /// 只有三项：名字、提示词、"出现在切换里"。不暴露温度和模型——CONTEXT.md 说了不做高级
 /// 参数面板。同一个控件里做完，不另做一个静态 Choice 再替换掉。
 ///
-/// 数据是 <see cref="AppSettings.DefaultPromptTemplateId"/>、<see cref="AppSettings.TemplateCycle"/>
-/// 与 <see cref="AppSettings.PromptTemplates"/>；怎样落到设置上、怎样校验的逻辑在 Core 的
+/// 数据是 <see cref="AppSettings.DefaultPromptTemplateId"/>、<see cref="AppSettings.ReverseInputTemplateId"/>、
+/// <see cref="AppSettings.TemplateCycle"/> 与 <see cref="AppSettings.PromptTemplates"/>；怎样落到设置上、怎样校验的逻辑在 Core 的
 /// <see cref="PromptTemplates"/>（有测试），这里只负责摆控件、转达点击、把校验的话说给
 /// 用户。写设置一律走 SettingsStore：这是在设置窗里写，属于常规路径，不涉及面板 Esc
 /// 那个问题。
@@ -28,14 +28,17 @@ namespace Shiyu.App;
 /// </summary>
 internal sealed class PromptTemplatesCard
 {
-    // 两列开关的宽度固定：每行是各自的 Grid，Auto 列对不齐。
-    private const double DefaultColumnWidth = 92;
-    private const double CycleColumnWidth = 100;
+    // 三列开关的宽度固定：每行是各自的 Grid，Auto 列对不齐。票 43 加了第三列（输入框默认），三列
+    // 合计 260（原来两列 192）：各自收窄了一点，说明文字那一列才不被挤没——卡片变窄时说明会折行，
+    // 但至少还有 280 上下可用。
+    private const double DefaultColumnWidth = 84;
+    private const double ReverseColumnWidth = 84;
+    private const double CycleColumnWidth = 92;
 
     /// <summary>自建模板在行里的预览长度：一眼认出是哪个，不占成一大段。</summary>
     private const int PreviewLength = 36;
 
-    private sealed record RowControls(ToggleButton Default, CheckBox Cycle);
+    private sealed record RowControls(ToggleButton Default, ToggleButton Reverse, CheckBox Cycle);
 
     private readonly Func<AppSettings> _current;
     private readonly Func<Func<AppSettings, AppSettings>, bool> _update;
@@ -96,6 +99,7 @@ internal sealed class PromptTemplatesCard
         }
 
         var defaultId = PromptTemplates.ResolveDefault(settings).Id;
+        var reverseId = PromptTemplates.ResolveReverseDefault(settings).Id;
         var inCycle = PromptTemplates.Cycle(settings).Select(template => template.Id).ToHashSet();
 
         foreach (var (id, row) in _controls)
@@ -103,6 +107,11 @@ internal sealed class PromptTemplatesCard
             var isDefault = id == defaultId;
             row.Default.IsChecked = isDefault;
             row.Default.Content = isDefault ? "默认" : "设为默认";
+
+            var isReverse = id == reverseId;
+            row.Reverse.IsChecked = isReverse;
+            row.Reverse.Content = isReverse ? "默认" : "设为默认";
+
             row.Cycle.IsChecked = inCycle.Contains(id);
         }
 
@@ -118,6 +127,7 @@ internal sealed class PromptTemplatesCard
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DefaultColumnWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ReverseColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CycleColumnWidth) });
         return grid;
     }
@@ -137,7 +147,7 @@ internal sealed class PromptTemplatesCard
         return label;
     }
 
-    /// <summary>列头：两个开关各自是什么意思，行里就不必每行重复一遍。</summary>
+    /// <summary>列头：三个开关各自是什么意思，行里就不必每行重复一遍。</summary>
     private static FrameworkElement BuildHeader()
     {
         var grid = ColumnsGrid();
@@ -151,8 +161,9 @@ internal sealed class PromptTemplatesCard
             grid.Children.Add(label);
         }
 
-        Add("设为默认", 1);
-        Add("出现在切换里", 2);
+        Add("面板默认", 1);
+        Add("输入框默认", 2);
+        Add("出现在切换里", 3);
         return grid;
     }
 
@@ -194,7 +205,7 @@ internal sealed class PromptTemplatesCard
 
     private FrameworkElement BuildNotice()
     {
-        _notice.Text = "当前翻译方式没有提示词这一层（公共通道与免费引擎的 prompt 不在客户端），模板暂不生效；改用自备密钥后启用。";
+        _notice.Text = "当前翻译方式没有提示词这一层（公共通道与免费引擎的 prompt 不在客户端），面板与反向输入框的模板暂不生效；改用自备密钥后启用。";
         _notice.TextWrapping = TextWrapping.Wrap;
         _notice.Margin = new Thickness(0, 8, 0, 0);
         _notice.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
@@ -245,7 +256,7 @@ internal sealed class PromptTemplatesCard
         words.Children.Add(name);
         words.Children.Add(Caption(Describe(template), new Thickness(0, 2, 0, 0)));
 
-        // 行内动作放在说明下面，不另占一列：两列开关已经占了 192，再加一列文字会被挤没。
+        // 行内动作放在说明下面，不另占一列：三列开关已经占了 260，再加一列文字会被挤没。
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(-8, 2, 0, 0) };
         if (template.IsBuiltIn)
         {
@@ -264,20 +275,14 @@ internal sealed class PromptTemplatesCard
 
         // 设为默认：一列里只有一个是默认，选中即 accent（设置窗是常规窗，不受
         // 浮层"静止态只有一处 accent"的约束）。点已是默认的那个不会取消它。
-        var chip = new ToggleButton
-        {
-            Padding = new Thickness(10, 3, 10, 3),
-            MinWidth = DefaultColumnWidth - 8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Cursor = Cursors.Hand,
-        };
-        chip.SetResourceReference(FrameworkElement.StyleProperty, "SegmentChip");
-        // 名字带上模板名：一列里有好几个"设为默认"，念出来要分得清是哪一个。
-        AutomationProperties.SetName(chip, $"{template.Name}：设为默认");
-        chip.Click += (_, _) => OnDefaultClicked(template.Id);
+        // 面板默认与输入框默认（票 43）是两列各管各的，同一个模板可以同时是两边的默认。
+        var chip = DefaultChip(DefaultColumnWidth, $"{template.Name}：设为面板默认", () => OnDefaultClicked(template.Id));
         Grid.SetColumn(chip, 1);
         grid.Children.Add(chip);
+
+        var reverse = DefaultChip(ReverseColumnWidth, $"{template.Name}：设为输入框默认", () => OnReverseDefaultClicked(template.Id));
+        Grid.SetColumn(reverse, 2);
+        grid.Children.Add(reverse);
 
         var cycle = new CheckBox
         {
@@ -288,11 +293,28 @@ internal sealed class PromptTemplatesCard
         cycle.SetResourceReference(FrameworkElement.StyleProperty, "ToggleSwitch");
         AutomationProperties.SetName(cycle, $"{template.Name}：出现在切换里");
         cycle.Click += (_, _) => OnCycleClicked(template.Id, cycle.IsChecked == true);
-        Grid.SetColumn(cycle, 2);
+        Grid.SetColumn(cycle, 3);
         grid.Children.Add(cycle);
 
-        _controls[template.Id] = new RowControls(chip, cycle);
+        _controls[template.Id] = new RowControls(chip, reverse, cycle);
         return grid;
+    }
+
+    /// <summary>"设为默认"那一枚：名字带上模板名与是哪一边的默认——一列里有好几个，念出来要分得清。</summary>
+    private static ToggleButton DefaultChip(double columnWidth, string accessibleName, Action click)
+    {
+        var chip = new ToggleButton
+        {
+            Padding = new Thickness(10, 3, 10, 3),
+            MinWidth = columnWidth - 8,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = Cursors.Hand,
+        };
+        chip.SetResourceReference(FrameworkElement.StyleProperty, "SegmentChip");
+        AutomationProperties.SetName(chip, accessibleName);
+        chip.Click += (_, _) => click();
+        return chip;
     }
 
     /// <summary>行内文字动作：次要、不抢眼；名字写全（"编辑「润色」"），一列里有好几个"编辑"。</summary>
@@ -543,12 +565,20 @@ internal sealed class PromptTemplatesCard
     private void Delete(PromptTemplate template)
     {
         var settings = _current();
-        var isDefault = PromptTemplates.ResolveDefault(settings).Id == template.Id;
+        var isPanelDefault = PromptTemplates.ResolveDefault(settings).Id == template.Id;
+        var isReverseDefault = PromptTemplates.ResolveReverseDefault(settings).Id == template.Id;
 
-        // 删除正被用作默认的模板时，确认框写明"将回落为标准"。自建的措辞归用户，
-        // 删了就没了，所以一律确认；按钮写全动词与对象（§6.5），Enter 落在取消上。
-        var body = isDefault
-            ? $"「{template.Name}」正被用作默认模板，删除后将回落为标准。删除后无法恢复。"
+        // 删除正被用作默认的模板时，确认框写明"将回落为标准"（面板的、输入框的，哪边用着说哪边）。
+        // 自建的措辞归用户，删了就没了，所以一律确认；按钮写全动词与对象（§6.5），Enter 落在取消上。
+        var usedAs = (isPanelDefault, isReverseDefault) switch
+        {
+            (true, true) => "面板与反向输入框的默认模板",
+            (true, false) => "面板的默认模板",
+            (false, true) => "反向输入框的默认模板",
+            _ => null,
+        };
+        var body = usedAs is not null
+            ? $"「{template.Name}」正被用作{usedAs}，删除后将回落为标准。删除后无法恢复。"
             : $"删除「{template.Name}」？删除后无法恢复。";
 
         var answer = ContentDialog.Show(
@@ -576,6 +606,16 @@ internal sealed class PromptTemplatesCard
         // 即改即生效（ADR-0012 #15）：写成功后 store 的广播会回到 Refresh；写失败
         // 宿主已经在卡片里说了话，这里把开关拨回事实。
         if (!_update(settings => PromptTemplates.SetDefault(settings, id)))
+        {
+            Refresh(_current());
+        }
+    }
+
+    private void OnReverseDefaultClicked(string id)
+    {
+        // 同上：即改即生效，写失败把开关拨回事实。反向输入框的运行时模板跟随这个设置
+        // （只在它自己的默认变了时才覆盖，见 PromptTemplates.ReconcileReverse）。
+        if (!_update(settings => PromptTemplates.SetReverseDefault(settings, id)))
         {
             Refresh(_current());
         }

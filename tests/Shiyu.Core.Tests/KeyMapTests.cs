@@ -95,6 +95,7 @@ public class KeyMapTests
             BarHotkey = "Ctrl+Alt+B",
             ClipboardTranslateHotkey = "Ctrl+Alt+X",
             LibraryHotkey = "Ctrl+Alt+L",
+            ReverseInputHotkey = "Ctrl+Alt+R",
         };
 
         foreach (var action in Enum.GetValues<HotkeyAction>())
@@ -152,6 +153,21 @@ public class KeyMapTests
     {
         // 打开管理窗默认不设：行文里连 \t 都不出现，空列比没列诚实。
         Assert.Equal("管理历史…", KeyMap.TrayMenuLine(HotkeyAction.Library, new AppSettings()));
+    }
+
+    [Fact]
+    public void The_reverse_input_row_is_named_and_carries_its_live_combination()
+    {
+        // 票 43：托盘菜单的动作行，名称"反向输入"，加速键列读现设置——改键即改菜单。
+        Assert.Equal("反向输入", KeyMap.TrayLabel(HotkeyAction.ReverseInput));
+        Assert.Equal("反向输入\tAlt+Q", KeyMap.TrayMenuLine(HotkeyAction.ReverseInput, new AppSettings()));
+        Assert.Equal(
+            "反向输入\tCtrl+Alt+R",
+            KeyMap.TrayMenuLine(
+                HotkeyAction.ReverseInput, new AppSettings { ReverseInputHotkey = "Ctrl+Alt+R" }));
+        Assert.Equal(
+            "反向输入",
+            KeyMap.TrayMenuLine(HotkeyAction.ReverseInput, new AppSettings { ReverseInputHotkey = " " }));
     }
 
     [Fact]

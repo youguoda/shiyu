@@ -20,6 +20,7 @@ internal sealed class TrayModule
     private const string BarKey = "bar";
     private const string QuickPasteKey = "quick-paste";
     private const string TranslateClipboardKey = "translate-clipboard";
+    private const string ReverseInputKey = "reverse-input";
     private const string LibraryKey = "library";
     private const string SettingsKey = "settings";
     private const string KeymapKey = "keymap";
@@ -80,7 +81,7 @@ internal sealed class TrayModule
     }
 
     /// <summary>
-    /// §5.2 的菜单结构：三个有键的动作 / 分隔 / 管理历史（设了键才带列）、
+    /// §5.2 的菜单结构：四个有键的动作（票 43 起含反向输入）/ 分隔 / 管理历史（设了键才带列）、
     /// 设置、键位速查 / 分隔 / 检查更新、退出。标签与加速键全部由
     /// <see cref="KeyMap"/> 从现设置渲染——改键即改菜单。
     /// </summary>
@@ -90,6 +91,7 @@ internal sealed class TrayModule
         new(BarKey, KeyMap.TrayLabel(HotkeyAction.Bar), KeyMap.Combination(HotkeyAction.Bar, settings)),
         new(QuickPasteKey, KeyMap.TrayLabel(HotkeyAction.QuickBar), KeyMap.Combination(HotkeyAction.QuickBar, settings)),
         new(TranslateClipboardKey, KeyMap.TrayLabel(HotkeyAction.ClipboardTranslate), KeyMap.Combination(HotkeyAction.ClipboardTranslate, settings)),
+        new(ReverseInputKey, KeyMap.TrayLabel(HotkeyAction.ReverseInput), KeyMap.Combination(HotkeyAction.ReverseInput, settings)),
         new(string.Empty, null, null),
         new(LibraryKey, KeyMap.TrayLabel(HotkeyAction.Library), KeyMap.Combination(HotkeyAction.Library, settings)),
         new(SettingsKey, "设置…", null),
@@ -112,6 +114,11 @@ internal sealed class TrayModule
             case TranslateClipboardKey:
                 shell.TranslateClipboard?.Invoke();
                 break;
+            case ReverseInputKey:
+                // 托盘菜单刚收起，前台还在回到用户原来所在应用的路上：等一拍再呼出，否则框记下的
+                // "原来的窗口"会是拾语自己的消息窗口，回贴就没有地方可回。
+                RunAfterMenuSettles(() => shell.ShowReverseInput?.Invoke());
+                break;
             case LibraryKey:
                 shell.ShowLibrary?.Invoke();
                 break;
@@ -129,5 +136,17 @@ internal sealed class TrayModule
                 Application.Current.Shutdown();
                 break;
         }
+    }
+
+    /// <summary>单发地等一拍再执行（托盘菜单收起后，前台回到原应用需要一两帧）。</summary>
+    private static void RunAfterMenuSettles(Action action)
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            action();
+        };
+        timer.Start();
     }
 }

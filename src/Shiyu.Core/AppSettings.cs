@@ -87,6 +87,14 @@ public sealed record AppSettings
     public IReadOnlyList<string> TemplateCycle { get; init; } = PromptTemplate.DefaultCycle;
 
     /// <summary>
+    /// 反向输入框（票 43）启动时用的提示词模板 id，默认口语：回英文帖、写给人看的话，口语比标准
+    /// 自然。与面板的 <see cref="DefaultPromptTemplateId"/> 各管各的；运行中在输入框里换模板
+    /// 只改运行时状态、不写这里。指向不存在的模板时由 <see cref="Shiyu.Core.PromptTemplates"/>
+    /// 在数据层回落到标准。
+    /// </summary>
+    public string ReverseInputTemplateId { get; init; } = PromptTemplate.ColloquialId;
+
+    /// <summary>
     /// 用户自建的提示词模板（票 42 阶段二），形状同 <see cref="ExclusionRules"/>。读取时
     /// 缺字段、占了保留 id、id 重复的条目一律当作不存在（见 <see cref="Shiyu.Core.PromptTemplates"/>）。
     /// </summary>
@@ -230,6 +238,13 @@ public sealed record AppSettings
     /// 管理窗有托盘与窄条入口，不设键不缺路；空串 = 不注册。
     /// </summary>
     public string LibraryHotkey { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 反向输入框（票 43）：在当前输入框旁呼出小框，打中文出英文，Enter 贴回原处。默认 Alt+Q（Xtranslate
+    /// 同款）。注意 Microsoft 365（Word、Excel、PowerPoint、Outlook）里 Alt+Q 是"跳到搜索框"：这是应用内
+    /// 快捷键，RegisterHotKey 不会报冲突，注册后会悄悄把它盖掉——设置项的说明里写明，用户可以自己改键。
+    /// </summary>
+    public string ReverseInputHotkey { get; init; } = "Alt+Q";
 
     // --- narrow bar density ---
     // Density is how much content each card clamps, never how small the text

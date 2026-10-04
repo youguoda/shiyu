@@ -82,6 +82,9 @@ internal sealed class AppShell
     public Action? TranslateSelection { get; set; }
     public Action? TranslateClipboard { get; set; }
 
+    /// <summary>反向输入框（票 43）：在当前输入框旁呼出，打中文出英文，Enter 贴回原处。</summary>
+    public Action? ShowReverseInput { get; set; }
+
     /// <summary>一次拖选完成（UI 线程）：热键模块的钩子把事件转给取词模块。</summary>
     public Action? DragSelected { get; set; }
 
@@ -214,7 +217,9 @@ internal sealed class AppShell
     /// </summary>
     public void AttachClipboardPipeline()
     {
-        if (IsProbe)
+        // 票 43：反向输入框的端到端探针要核对"回贴的写入与还原不产生历史条目"，得让监听在场——
+        // 仅 Debug 构建、仅探针自己点名（SHIYU_PROBE_CLIPBOARD=1）；Release 里恒为假。
+        if (IsProbe && !DebugOverrides.ProbeClipboard)
         {
             return;
         }

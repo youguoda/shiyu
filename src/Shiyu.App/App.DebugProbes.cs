@@ -74,7 +74,7 @@ public partial class App
 
     /// <summary>
     /// 探针的呼出通道（票 15）：热键一颗都没注册，所以窗口只能这样开——
-    /// <c>SHIYU_PROBE_CMD=bar|panel|library|settings|quickbar</c> 启动即直接
+    /// <c>SHIYU_PROBE_CMD=bar|panel|library|settings|quickbar|reverse</c> 启动即直接
     /// 显示对应窗口，走的是和热键完全相同的内部方法。
     /// <c>SHIYU_PROBE_ITEM</c> 让设置窗直接落到某个设置项（既有深链）；
     /// <c>SHIYU_PROBE_TEXT</c> 给面板一句要翻译的话。仅在探针模式生效。
@@ -121,6 +121,12 @@ public partial class App
 
             case "panel":
                 _modules!.Translation.ShowPanel(text);
+                break;
+
+            // 票 43：反向输入框。探针没有全局热键，所以直接开；脚本在此之前把记事本置于前台——
+            // 框记下的"原来的窗口"就是那时的前台。配 SHIYU_FAKE_BACKEND=1 用确定性的假后端。
+            case "reverse":
+                shell.ShowReverseInput?.Invoke();
                 break;
 
             // 票 25：引导五屏的走查通道。探针原则上跳过首启引导（票 15），

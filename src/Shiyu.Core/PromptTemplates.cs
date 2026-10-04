@@ -93,6 +93,10 @@ public static class PromptTemplates
     public static PromptTemplate ResolveDefault(AppSettings settings)
         => Resolve(settings, settings.DefaultPromptTemplateId);
 
+    /// <summary>反向输入框（票 43）启动时、以及它的默认模板被改动时，用的那个模板。</summary>
+    public static PromptTemplate ResolveReverseDefault(AppSettings settings)
+        => Resolve(settings, settings.ReverseInputTemplateId);
+
     /// <summary>
     /// 循环列表：设置里存的 id 按原顺序解析，不认识的与重复的滤掉。面板的模板按钮
     /// 与反向输入框的 Ctrl+E 共用它。
@@ -124,6 +128,16 @@ public static class PromptTemplates
     public static AppSettings SetDefault(AppSettings settings, string id)
         => All(settings).Any(template => template.Id == id)
             ? settings with { DefaultPromptTemplateId = id }
+            : settings;
+
+    /// <summary>
+    /// 把某个模板设为反向输入框的默认（设置里「输入框默认」那一列，票 43）。与
+    /// <see cref="SetDefault"/> 各管各的：同一个模板可以同时是两边的默认，也可以不是；
+    /// 不认识的 id 同样不写。
+    /// </summary>
+    public static AppSettings SetReverseDefault(AppSettings settings, string id)
+        => All(settings).Any(template => template.Id == id)
+            ? settings with { ReverseInputTemplateId = id }
             : settings;
 
     /// <summary>
@@ -240,8 +254,9 @@ public static class PromptTemplates
     }
 
     /// <summary>
-    /// 删除：从自建列表与循环里拿掉；它正被用作默认时，默认回落为标准（读取端本来也会
-    /// 回落，这里把设置文件写干净）。内置模板与不存在的 id 原样返回——内置只读。
+    /// 删除：从自建列表与循环里拿掉；它正被用作默认（面板的、反向输入框的）时，默认回落为
+    /// 标准（读取端本来也会回落，这里把设置文件写干净）。内置模板与不存在的 id 原样返回——
+    /// 内置只读。
     /// </summary>
     public static AppSettings DeleteCustom(AppSettings settings, string id)
     {
@@ -257,6 +272,11 @@ public static class PromptTemplates
             DefaultPromptTemplateId = settings.DefaultPromptTemplateId == id
                 ? PromptTemplate.StandardId
                 : settings.DefaultPromptTemplateId,
+
+            // 反向输入框的默认同理（票 43）：正被它用着的模板删了，也回落为标准。
+            ReverseInputTemplateId = settings.ReverseInputTemplateId == id
+                ? PromptTemplate.StandardId
+                : settings.ReverseInputTemplateId,
         };
     }
 
@@ -316,13 +336,28 @@ public static class PromptTemplates
     /// 被改了正文、被删了之后，运行时的值跟着变（删了即回落到标准）。
     /// </summary>
     public static PromptTemplate Reconcile(AppSettings before, AppSettings after, PromptTemplate runtime)
+        => ReconcileWith(before, after, runtime, ResolveDefault);
+
+    /// <summary>
+    /// 反向输入框的同一件事（票 43）：运行时模板同样只活在进程里，只有它自己的默认模板
+    /// （<see cref="AppSettings.ReverseInputTemplateId"/>）或共用的循环列表真的变了，才用新的默认值
+    /// 覆盖；面板的默认模板变了与它无关。
+    /// </summary>
+    public static PromptTemplate ReconcileReverse(AppSettings before, AppSettings after, PromptTemplate runtime)
+        => ReconcileWith(before, after, runtime, ResolveReverseDefault);
+
+    private static PromptTemplate ReconcileWith(
+        AppSettings before,
+        AppSettings after,
+        PromptTemplate runtime,
+        Func<AppSettings, PromptTemplate> resolveDefault)
     {
         var selectionChanged =
-            ResolveDefault(before).Id != ResolveDefault(after).Id
+            resolveDefault(before).Id != resolveDefault(after).Id
             || !Cycle(before).Select(template => template.Id)
                 .SequenceEqual(Cycle(after).Select(template => template.Id));
 
-        return selectionChanged ? ResolveDefault(after) : Resolve(after, runtime.Id);
+        return selectionChanged ? resolveDefault(after) : Resolve(after, runtime.Id);
     }
 }
 

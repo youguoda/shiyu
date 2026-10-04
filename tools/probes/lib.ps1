@@ -6,7 +6,8 @@
 #     only ever the pid we started ourselves)
 #   - finding a window of that instance by its DIP width (windows of this
 #     app are size-fixed: bar 384 / panel 420 / quickbar 460 / settings 880 /
-#     library 1100 (ticket 24, was 1150); the app's WPF class names are
+#     library 1100 (ticket 24, was 1150) / reverse input 520 (ticket 43; its
+#     height grows with the content); the app's WPF class names are
 #     per-instance GUIDs, so a width match plus pid match is the structural
 #     way to tell them apart)
 #   - PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT) screenshots (reads the
@@ -466,12 +467,21 @@ function Start-ProbeApp {
         [Parameter(Mandatory = $true)][string]$DataDir,
         [string]$Cmd = '',
         [string]$Item = '',
-        [string]$Text = ''
+        [string]$Text = '',
+        # Extra DEBUG-only knobs for the probe instance (ticket 43), e.g.
+        # @{ SHIYU_FAKE_BACKEND = '1'; SHIYU_PROBE_CLIPBOARD = '1' }. Set only
+        # around the launch and restored afterwards, like the four above.
+        [hashtable]$ExtraEnv = @{}
     )
     if (-not (Test-Path $Exe)) { throw "probe exe not found: $Exe" }
     if ($DataDir -notlike "$env:TEMP*") { throw "refusing to probe outside TEMP: $DataDir" }
 
     $old = @{ DATA = $env:SHIYU_DATA_DIR; CMD = $env:SHIYU_PROBE_CMD; ITEM = $env:SHIYU_PROBE_ITEM; TEXT = $env:SHIYU_PROBE_TEXT }
+    $oldExtra = @{}
+    foreach ($name in $ExtraEnv.Keys) {
+        $oldExtra[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+        [Environment]::SetEnvironmentVariable($name, [string]$ExtraEnv[$name], 'Process')
+    }
     $env:SHIYU_DATA_DIR = $DataDir
     $env:SHIYU_PROBE_CMD = $Cmd
     $env:SHIYU_PROBE_ITEM = $Item
@@ -481,6 +491,9 @@ function Start-ProbeApp {
     } finally {
         $env:SHIYU_DATA_DIR = $old.DATA; $env:SHIYU_PROBE_CMD = $old.CMD
         $env:SHIYU_PROBE_ITEM = $old.ITEM; $env:SHIYU_PROBE_TEXT = $old.TEXT
+        foreach ($name in $oldExtra.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $oldExtra[$name], 'Process')
+        }
     }
     return $p
 }
