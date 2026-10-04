@@ -365,4 +365,23 @@ public class SettingsSchemaTests
             Assert.Contains(SettingsSearch.Find(query), hit => hit.Item.Id == "hotkey.reverse");
         }
     }
+
+    [Fact]
+    public void The_templates_card_says_it_serves_the_reverse_input_too_and_names_both_defaults()
+    {
+        // 「提示词模板」控件的说明里不能还只说"面板"：反向输入框（票 43）也读它，
+        // 并且有自己的默认（"输入框默认"那一列）。
+        var item = Items().Single(i => i.Id == "translate.templates");
+
+        Assert.Contains("反向输入框", item.Hint);
+        Assert.Contains("面板默认", item.Hint);
+        Assert.Contains("输入框默认", item.Hint);
+        Assert.Contains("反向输入", string.Join(' ', item.KeywordList));
+    }
+
+    [Fact]
+    public void Searching_for_the_reverse_input_default_lands_on_the_templates_card()
+    {
+        Assert.Contains(SettingsSearch.Find("输入框默认"), hit => hit.Item.Id == "translate.templates");
+    }
 }

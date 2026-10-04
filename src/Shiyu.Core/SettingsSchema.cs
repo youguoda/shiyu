@@ -281,8 +281,8 @@ public static class SettingsSchema
             new SettingsSection("translate.templates", "提示词模板",
                 new SettingsItem(
                     "translate.templates", "提示词模板", SettingsControl.Custom,
-                    Hint: "决定面板怎样处理当下这段文字：标准、口语、正式是翻译，换个语气；提示词优化把随手写的需求整理成给 AI 编程助手的提示词。只对自备密钥的大模型生效。",
-                    Keywords: ["提示词", "prompt", "模板", "口语", "正式", "优化", "vibe coding", "润色", "风格", "语气", "人设"],
+                    Hint: "决定面板与反向输入框怎样处理当下这段文字：标准、口语、正式是翻译，换个语气；提示词优化把随手写的需求整理成给 AI 编程助手的提示词。「面板默认」管面板启动时用哪个，「输入框默认」管反向输入框。只对自备密钥的大模型生效。",
+                    Keywords: ["提示词", "prompt", "模板", "口语", "正式", "优化", "vibe coding", "润色", "风格", "语气", "人设", "反向输入", "输入框默认"],
                     Icon: "E70F",
                     FullBleed: true)),
             new SettingsSection("translate.trigger", "拖选",
