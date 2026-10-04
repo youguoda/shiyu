@@ -51,20 +51,25 @@
 
 ## 安装
 
-**目前还没有发布版本**（发布流水线正在搭建中）。当前请自行构建：
+从 [Releases](https://github.com/youguoda/shiyu/releases) 下载最新的
+`shiyu-win-x64.zip`，校验（可选，同目录附 `.sha256` 与 `.sig` 签名）后解压到
+一个固定位置（例如 `%LOCALAPPDATA%\Programs\Shiyu`），运行其中的
+`Shiyu.App.exe`。
+
+- 包为 self-contained，无需另装 .NET 运行时。
+- 拾语默认开机自启，自启项指向你实际运行的位置——换了位置后从新位置运行一次，
+  自启就会跟着过去。
+- 应用内"设置 → 关于 → 检查更新"可检查新版本；已装 rc1 的用户会收到 0.9.0 的
+  自动更新提示。
+
+自行构建：
 
 ```powershell
 dotnet build Shiyu.sln -c Release
 ```
 
-产物在 `src/Shiyu.App/bin/Release/net9.0-windows/`，运行其中的 `Shiyu.App.exe`。
-
-建议把整个 `net9.0-windows` 目录复制到一个固定位置（例如
-`%LOCALAPPDATA%\Programs\Shiyu`）再从那里运行：
-
-- 拾语默认开机自启。**发布构建**在启动时会把自启项指向你实际运行的那个位置——
-  换了位置后从新位置运行一次，自启就会跟着过去。
-- **调试构建**启动时不写自启，适合开发时使用。
+产物在 `src/Shiyu.App/bin/Release/net9.0-windows/`。**调试构建**启动时不写自启，
+适合开发时使用。
 
 ## 首次配置翻译
 
