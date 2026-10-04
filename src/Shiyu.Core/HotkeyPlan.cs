@@ -17,22 +17,26 @@ public enum HotkeyAction
 
     /// <summary>打开历史管理窗（默认不设，§5.1）。</summary>
     Library,
+
+    /// <summary>反向输入框（票 43）：在当前输入框旁呼出，打中文出英文，Enter 贴回原处。</summary>
+    ReverseInput,
 }
 
 /// <summary>One hotkey that parsed and survived deduplication, ready to register.</summary>
 public sealed record HotkeyBinding(HotkeyAction Action, HotkeySpec Spec);
 
 /// <summary>
-/// 把设置里的四个热键字符串变成一份注册方案（O-27 下沉候选 3）。
+/// 把设置里的热键字符串（五个动作加管理窗，票 43 起再加反向输入，共六个槽位）变成一份
+/// 注册方案（O-27 下沉候选 3）。
 ///
 /// 这曾是三份各自为政的实现：设置窗校验四键互异、引导只校验三个（漏了
 /// 快速粘贴——用户把窄条设成 Ctrl+Shift+V 时，保存照常通过，随后 App 注册
 /// 失败，托盘误报"已被其他软件占用"，而占住它的是拾语自己的快速粘贴）、
 /// App 注册循环各写各的解析。现在三处都问这一份：
 ///
-/// - 解析四键（<see cref="HotkeySpec.Parse"/>，裸键缺修饰键在此就被拒绝）；
+/// - 解析各键（<see cref="HotkeySpec.Parse"/>，裸键缺修饰键在此就被拒绝）；
 /// - 键间互撞逐对点名——问题文案说清是哪两个动作撞了哪一个组合；
-/// - 能注册的照常返回，坏一个不赔上其余三个。
+/// - 能注册的照常返回，坏一个不赔上其余的。
 /// </summary>
 public static class HotkeyPlan
 {
@@ -45,6 +49,7 @@ public static class HotkeyPlan
             [HotkeyAction.Bar] = "窄条",
             [HotkeyAction.ClipboardTranslate] = "翻译剪贴板",
             [HotkeyAction.Library] = "打开管理窗",
+            [HotkeyAction.ReverseInput] = "反向输入",
         };
 
     /// <summary>
@@ -68,6 +73,7 @@ public static class HotkeyPlan
             (HotkeyAction.Bar, settings.BarHotkey),
             (HotkeyAction.ClipboardTranslate, settings.ClipboardTranslateHotkey),
             (HotkeyAction.Library, settings.LibraryHotkey),
+            (HotkeyAction.ReverseInput, settings.ReverseInputHotkey),
         };
 
         var problems = new List<string>();

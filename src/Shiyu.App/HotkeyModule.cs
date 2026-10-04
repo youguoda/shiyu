@@ -83,6 +83,11 @@ internal sealed class HotkeyModule
 
             // 打开管理窗（§5.1 新增，默认不设）：键盘重度用户不必绕托盘。
             [HotkeyAction.Library] = () => shell.ShowLibrary?.Invoke(),
+
+            // 反向输入框（票 43，默认 Alt+Q）：在当前输入框旁呼出，打中文出英文，Enter 贴回。
+            // 在 Microsoft 365 里 Alt+Q 是应用内的"跳到搜索框"——RegisterHotKey 不会报冲突，注册后
+            // 会悄悄把它盖掉；设置项的说明里写明了，用户可以自己改键。
+            [HotkeyAction.ReverseInput] = () => shell.ShowReverseInput?.Invoke(),
         };
 
         var (bindings, problems) = HotkeyPlan.Build(shell.Settings);

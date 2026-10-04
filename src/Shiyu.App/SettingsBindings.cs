@@ -38,6 +38,7 @@ internal static class SettingsBindings
         "hotkey.quickbar" => settings.QuickBarHotkey,
         "hotkey.bar" => settings.BarHotkey,
         "hotkey.library" => settings.LibraryHotkey,
+        "hotkey.reverse" => settings.ReverseInputHotkey,
         "service.target-language" => settings.TargetLanguage,
         "service.source-language" => settings.SourceLanguage ?? string.Empty,
 
@@ -116,6 +117,7 @@ internal static class SettingsBindings
         "hotkey.quickbar" => current with { QuickBarHotkey = text },
         "hotkey.bar" => current with { BarHotkey = text },
         "hotkey.library" => current with { LibraryHotkey = text },
+        "hotkey.reverse" => current with { ReverseInputHotkey = text },
         "service.target-language" => current with { TargetLanguage = text },
         "service.source-language" => current with
         {

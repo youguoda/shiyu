@@ -141,6 +141,7 @@ public static class KeyMap
         HotkeyAction.Bar => NonEmpty(settings.BarHotkey),
         HotkeyAction.ClipboardTranslate => NonEmpty(settings.ClipboardTranslateHotkey),
         HotkeyAction.Library => NonEmpty(settings.LibraryHotkey),
+        HotkeyAction.ReverseInput => NonEmpty(settings.ReverseInputHotkey),
         _ => null,
     };
 
