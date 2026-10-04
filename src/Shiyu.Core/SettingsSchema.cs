@@ -278,6 +278,13 @@ public static class SettingsSchema
                     Hint: "自备密钥时使用。已保存的凭据不回显。填入后点「保存凭据」。",
                     Keywords: ["凭据", "密钥", "api", "key"],
                     Icon: "E72E")),
+            new SettingsSection("translate.templates", "提示词模板",
+                new SettingsItem(
+                    "translate.templates", "提示词模板", SettingsControl.Custom,
+                    Hint: "决定面板怎样处理当下这段文字：标准、口语、正式是翻译，换个语气；提示词优化把随手写的需求整理成给 AI 编程助手的提示词。只对自备密钥的大模型生效。",
+                    Keywords: ["提示词", "prompt", "模板", "口语", "正式", "优化", "vibe coding", "润色", "风格", "语气", "人设"],
+                    Icon: "E70F",
+                    FullBleed: true)),
             new SettingsSection("translate.trigger", "拖选",
                 new SettingsItem(
                     "hotkeys.selection-badge", "拖选后出翻译徽标", SettingsControl.Toggle,

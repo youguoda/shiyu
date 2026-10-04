@@ -64,12 +64,17 @@ public sealed class OpenAiCompatibleBackend(
     public IAsyncEnumerable<string> TranslateAsync(
         TranslationRequest request,
         CancellationToken cancellation)
-        => StreamAsync(
-            new ModelRequest(TranslationPrompt.For(request), request.Text)
+    {
+        // 提示词模板（票 42）：system、user 两段与温度都由模板决定，ModelRequest 的
+        // 形状不变——示例写在 system 里，不引入多轮假对话。
+        var prompt = TranslationPrompt.Build(request);
+        return StreamAsync(
+            new ModelRequest(prompt.System, prompt.User)
             {
-                Temperature = request.Temperature,
+                Temperature = prompt.Temperature,
             },
             cancellation);
+    }
 
     /// <summary>
     /// The one transport. Translation and agent actions both come through here

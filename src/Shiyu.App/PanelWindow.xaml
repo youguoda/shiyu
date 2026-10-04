@@ -21,10 +21,12 @@
         <StackPanel Margin="16,12">
 
             <!-- 头部：源语言名 · 换方向（挨着它改变的东西）· 目标语言名 ·
+                 提示词模板按钮（票 42，读作"中文 ⇄ 英语 · 口语"）·
                  模式分段（句子态才有；选中 = accent 字形 + 3×12 指示条，
                  KindTab，不靠字重）· 关闭 32×32。语言名统一中文（票 22）。 -->
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
@@ -43,7 +45,27 @@
                 </Button>
                 <TextBlock x:Name="TargetLabel" Grid.Column="2" VerticalAlignment="Center"
                            Foreground="{DynamicResource Brush.TextSecondary}"/>
-                <StackPanel x:Name="ModeSegment" Grid.Column="4" Orientation="Horizontal"
+
+                <!-- 提示词模板按钮（票 42）：点击按 TemplateCycle 循环并立即重跑。
+                     样式中性——FlyoutButton 配次级文字色：ADR-0012 #13 规定浮层静止态
+                     只有一处 accent，这一处已经给了模式分段的选中项。名字按显示宽度
+                     截断加省略号，tooltip 与无障碍名用全名（代码里随状态更新）。
+                     不加面板快捷键、不做弹出菜单：面板不接受焦点。 -->
+                <Button x:Name="TemplateButton" Grid.Column="3" Style="{DynamicResource FlyoutButton}"
+                        Height="{DynamicResource Control.Height}" Padding="8,0" Margin="2,0,0,0"
+                        Cursor="Hand" Click="OnCycleTemplate" Visibility="Collapsed"
+                        AutomationProperties.Name="提示词模板，点击切换"
+                        ToolTip="点击切换提示词模板">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="TemplateSeparator" Text="·" Margin="0,0,6,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <TextBlock x:Name="TemplateName" MaxWidth="96" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </StackPanel>
+                </Button>
+                <StackPanel x:Name="ModeSegment" Grid.Column="5" Orientation="Horizontal"
                             VerticalAlignment="Center" Margin="0,0,8,0">
                     <ToggleButton x:Name="WholeSegment" Style="{DynamicResource KindTab}"
                                   Height="{DynamicResource Control.Height}" Content="整段"
@@ -54,7 +76,7 @@
                                   Cursor="Hand" Checked="OnModeSentenceSegment"
                                   ToolTip="原文与译文按句对照"/>
                 </StackPanel>
-                <Button x:Name="CloseButton" Grid.Column="5" Style="{DynamicResource IconButton}"
+                <Button x:Name="CloseButton" Grid.Column="6" Style="{DynamicResource IconButton}"
                         Cursor="Hand" Click="OnClose" ToolTip="关闭（Esc）"
                         AutomationProperties.Name="关闭">
                     <TextBlock Text="&#xE711;" FontFamily="{DynamicResource Font.Icon}"

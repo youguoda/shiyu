@@ -144,6 +144,25 @@ public partial class PanelWindow : Window
     private string _target;
     private string? _source;
 
+    /// <summary>面板持有的最新设置（票 42）：模板的解析、循环与"模板是否生效"都读它。</summary>
+    private AppSettings _settings;
+
+    /// <summary>
+    /// 面板当下选着的提示词模板（票 42）。只活在进程里，不写设置：面板在场时
+    /// 写设置有三个副作用——① 广播 SettingsChanged 会让 HotkeyModule 整体重建热键
+    /// 注册表，面板持有的作用域 Esc 跟着旧注册表一起被注销，点一下模板按钮 Esc 就
+    /// 失灵；② ApplySettings 会把 _source/_target 打回设置值，用户先换向、再换模板，
+    /// 方向会被打回去；③ 有热键冲突的用户每点一次都会再弹一次冲突气泡。
+    /// 面板是复用的实例，下次弹出时仍是这个模板；启动时取默认模板。
+    /// </summary>
+    private PromptTemplate _template;
+
+    /// <summary>模板是否生效（<see cref="AppSettings.PromptTemplatesApply"/>）：设置变了才重读，不在流式回调里反复建后端。</summary>
+    private bool _templatesApply;
+
+    /// <summary>头部与布局据此取舍，随模板、单词态与设置刷新（<see cref="ApplyTemplateChrome"/>）。</summary>
+    private PanelTemplateState _templateState;
+
     /// <summary>逐句对照显示开关。默认关——整段流式是主路径，对照是阅读辅助。</summary>
     private bool _sentenceMode;
 
@@ -188,6 +207,10 @@ public partial class PanelWindow : Window
         _openSettings = openSettings;
         _target = settings.TargetLanguage;
         _source = settings.SourceLanguage;
+        _settings = settings;
+        _template = PromptTemplates.ResolveDefault(settings);
+        _templatesApply = settings.PromptTemplatesApply;
+        _templateState = PanelTemplateState.For(_template, _templatesApply, wordMode: false);
 
         Backdrop.AttachShell(this, Shell, () => BackdropKind.Acrylic);
     }
@@ -206,6 +229,13 @@ public partial class PanelWindow : Window
     {
         _target = settings.TargetLanguage;
         _source = settings.SourceLanguage;
+
+        // 运行时模板只在默认模板或循环列表真的变了时才被覆盖（票 42）：别处改了无关
+        // 的设置，用户在面板里切到的模板原样保留。
+        _template = PromptTemplates.Reconcile(_settings, settings, _template);
+        _settings = settings;
+        _templatesApply = settings.PromptTemplatesApply;
+        ApplyTemplateChrome();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -345,7 +375,7 @@ public partial class PanelWindow : Window
             }
 
             RenderTranslation(session);
-            if (_sentenceMode)
+            if (SentenceView)
             {
                 RenderSentencePairs(session.Text);
             }
@@ -362,8 +392,12 @@ public partial class PanelWindow : Window
             UpdateLayout();
         });
 
+        // 提示词模板（票 42）：单词态（词典卡）与模板不生效（免费引擎）时一律按标准
+        // 构建，这样免费引擎下回声换向照常工作。
+        var template = PanelTemplateState.For(_template, _templatesApply, _wordMode).Template;
+
         await session.RunAsync(
-            new TranslationRequest(_original, _target) { SourceLanguage = _source },
+            new TranslationRequest(_original, _target) { SourceLanguage = _source, Template = template },
             _inFlight.Token);
 
         // 终态统一在 await 之后结算（流式回调只管增量）：失败在此映射成人
@@ -542,7 +576,7 @@ public partial class PanelWindow : Window
             return;
         }
 
-        if (_sentenceMode)
+        if (SentenceView)
         {
             TranslatedText.Visibility = Visibility.Collapsed;
             return;
@@ -650,9 +684,77 @@ public partial class PanelWindow : Window
     /// <summary>头部与原文块随模式换脸：逐句与单词都藏顶部原文。</summary>
     private void ApplyLayoutMode()
     {
-        ModeSegment.Visibility = _wordMode ? Visibility.Collapsed : Visibility.Visible;
+        // 模式分段与方向标签一并随模板取舍（票 42）：单词态没有分段，改写类固定整段。
+        ApplyTemplateChrome();
         WordHeader.Visibility = _wordMode ? Visibility.Visible : Visibility.Collapsed;
         ApplySentenceMode();
+    }
+
+    /// <summary>
+    /// 实际生效的逐句对照（票 42）：改写类模板下固定为整段——逐句对照是给译文用的，
+    /// 改写结果和原文的句子对不上。用户原来的选择仍留在 <see cref="_sentenceMode"/>
+    /// 里，切回翻译类模板时恢复。
+    /// </summary>
+    private bool SentenceView
+        => _sentenceMode && _templateState.Template.Kind == PromptTemplateKind.Translate;
+
+    /// <summary>
+    /// 头部按模板换脸（票 42）：模板含 {target} 时读作"中文 ⇄ 英语 · 口语"，不含时隐藏
+    /// 源语言、⇄ 与目标语言，只显示模板名；单词态与模板不生效（免费引擎）时按钮隐藏。
+    /// 取舍全在 <see cref="PanelTemplateState"/>（Core，有测试），这里只照着显示。
+    /// </summary>
+    private void ApplyTemplateChrome()
+    {
+        var state = _templateState = PanelTemplateState.For(_template, _templatesApply, _wordMode);
+
+        TemplateButton.Visibility = state.ButtonVisible ? Visibility.Visible : Visibility.Collapsed;
+        TemplateName.Text = _template.Name;
+
+        // 按钮上的名字按显示宽度截断；tooltip 与无障碍名用全名，随状态更新
+        // （探针的 a11y 全件具名扫描要求零无名件）。
+        TemplateButton.ToolTip = $"{_template.Name} · 点击切换提示词模板";
+        AutomationProperties.SetName(TemplateButton, state.AccessibleName);
+
+        var direction = state.DirectionVisible ? Visibility.Visible : Visibility.Collapsed;
+        SourceLabel.Visibility = direction;
+        SwapButton.Visibility = direction;
+        TargetLabel.Visibility = direction;
+        TemplateSeparator.Visibility = direction;
+
+        ModeSegment.Visibility = state.ModeSegmentVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 点击：按 TemplateCycle 循环，并立即用新模板重跑当前原文（票 42）。走换方向那条
+    /// 重跑路径（<see cref="OnSwapDirection"/> → <see cref="RunTranslation"/>），在途请求
+    /// 照旧取消。只改运行时状态，不写设置——理由见 <see cref="_template"/>。
+    /// </summary>
+    private async void OnCycleTemplate(object sender, RoutedEventArgs e)
+    {
+        // async void 逃出去的异常是进程级崩溃（O-05）：与换向同一条纪律。
+        try
+        {
+            var next = PromptTemplates.Next(_template, PromptTemplates.Cycle(_settings));
+            if (next.Id == _template.Id)
+            {
+                // 循环里没有别的可换：不白白重跑一遍。
+                return;
+            }
+
+            _template = next;
+            ApplyTemplateChrome();
+
+            // 改写类固定整段，切回翻译类恢复用户原来的选择。
+            ApplySentenceMode();
+            ResetCopyLabel();
+            ResetSaveLabel();
+            await RunTranslation();
+        }
+        catch (Exception failure)
+        {
+            Log.Event(LogEvent.TranslationFailed, failure, ("template", 1));
+            ShowError(TranslationUserErrorMapper.Describe(failure, failure.Message));
+        }
     }
 
     private void OnModeWholeSegment(object sender, RoutedEventArgs e)
@@ -690,11 +792,11 @@ public partial class PanelWindow : Window
             SpeakButton.Visibility = _wordMode ? Visibility.Collapsed : Visibility.Visible;
 
             // 顶部原文块：逐句模式的原文在句对里；单词模式的"原文"是词头。
-            OriginalText.Visibility = _sentenceMode || _wordMode
+            OriginalText.Visibility = SentenceView || _wordMode
                 ? Visibility.Collapsed
                 : Visibility.Visible;
 
-            if (_sentenceMode)
+            if (SentenceView)
             {
                 TranslatedText.Visibility = Visibility.Collapsed;
                 SentencePairs.Visibility = Visibility.Visible;
@@ -837,6 +939,16 @@ public partial class PanelWindow : Window
         _copyReset = null;
         CopyLabel.Text = "复制";
         AutomationProperties.SetName(CopyButton, "复制");
+    }
+
+    /// <summary>
+    /// 换模板重跑出来的是另一份结果：此前存过的"已存入"不该留在能再存的按钮上
+    /// （票 42）。名字与文字一起回落，屏幕阅读器听到的和眼睛看到的一致。
+    /// </summary>
+    private void ResetSaveLabel()
+    {
+        SaveLabel.Text = "存入历史";
+        AutomationProperties.SetName(SaveButton, "存入历史");
     }
 
     // === 定位与夹回 ==========================================================
