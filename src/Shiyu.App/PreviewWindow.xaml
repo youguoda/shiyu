@@ -37,6 +37,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <Border x:Name="BridgeLeft" Grid.RowSpan="2" Width="2" Margin="0,8"
@@ -78,6 +79,17 @@
                     <StackPanel x:Name="FilesBody"/>
                 </ScrollViewer>
             </Grid>
+
+            <!-- 教学行（2026-10-05 从卡片气泡迁来）：系统 ToolTip 的关闭
+                 行为留过两次"空壳"实录，气泡整体退役；拖放教学常驻预览
+                 尾行，看得更久，bar.card-tooltips 关闭时整行隐藏。 -->
+            <Border x:Name="TeachHost" Grid.Row="2" Margin="0,8,0,0"
+                    BorderBrush="{DynamicResource Brush.Divider}" BorderThickness="0,1,0,0"
+                    Padding="0,6,0,0" Visibility="Collapsed">
+                <TextBlock x:Name="TeachText" TextWrapping="Wrap"
+                           FontSize="{DynamicResource Type.Caption}"
+                           Foreground="{DynamicResource Brush.TextTertiary}"/>
+            </Border>
         </Grid>
     </Border>
 </Window>

@@ -164,9 +164,9 @@ public static class SettingsSchema
                     Unit: "毫秒",
                     Icon: "E823"),
                 new SettingsItem(
-                    "bar.card-tooltips", "悬停卡片提示", SettingsControl.Toggle,
-                    Hint: "预览弹出前，卡片上短暂显示的完整内容与拖放教学提示；关闭后只保留悬停预览。",
-                    Keywords: ["提示", "悬停", "教学", "工具提示", "气泡", "拖放", "拖出"],
+                    "bar.card-tooltips", "悬停教学提示", SettingsControl.Toggle,
+                    Hint: "悬停预览面板底部的一行拖放教学（双击粘贴、拖出等）；关闭后预览不再显示教学行。",
+                    Keywords: ["提示", "悬停", "教学", "拖放", "拖出", "预览"],
                     Icon: "E823")),
             new SettingsSection("bar.actions", "悬停动作",
                 new SettingsItem(

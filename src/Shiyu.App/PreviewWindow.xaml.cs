@@ -384,6 +384,13 @@ internal partial class PreviewWindow : Window
         FilesBody.Children.Clear();
         _fileRows.Clear();
 
+        // 拖放教学行（2026-10-05 迁入）：气泡退役后的唯一教学位，由
+        // bar.card-tooltips 决定显隐——设置关掉就是一点提示都不剩。
+        TeachText.Text = card.DragHint;
+        TeachHost.Visibility = card.ShowToolTip && card.DragHint is { Length: > 0 }
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
         if (card.Kind == EntryKind.Image)
         {
             // The thumbnail first — it is already decoded, and it is the

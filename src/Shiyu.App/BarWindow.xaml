@@ -351,12 +351,10 @@
                          than MaxLines, because this build's XAML compiler
                          rejects bindings on MaxLines.
 
-                         教学气泡的 InitialShowDelay 设在这里（挂 tip 的元素
-                         才读得到，不沿树解析）：即悬即出——系统默认约 1 秒总
-                         晚于悬停预览的 dwell，气泡会被预览的收起逻辑永远抢先；
-                         预览就位后接管（见 BarPreview.cs 的禁用收起——禁用会
-                         立即关闭已弹的气泡，清内容则只留空壳）。bar.card-tooltips
-                         关闭时 DragToolTip 为空串，模板根本不带提示。 -->
+                         卡片不再挂系统 ToolTip（2026-10-05 退役）：其关闭行为
+                         两次留下"空壳"实录（清内容不关框/禁用不关已开框）；
+                         拖放教学迁至预览面板尾行（PreviewWindow.TeachText），
+                         bar.card-tooltips 开关随之改控那一行。 -->
                     <DockPanel Grid.Row="1">
                         <Border DockPanel.Dock="Left" Width="44" Height="22" Margin="0,2,8,2"
                                 CornerRadius="{DynamicResource Radius.Thumb}"
@@ -369,9 +367,7 @@
                                    FontSize="{DynamicResource Type.Content}"
                                    LineHeight="{DynamicResource Line.Content}"
                                    LineStackingStrategy="BlockLineHeight"
-                                   Foreground="{DynamicResource Brush.Text}"
-                                   ToolTip="{Binding DragToolTip}"
-                                   ToolTipService.InitialShowDelay="1"/>
+                                   Foreground="{DynamicResource Brush.Text}"/>
                         <!-- Padding=1：图贴满时高质量缩放在底缘会采样出一条 1px
                              暗线（视觉走查 2026-10-03），一 DIP 缓冲隔开采样边。 -->
                         <Border x:Name="ImageBody" Height="{Binding ImageHeight}"

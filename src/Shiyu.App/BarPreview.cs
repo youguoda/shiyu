@@ -31,20 +31,17 @@ internal partial class BarWindow
                 _connectorAnchor = AnchorFor(opening) ?? WindowRect();
                 EnsurePreview().ShowFor(opening, PlacementAnchor(_connectorAnchor.Value), slide: false,
                     scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
-                SuppressCardTooltip(opening);
                 break;
 
             case PreviewCommand.Retarget when CardById(_previewPolicy.Card) is { } moving:
                 _connectorAnchor = AnchorFor(moving) ?? WindowRect();
                 EnsurePreview().ShowFor(moving, PlacementAnchor(_connectorAnchor.Value), slide: true,
                     scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
-                SuppressCardTooltip(moving);
                 break;
 
             case PreviewCommand.Close:
                 _preview?.TakeDown();
                 _connector?.HideCurve();
-                RestoreCardTooltip();
                 break;
         }
 
@@ -60,58 +57,6 @@ internal partial class BarWindow
     /// repeats the entry text in full — the two floating together only stack
     /// one over the other (user report 2026-10-03). While a preview is up the
     /// hovered card's tooltip is stashed off (clearing it closes an open tip
-    /// too); closing the preview restores it, so the drag hint still teaches
-    /// during short hovers. ToolTipService.IsEnabled is NOT inherited down the
-    /// visual tree, so the setting has to land on the card container itself.
-    /// </summary>
-    private readonly List<FrameworkElement> _tipsSuppressed = [];
-
-    private void SuppressCardTooltip(BarCard card)
-    {
-        RestoreCardTooltip();
-
-        var container = PinnedList.ItemContainerGenerator.ContainerFromItem(card)
-            ?? Cards.ItemContainerGenerator.ContainerFromItem(card);
-        if (container is FrameworkElement element)
-        {
-            SuppressTips(element);
-        }
-    }
-
-    /// <summary>
-    /// The template hangs tips on inner elements (body text, timestamp), not on
-    /// the container. Disabling beats clearing: setting ToolTip to null mid-show
-    /// left an EMPTY tooltip shell parked over the cards for its whole duration
-    /// (user report 2026-10-05 — the mysterious blank strip), while
-    /// ToolTipService.IsEnabled=false on the same element closes the open tip
-    /// immediately and blocks new ones.
-    /// </summary>
-    private void SuppressTips(DependencyObject root)
-    {
-        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
-        {
-            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-            if (child is FrameworkElement fe && fe.ToolTip is not null)
-            {
-                ToolTipService.SetIsEnabled(fe, false);
-                _tipsSuppressed.Add(fe);
-            }
-
-            SuppressTips(child);
-        }
-    }
-
-    private void RestoreCardTooltip()
-    {
-        foreach (var element in _tipsSuppressed)
-        {
-            ToolTipService.SetIsEnabled(element, true);
-        }
-
-        _tipsSuppressed.Clear();
-    }
-
     /// <summary>
     /// Where ShowFor anchors the panel (U-03): horizontally to the BAR's outer
     /// edge — the card used to carry the anchor and the panel pressed ~8 DIP
@@ -129,6 +74,9 @@ internal partial class BarWindow
 
     /// <summary>The row the panel (and its connector) currently belongs beside.</summary>
     private ScreenRect? _connectorAnchor;
+
+    // 卡片悬停教学已迁至预览面板尾行（2026-10-05）：系统 ToolTip 的关闭
+    // 行为两次留下空壳（用户实录），收起/恢复它的那套逻辑随之整体退役。
 
     private PreviewWindow EnsurePreview()
     {
