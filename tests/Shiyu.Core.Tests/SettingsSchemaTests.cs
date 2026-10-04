@@ -59,6 +59,7 @@ public class SettingsSchemaTests
             ["service.base-url"] = "translate",
             ["service.model"] = "translate",
             ["service.api-key"] = "translate",
+            ["translate.templates"] = "translate",
             ["hotkeys.selection-badge"] = "translate",
             ["translate.hotkey-ref"] = "translate",
 

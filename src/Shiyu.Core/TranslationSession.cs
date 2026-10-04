@@ -37,8 +37,12 @@ public sealed class TranslationSession(ITranslationBackend backend)
     /// </summary>
     public Exception? Failure { get; private set; }
 
-    /// <summary>What has arrived so far, cleaned of any wrapping the model added.</summary>
-    public string Text => TranslationCleanup.Clean(string.Concat(_pieces));
+    /// <summary>
+    /// What has arrived so far, cleaned of any wrapping the model added. 清洗按屏幕上
+    /// 那条请求的模板类别走（票 42）：翻译类全量，改写类只剥首尾的 &lt;text&gt;。
+    /// </summary>
+    public string Text => TranslationCleanup.Clean(
+        string.Concat(_pieces), CurrentRequest?.Template ?? PromptTemplates.Standard);
 
     /// <summary>
     /// The request behind the text currently on screen. With an echo retry it
@@ -56,7 +60,10 @@ public sealed class TranslationSession(ITranslationBackend backend)
 
         // 回声且用户未强制源语言：换向重试恰好一次。重试请求带着声明的
         // 源语言，即使这里判断写错也构不成循环。再回声就如实展示。
+        // 只对翻译类模板：改写结果与原文相近是正常的（优化一段本来就写得不错
+        // 的提示词），回声换向对它没有意义。
         if (State == TranslationState.Finished
+            && request.Template.Kind == PromptTemplateKind.Translate
             && request.SourceLanguage is null
             && TranslationEcho.IsEchoish(request.Text, Text))
         {

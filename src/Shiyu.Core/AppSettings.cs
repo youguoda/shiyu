@@ -65,6 +65,19 @@ public sealed record AppSettings
     public string BackendPresetId { get; init; } = string.Empty;
 
     /// <summary>
+    /// 面板启动时用的提示词模板 id（票 42）。默认标准：与模板落地之前逐字相同。
+    /// 指向不存在的模板（被删、文件被手改坏）时由 <see cref="PromptTemplates"/> 在
+    /// 数据层回落到标准，界面不必处理。
+    /// </summary>
+    public string DefaultPromptTemplateId { get; init; } = PromptTemplate.StandardId;
+
+    /// <summary>
+    /// 面板模板按钮的循环列表（票 42），存模板 id，有序；反向输入框（票 43）的 Ctrl+E
+    /// 共用同一份。未知 id 在读取时滤掉。
+    /// </summary>
+    public IReadOnlyList<string> TemplateCycle { get; init; } = PromptTemplate.DefaultCycle;
+
+    /// <summary>
     /// 「公共通道暂未开放」的一次性提示是否已经给过（票 08 迁移）。存量
     /// 用户选中公共通道时启动迁移要说一次话；每次启动都说就成了骚扰。
     /// </summary>
@@ -281,6 +294,16 @@ public sealed record AppSettings
             maxTemperature: preset?.MaxTemperature,
             sendTemperature: preset?.SendTemperature ?? true);
     }
+
+    /// <summary>
+    /// 提示词模板（票 42）此刻是否生效：与 <see cref="BuildTranslationBackend"/> 走同
+    /// 一套分支，实际建出 <see cref="OpenAiCompatibleBackend"/>（自备密钥的大模型）
+    /// 时为真。公共通道未上线时选 Relay 也会落到自备密钥，同样为真；公共通道与
+    /// 免费引擎的 prompt 不在客户端，为假。面板与设置都读这一个判断，日后新增的
+    /// 后端种类不必回头改这里。
+    /// </summary>
+    [JsonIgnore]
+    public bool PromptTemplatesApply => BuildTranslationBackend() is OpenAiCompatibleBackend;
 
     private static readonly JsonSerializerOptions Format = new()
     {

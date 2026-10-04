@@ -5,8 +5,23 @@ public sealed record TranslationRequest(string Text, string TargetLanguage)
     /// <summary>Null asks the backend to work it out from the text.</summary>
     public string? SourceLanguage { get; init; }
 
-    /// <summary>采样温度，默认 <see cref="TranslationPrompt.DefaultTemperature"/>。</summary>
-    public double Temperature { get; init; } = TranslationPrompt.DefaultTemperature;
+    /// <summary>
+    /// 提示词模板（票 42），默认是内置的标准模板。传的是解析好的模板对象而不是
+    /// id，Core 不必回头去读设置；回声换向重试用 <c>with</c> 复制请求，模板随之保留。
+    /// </summary>
+    public PromptTemplate Template { get; init; } = PromptTemplates.Standard;
+
+    private double? _temperature;
+
+    /// <summary>
+    /// 采样温度。调用方没有指定时跟随模板（标准与正式 <see cref="TranslationPrompt.DefaultTemperature"/>，
+    /// 口语与改写类 0.3）；指定了就是调用方的覆盖，模板不再插手。
+    /// </summary>
+    public double Temperature
+    {
+        get => _temperature ?? Template.Temperature;
+        init => _temperature = value;
+    }
 }
 
 /// <summary>
