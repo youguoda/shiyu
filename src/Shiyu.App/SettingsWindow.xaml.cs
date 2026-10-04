@@ -1172,23 +1172,9 @@ public partial class SettingsWindow : Window
     /// </summary>
     private FrameworkElement BrandHeader()
     {
-        var mark = new Border
-        {
-            Width = 40,
-            Height = 40,
-            Child = new TextBlock
-            {
-                Text = "拾",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
-        mark.SetResourceReference(BackgroundProperty, "Brush.Accent");
-        mark.SetResourceReference(Border.CornerRadiusProperty, "Radius.Control");
-        var markText = (TextBlock)mark.Child;
-        markText.SetResourceReference(TextElement.FontSizeProperty, "Type.Subtitle");
-        markText.FontWeight = FontWeights.SemiBold;
-        markText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextOnAccent");
+        // 与任务栏图标同一个标志（大号母版，矢量）。
+        var mark = new Image { Width = 40, Height = 40 };
+        mark.SetResourceReference(Image.SourceProperty, "Brand.Mark.Large");
 
         var copy = new Button
         {

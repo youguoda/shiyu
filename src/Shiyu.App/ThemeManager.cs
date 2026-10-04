@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
-using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Shiyu.Core;
 using Shiyu.Windows;
@@ -28,6 +27,14 @@ namespace Shiyu.App;
 internal sealed class ThemeManager : IDisposable
 {
     private const string ControlsSource = "/Themes/Controls.xaml";
+
+    /// <summary>
+    /// The brand marks (Brand.Mark, Brand.Mark.Large): vector DrawingImages drawn
+    /// from the same source as app.ico by tools/icon/render-icon.ps1 -Xaml. The
+    /// mark reads on light and dark alike, so it is merged once rather than swapped
+    /// per palette like the brushes.
+    /// </summary>
+    private const string BrandMarkSource = "/Assets/BrandMark.xaml";
 
     private readonly MessageWindow _messages;
 
@@ -55,6 +62,8 @@ internal sealed class ThemeManager : IDisposable
         Application.Current.Resources.MergedDictionaries.Add(BuildValues(DesignTokens.Light));
         Application.Current.Resources.MergedDictionaries.Add(
             new ResourceDictionary { Source = new Uri(ControlsSource, UriKind.Relative) });
+        Application.Current.Resources.MergedDictionaries.Add(
+            new ResourceDictionary { Source = new Uri(BrandMarkSource, UriKind.Relative) });
 
         _messages.MessageReceived += OnSystemMessage;
     }
@@ -196,26 +205,10 @@ internal sealed class ThemeManager : IDisposable
         values["Shadow.Floating"] = Shadow(DesignTokens.ShadowFloating);
         values["Shadow.Badge"] = Shadow(DesignTokens.ShadowBadge);
 
-        // The brand mark is a palette value (ticket 39): 拾语 in the light,
-        // its dark-mode counterpart 深语 in the dark — one DynamicResource
-        // reference in the bar's header, and a theme swap carries the icon
-        // along with every brush, live.
-        values["Brand.Mark"] = BrandMark(palette.Name);
-
+        // The brand mark used to be a palette value here (ticket 39: a light and
+        // a dark PNG). It is now one vector mark for both, merged from
+        // BrandMarkSource — see the constructor.
         return values;
-
-        static ImageSource BrandMark(string paletteName)
-        {
-            var source = new BitmapImage();
-            source.BeginInit();
-            source.CacheOption = BitmapCacheOption.OnLoad;
-            source.UriSource = new Uri(
-                $"pack://application:,,,/Assets/brand-{paletteName.ToLowerInvariant()}.png",
-                UriKind.Absolute);
-            source.EndInit();
-            source.Freeze();
-            return source;
-        }
 
         static DropShadowEffect Shadow((double Blur, double Depth, double Opacity) spec)
         {

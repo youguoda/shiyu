@@ -323,25 +323,15 @@ internal sealed class OnboardingWindow : Window
     {
         var panel = new StackPanel();
 
-        var mark = new Border
+        // 品牌 48：与任务栏图标同一个标志（大号母版，矢量）。
+        var mark = new Image
         {
             Width = 48,
             Height = 48,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 4, 0, 12),
-            Child = new TextBlock
-            {
-                Text = "拾",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
         };
-        mark.SetResourceReference(BackgroundProperty, "Brush.Accent");
-        mark.SetResourceReference(Border.CornerRadiusProperty, "Radius.Control");
-        var markText = (TextBlock)mark.Child;
-        markText.SetResourceReference(TextElement.FontSizeProperty, "Type.Title");
-        markText.FontWeight = FontWeights.SemiBold;
-        markText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextOnAccent");
+        mark.SetResourceReference(Image.SourceProperty, "Brand.Mark.Large");
         panel.Children.Add(mark);
 
         var title = new TextBlock { Text = "拾语", Margin = new Thickness(0, 0, 0, 4) };
@@ -365,11 +355,19 @@ internal sealed class OnboardingWindow : Window
                      "划词翻译开箱可用——免费引擎无需账号；自备密钥可得到更好的质量与 AI 动作。",
                  })
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            var glyph = new TextBlock { Text = "\uE73E", Margin = new Thickness(0, 0, 8, 0) };
+            // DockPanel\uFF0C\u4E0D\u662F\u6A2A\u5411 StackPanel\uFF1A\u540E\u8005\u7ED9\u5B50\u5143\u7D20\u65E0\u9650\u5BBD\uFF0CWrap \u6C38\u8FDC\u4E0D\u4F1A
+            // \u6362\u884C\u2014\u2014\u7B2C\u4E09\u6761\u52A0\u957F\u540E\uFF08\u7968 41\uFF09\u5C31\u5728\u7A97\u53E3\u8FB9\u4E0A\u88AB\u622A\u65AD\u4E86\u3002
+            var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+            var glyph = new TextBlock
+            {
+                Text = "\uE73E",
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
             glyph.SetResourceReference(TextElement.FontFamilyProperty, "Font.Icon");
             glyph.SetResourceReference(TextElement.FontSizeProperty, "Size.IconS");
             glyph.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
+            DockPanel.SetDock(glyph, Dock.Left);
             row.Children.Add(glyph);
             var text = new TextBlock { Text = promise, TextWrapping = TextWrapping.Wrap };
             row.Children.Add(text);

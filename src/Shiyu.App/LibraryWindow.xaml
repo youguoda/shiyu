@@ -58,13 +58,9 @@
                     <Image Source="{Binding Icon}" Visibility="{Binding IconVisibility}"
                            RenderOptions.BitmapScalingMode="HighQuality"
                            SnapsToDevicePixels="True"/>
-                    <Border CornerRadius="{DynamicResource Radius.Small}"
-                            Background="{DynamicResource Brush.Accent}"
-                            Visibility="{Binding FallbackIconVisibility}">
-                        <TextBlock Text="拾" FontSize="{DynamicResource Size.IconXs}"
-                                   Foreground="{DynamicResource Brush.TextOnAccent}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <!-- 没有来源图标时的回退：拾语的品牌标志（小号母版，矢量）。 -->
+                    <Image Source="{DynamicResource Brand.Mark}"
+                           Visibility="{Binding FallbackIconVisibility}"/>
                 </Grid>
                 <StackPanel Grid.Column="3" VerticalAlignment="Center">
                     <!-- 同理用 DockPanel：置顶字形占 Auto，标题拿剩余宽，省略号才有宽可省。 -->

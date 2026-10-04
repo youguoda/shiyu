@@ -316,13 +316,9 @@
                             <Image Source="{Binding Icon}" Visibility="{Binding IconVisibility}"
                                    RenderOptions.BitmapScalingMode="HighQuality"
                                    SnapsToDevicePixels="True"/>
-                            <Border CornerRadius="{DynamicResource Radius.Thumb}"
-                                    Background="{DynamicResource Brush.Accent}"
-                                    Visibility="{Binding FallbackIconVisibility}">
-                                <TextBlock Text="拾" FontSize="{DynamicResource Type.Caption}"
-                                           Foreground="{DynamicResource Brush.TextOnAccent}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <!-- 没有来源图标时的回退：拾语的品牌标志（小号母版，矢量）。 -->
+                            <Image Source="{DynamicResource Brand.Mark}"
+                                   Visibility="{Binding FallbackIconVisibility}"/>
                             <!-- Covers the icon exactly while Ctrl is held. -->
                             <local:RowKeyBadge Visibility="Collapsed"/>
                         </Grid>
