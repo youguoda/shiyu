@@ -338,7 +338,7 @@ internal partial class BarWindow
     /// (O-36's one synchronous exception: the user is holding the mouse
     /// button down, asking for this specific entry).
     /// </summary>
-    private System.Windows.Media.ImageSource? DecodeThumbnailNow(long id)
+    private System.Windows.Media.Imaging.BitmapSource? DecodeThumbnailNow(long id)
     {
         var payload = _store.BlobsOf([id]).GetValueOrDefault(id);
         var decoded = AppIconCache.Decode(payload?.ThumbnailPng, 320);
@@ -355,7 +355,9 @@ internal partial class BarWindow
             }
         }
 
-        return decoded;
+        // AppIconCache.Decode builds BitmapImages; the narrower return type
+        // keeps drag-out callers honest without a cast at every use.
+        return decoded as System.Windows.Media.Imaging.BitmapSource;
     }
 
     private void OnCardMouseMove(object sender, MouseEventArgs e)
@@ -425,7 +427,7 @@ internal partial class BarWindow
                     picture = LoadImageFile(path);
                 }
 
-                picture ??= card.Thumbnail ?? DecodeThumbnailNow(card.Id);
+                picture ??= (card.Thumbnail as BitmapSource) ?? DecodeThumbnailNow(card.Id);
                 if (picture is null)
                 {
                     return;
