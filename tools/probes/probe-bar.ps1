@@ -67,11 +67,30 @@ try {
     }
 
     # --- defect: keycap "<- ->" clipped to a horizontal line ----------------
-    # Modifier keys reach the unactivated bar fine through PostMessage (the
-    # visual-matrix Ctrl shots have always relied on it); global keybd_event
-    # is the one that gets stolen by whatever holds the foreground (another
-    # Shiyu instance, the teaching tooltip's popup, or the probe console).
-    Send-ProbeKey $hwnd $VK_CONTROL
+    # The reliable route, learned the hard way across three flips: click a card
+    # once (the bar is WS_EX_NOACTIVATE so the CLICK alone is not enough, but a
+    # real click does hand it the foreground now that cards carry no system
+    # tooltip - the tooltip's popup used to take the foreground and swallow the
+    # key), then a REAL keyboard Ctrl. PostMessage Ctrl works only while the
+    # session's input state happens to cooperate - it has flipped twice.
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class BarKeycapInput2 {
+ [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+ [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint data, UIntPtr extra);
+ [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+}
+'@ -ErrorAction SilentlyContinue
+    $clickCard = $cards | Select-Object -First 1
+    if ($clickCard) {
+        [void][BarKeycapInput2]::SetCursorPos(($clickCard.L + 60), ($clickCard.T + [int]($clickCard.H / 2)))
+        Start-Sleep -Milliseconds 250
+        [BarKeycapInput2]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        [BarKeycapInput2]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 500
+    }
+    [BarKeycapInput2]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
     Start-Sleep -Milliseconds 700
     $shotCtrl = Get-WindowShot $hwnd
     if ($shotCtrl) { [void](Save-Shot $shotCtrl 'bar-ctrl') }
@@ -150,7 +169,8 @@ try {
             }
         }
     }
-    Send-ProbeKey $hwnd $VK_CONTROL -KeyUp
+    [BarKeycapInput2]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+    [void][BarKeycapInput2]::SetCursorPos(60, 60)
     Start-Sleep -Milliseconds 400
 
     # --- defect: hover tray delete colour ---------------------------------
