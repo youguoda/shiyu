@@ -219,7 +219,15 @@ internal partial class BarWindow
         // 替他转的这一手。票 24 在管理窗（LibraryKeys）做了同一归一，代码
         // 里留了指给窄条的档；这里是那一笔的兑现：字母动作在中文输入法
         // 下也得活着。
-        var key = e.Key == Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
+        // 带 Alt 的组合走 WM_SYSKEYDOWN：e.Key 报 Key.System，真实键在
+        // SystemKey——不归一，Alt+S（只看收藏）这类 Alt 动作永远匹配不上
+        // （用户实录 2026-10-05"按 Alt+S 没反应"）。
+        var key = e.Key switch
+        {
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.System => e.SystemKey,
+            _ => e.Key,
+        };
 
         switch (key)
         {

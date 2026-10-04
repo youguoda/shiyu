@@ -160,7 +160,13 @@ public partial class LibraryWindow
         // ImeProcessedKey 里）——键位模型认"用户按了哪个键"，不认输入法
         // 替他转的这一手。母语用户是这个窗的主力，字母动作不能只在英文
         // 输入法下活着。（窄条同形问题记给票 25 的 KeyMap 收编。）
-        var key = e.Key == Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
+        // 带 Alt 的组合同形归一：e.Key 报 Key.System，真实键在 SystemKey。
+        var key = e.Key switch
+        {
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.System => e.SystemKey,
+            _ => e.Key,
+        };
         var none = Keyboard.Modifiers == ModifierKeys.None;
 
         switch (key)
