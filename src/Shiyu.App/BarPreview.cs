@@ -64,7 +64,7 @@ internal partial class BarWindow
     /// during short hovers. ToolTipService.IsEnabled is NOT inherited down the
     /// visual tree, so the setting has to land on the card container itself.
     /// </summary>
-    private readonly List<(FrameworkElement Element, object? Tip)> _stashedTips = [];
+    private readonly List<FrameworkElement> _tipsSuppressed = [];
 
     private void SuppressCardTooltip(BarCard card)
     {
@@ -74,12 +74,19 @@ internal partial class BarWindow
             ?? Cards.ItemContainerGenerator.ContainerFromItem(card);
         if (container is FrameworkElement element)
         {
-            StashTips(element);
+            SuppressTips(element);
         }
     }
 
-    /// <summary>The template hangs tips on inner elements (body text, timestamp), not on the container.</summary>
-    private void StashTips(DependencyObject root)
+    /// <summary>
+    /// The template hangs tips on inner elements (body text, timestamp), not on
+    /// the container. Disabling beats clearing: setting ToolTip to null mid-show
+    /// left an EMPTY tooltip shell parked over the cards for its whole duration
+    /// (user report 2026-10-05 — the mysterious blank strip), while
+    /// ToolTipService.IsEnabled=false on the same element closes the open tip
+    /// immediately and blocks new ones.
+    /// </summary>
+    private void SuppressTips(DependencyObject root)
     {
         var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
@@ -87,22 +94,22 @@ internal partial class BarWindow
             var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
             if (child is FrameworkElement fe && fe.ToolTip is not null)
             {
-                _stashedTips.Add((fe, fe.ToolTip));
-                fe.ToolTip = null;
+                ToolTipService.SetIsEnabled(fe, false);
+                _tipsSuppressed.Add(fe);
             }
 
-            StashTips(child);
+            SuppressTips(child);
         }
     }
 
     private void RestoreCardTooltip()
     {
-        foreach (var (element, tip) in _stashedTips)
+        foreach (var element in _tipsSuppressed)
         {
-            element.ToolTip = tip;
+            ToolTipService.SetIsEnabled(element, true);
         }
 
-        _stashedTips.Clear();
+        _tipsSuppressed.Clear();
     }
 
     /// <summary>
