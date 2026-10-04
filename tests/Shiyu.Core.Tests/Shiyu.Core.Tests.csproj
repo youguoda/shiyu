@@ -22,4 +22,9 @@
     <ProjectReference Include="..\..\src\Shiyu.Core\Shiyu.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Trimmed copies of real third-party pages (票 41): tests read them from the output folder. -->
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
