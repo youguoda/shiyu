@@ -638,6 +638,16 @@ internal partial class BarWindow : Window
     protected override void OnLocationChanged(EventArgs e)
     {
         base.OnLocationChanged(e);
+
+        // 窄条被拖走时预览与连接线锚的屏幕位置即刻作废——收掉，孤悬的面板
+        // 比没有面板误导得多（验收 B4 双屏拖动 20 次实录：预览连桥留在
+        // 原屏）。松手后的下一次悬停会重新开一个锚对的。第六轮的生命周期
+        // 兜底覆盖了隐藏与关闭，唯独没覆盖"窗口还在、只是动了"。
+        if (_preview is { IsVisible: true } || _connector is { IsVisible: true })
+        {
+            RunPreviewCommand(_previewPolicy.BarHidden());
+        }
+
         GeometryChanged?.Invoke();
     }
 
