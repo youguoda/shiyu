@@ -366,9 +366,12 @@ public class RelaySettingsTests
 
         Assert.NotNull(item);
         Assert.Equal(SettingsControl.Segmented, item!.Control);
-        Assert.Equal(2, item.ChoiceList.Length);
+
+        // 票 41：第三项是免费引擎，追加在末尾，前两项的下标不动。
+        Assert.Equal(3, item.ChoiceList.Length);
         Assert.Contains("公共通道", item.ChoiceList[0]);
         Assert.Contains("自备密钥", item.ChoiceList[1]);
+        Assert.Contains("免费引擎", item.ChoiceList[2]);
     }
 
     [Fact]
@@ -380,6 +383,10 @@ public class RelaySettingsTests
 
         Assert.Contains("公共通道", item.ChoiceList[(int)TranslationBackendKind.Relay]);
         Assert.Contains("自备密钥", item.ChoiceList[(int)TranslationBackendKind.OwnKey]);
+        Assert.Contains("免费引擎", item.ChoiceList[(int)TranslationBackendKind.Free]);
+
+        // 枚举有几个值，分段就有几项——多一个少一个都是错位的前兆。
+        Assert.Equal(Enum.GetValues<TranslationBackendKind>().Length, item.ChoiceList.Length);
     }
 
     [Fact]

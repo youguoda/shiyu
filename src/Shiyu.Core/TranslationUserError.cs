@@ -109,6 +109,16 @@ public static class TranslationUserErrorMapper
             return TranslationErrorKind.Other;
         }
 
+        // 免费引擎自己写的人话（票 41）：「改用自备密钥」「稍后再试」这类说法含
+        // 密钥/超时等子串，落到下面几条会被误判——Auth 类还不给「重试」，
+        // 并叫用户去检查根本不存在的 API 密钥。以「免费引擎」开头的一律归
+        // Other，保留原措辞与「重试」；必须排在超时、429、Auth、网络之前
+        // （TLS 仍然最先判，上面已过）。
+        if (message.TrimStart().StartsWith(FreeEngineMessages.Prefix, StringComparison.Ordinal))
+        {
+            return TranslationErrorKind.Other;
+        }
+
         if (message.Contains("超时", StringComparison.Ordinal)
             || ContainsType(failure, static ex => ex is TimeoutException)
             || message.Contains("timed out", StringComparison.OrdinalIgnoreCase))

@@ -22,6 +22,11 @@ internal sealed class TranslationModule
         // The panel's languages follow without a restart (原单体应用函数的
         // 一段，O-20)：面板是复用实例，下一次翻译就用新语言。
         shell.SettingsChanged += s => _panel?.ApplySettings(s);
+
+        // 面板在场时写设置，热键注册表随之整体重建，面板的 Esc 要在新注册表上重挂
+        // （票 41）。听的是"重建完成"而不是 SettingsChanged：本模块比热键模块先订阅，
+        // 直接听 SettingsChanged 会在重建之前就重挂——挂上的是即将退役的旧注册表。
+        shell.HotkeysRebuilt += () => _panel?.ReclaimEscape();
     }
 
     /// <summary>
@@ -70,7 +75,12 @@ internal sealed class TranslationModule
                 // 未配置时三条路（复制徽标、划词热键、翻译剪贴板）都落进
                 // 面板的引导卡，而不是异常文本（票 08）。
                 backendReady: () => shell.Settings.IsTranslationConfigured,
-                openSettings: () => shell.OpenSettingsAt?.Invoke("service.preset"));
+                openSettings: () => shell.OpenSettingsAt?.Invoke("service.preset"),
+
+                // 引导卡上的「用免费引擎」（票 41）：点击就是同意，在最新设置上增量写一项；
+                // 写失败时 TryUpdateSettings 已向托盘说了人话，翻译方式没变，返回 false。
+                enableFreeEngine: () => shell.TryUpdateSettings(
+                    latest => latest with { TranslationBackend = TranslationBackendKind.Free }));
             await _panel.TranslateAsync(text, Displayed);
         }
         catch (Exception failure)

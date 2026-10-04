@@ -37,11 +37,8 @@ public sealed class RelayBackend(
     /// <summary>单请求字符上限，与服务端同一数字（Glossy 实证参数）。</summary>
     internal const int MaxRequestChars = 2000;
 
-    /// <summary>
-    /// 一片的最大长度：无标点的长句也切成几步到达，"流式"不能在极端
-    /// 形状下退化成一次性甩一大块。
-    /// </summary>
-    internal const int MaxPieceChars = 160;
+    /// <summary>切片器已抽到 <see cref="StreamingSlicer"/>（票 41，与免费引擎共用）；这里只留转发。</summary>
+    internal const int MaxPieceChars = StreamingSlicer.MaxPieceChars;
 
     /// <summary>
     /// 官方通道地址。部署状态见 server/README.md——地址在这里、设置文件
@@ -57,7 +54,7 @@ public sealed class RelayBackend(
         ?? DefaultPieceDelay;
 
     /// <summary>片间小步节奏：够让译文"正在到来"，不至于拖慢总和。</summary>
-    private static TimeSpan DefaultPieceDelay() => TimeSpan.FromMilliseconds(35);
+    private static TimeSpan DefaultPieceDelay() => StreamingSlicer.PieceInterval;
 
     public async IAsyncEnumerable<string> TranslateAsync(
         TranslationRequest request,
@@ -275,69 +272,10 @@ public sealed class RelayBackend(
     }
 
     /// <summary>
-    /// 把整段译文切成按序吐出的片段：句末标点（含引号收尾）与换行是
-    /// 天然的界，无标点的长句按 <see cref="MaxPieceChars"/> 截断。只切
-    /// 不删——片段拼回必须与原文一字不差，丢一个换行都是破坏。
+    /// 把整段译文切成按序吐出的片段。逻辑在 <see cref="StreamingSlicer"/>——免费引擎
+    /// 与公共通道走同一个函数（票 41），这里只留转发，既有测试照旧经它调用。
     /// </summary>
-    internal static IReadOnlyList<string> SplitForStreaming(string text)
-    {
-        if (text.Length == 0)
-        {
-            return [];
-        }
-
-        var pieces = new List<string>();
-        var builder = new StringBuilder();
-
-        foreach (var rune in text.EnumerateRunes())
-        {
-            builder.Append(rune.ToString());
-
-            if (builder.Length >= MaxPieceChars)
-            {
-                Close();
-                continue;
-            }
-
-            if (rune.Value is '\n')
-            {
-                Close();
-                continue;
-            }
-
-            if (IsEnder(rune))
-            {
-                Close();
-            }
-        }
-
-        Close();
-        return pieces;
-
-        void Close()
-        {
-            if (builder.Length == 0)
-            {
-                return;
-            }
-
-            pieces.Add(builder.ToString());
-            builder.Clear();
-        }
-    }
-
-    /// <summary>句末标点：拉丁三件套加全角对应与省略号。小数点不在此列。</summary>
-    private static bool IsEnder(Rune rune) => rune.Value switch
-    {
-        '.' => true,
-        '!' => true,
-        '?' => true,
-        '。' => true,
-        '！' => true,
-        '？' => true,
-        '…' => true,
-        _ => false,
-    };
+    internal static IReadOnlyList<string> SplitForStreaming(string text) => StreamingSlicer.Split(text);
 
     public void Dispose()
     {

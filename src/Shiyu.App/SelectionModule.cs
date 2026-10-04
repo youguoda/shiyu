@@ -36,6 +36,9 @@ internal sealed class SelectionModule
     /// </summary>
     public void ShowBadge(string text, DeferredCapture? selection = null)
     {
+        // 徽标出现的这一刻：用户还要花一两秒才会点它，趁这段空档把免费引擎的会话取好。
+        WarmFreeEngine();
+
         if (_badge is null)
         {
             _badge = new BadgeWindow();
@@ -125,6 +128,10 @@ internal sealed class SelectionModule
             return;
         }
 
+        // 热键按下的这一刻就开始预热：取词（模拟 Ctrl+C、等剪贴板、还原）要几百毫秒，
+        // 够把免费引擎的会话取好。
+        WarmFreeEngine();
+
         // 显式请求也要过闸口（O-17）：热键可以在任何前台应用按下，包括
         // 排除名单里的。说一声但只说一次——用户多半是忘了规则，每次取词
         // 都弹就成了骚扰。
@@ -189,6 +196,8 @@ internal sealed class SelectionModule
             return;
         }
 
+        WarmFreeEngine();
+
         string? text;
         try
         {
@@ -210,6 +219,12 @@ internal sealed class SelectionModule
         // entire point of this hotkey.
         shell.ShowPanel?.Invoke(text, null);
     }
+
+    /// <summary>
+    /// 免费引擎的预热（票 41）：当前翻译方式是免费引擎、必应会话缺失或快过期时，在后台取一次。
+    /// 不设定时器，失败不提示；其它翻译方式下什么都不做——不替用户联系微软。
+    /// </summary>
+    private void WarmFreeEngine() => FreeEngineBackend.WarmUp(_shell!.Settings);
 
     /// <summary>还掉挂起的划词剪贴板（若有）。幂等：没债就是空操作。</summary>
     public void FlushPendingSelection() => Settle(_selectionDebt.Dismissed());

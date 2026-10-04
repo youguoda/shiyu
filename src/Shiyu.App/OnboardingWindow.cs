@@ -57,6 +57,14 @@ internal sealed class OnboardingWindow : Window
     private PasswordBox? _keyBox;
     private ItemState? _languageState;
 
+    // 翻译屏的两张可选卡（票 41、ADR-0013）：免费引擎与自备密钥。预选 ≠ 同意——
+    // 只有向前走完这一屏、或亲手点过免费引擎卡，才会写入 Free（见 OnboardingBackendChoice）。
+    private Border? _freeCard;
+    private Border? _ownCard;
+    private TranslationBackendKind _backendChoice = TranslationBackendKind.OwnKey;
+    private bool _backendPicked;
+    private bool _leavingForward;
+
     // --- the trial checklist (step 4) ----------------------------------------------
 
     private FrameworkElement? _trial1;
@@ -186,7 +194,10 @@ internal sealed class OnboardingWindow : Window
         // 离开即生效（§5.3）：上一步的答案此刻落盘，不是攒到最后。
         if (_body.Content is not null)
         {
+            // 翻译屏要分清"向前走完"与回退（票 41）：免费引擎的预选只在前者写入。
+            _leavingForward = index > _step;
             _stepCommits[_step]();
+            _leavingForward = false;
         }
 
         _step = index;
@@ -351,7 +362,7 @@ internal sealed class OnboardingWindow : Window
                  {
                      "复制过的内容只存在这台电脑，不上传、不联网。",
                      "常见密码管理器默认不记录，还可以自己加排除。",
-                     "划词翻译可用——用你自己的密钥，或等即将推出的公共通道。",
+                     "划词翻译开箱可用——免费引擎无需账号；自备密钥可得到更好的质量与 AI 动作。",
                  })
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
@@ -656,7 +667,7 @@ internal sealed class OnboardingWindow : Window
     private FrameworkElement TranslateStep()
     {
         var panel = new StackPanel();
-        panel.Children.Add(StepIntro("翻译怎么走。自备密钥：文本直接发给你选的服务商；公共通道上线前只能选自备。"));
+        panel.Children.Add(StepIntro("翻译怎么走。免费引擎无需账号和密钥，装好就能翻译；更好的质量与 AI 动作需要自备密钥。"));
 
         // 译文语言：默认取系统显示语言（§5.3；仅真首启预选，重跑尊重已存值）。
         var initialLanguage = _firstRun && LanguageOptions.FromSystemUi() is { } system
@@ -672,6 +683,14 @@ internal sealed class OnboardingWindow : Window
             toValue: LanguageOptions.ToValue);
 
         panel.Children.Add(Card("译文语言", "翻译结果使用的语言", picker));
+
+        // 票 41：免费引擎卡在前，披露行写在卡上；自备密钥卡紧随其后。
+        var freeCard = Card(
+            "免费引擎",
+            "无需账号和密钥，装好就能翻译。被翻译的文本发给微软必应翻译的网页接口，不可用时改发腾讯交互翻译；"
+            + "这是网页接口而非正式 API，可能随时变更或限流。",
+            new TextBlock());
+        panel.Children.Add(freeCard);
 
         // 两张单选卡（§5.3）：自备密钥可选，公共通道「即将推出」点不动。
         var ownBody = new StackPanel();
@@ -712,8 +731,13 @@ internal sealed class OnboardingWindow : Window
         ownBody.Children.Add(presetRow.KeyHint);
         presetRow.RefreshKeyHint();
 
-        var ownCard = Card("自备密钥", "选中即填好服务地址与模型；「申请密钥」直达服务商，「测试连接」当场验证。", ownBody);
-        MarkSelected(ownCard, selected: true);
+        // 预选哪张卡由 WireBackendCards 按 OnboardingBackendChoice 定（票 41），这里不再
+        // 写死选中自备密钥。
+        var ownCard = Card(
+            "自备密钥",
+            "更好的质量与 AI 动作需要自备密钥。选中即填好服务地址与模型；「申请密钥」直达服务商，「测试连接」当场验证。",
+            ownBody);
+        WireBackendCards(freeCard, ownCard);
         panel.Children.Add(ownCard);
 
         var relayCard = Card(
@@ -736,8 +760,74 @@ internal sealed class OnboardingWindow : Window
         return panel;
     }
 
+    /// <summary>
+    /// 翻译屏的两张可选卡接线（票 41）：预选哪张由 <see cref="OnboardingBackendChoice.Preselect"/>
+    /// 定（真首启且没配置才预选免费引擎，重跑引导尊重已存的选择）；点哪张卡（卡内任何
+    /// 位置，含预设下拉与测试连接）或往凭据框里敲字，就是亲手选了它。
+    /// </summary>
+    private void WireBackendCards(Border freeCard, Border ownCard)
+    {
+        _freeCard = freeCard;
+        _ownCard = ownCard;
+
+        foreach (var (card, kind, name) in new[]
+                 {
+                     (freeCard, TranslationBackendKind.Free, "免费引擎"),
+                     (ownCard, TranslationBackendKind.OwnKey, "自备密钥"),
+                 })
+        {
+            card.Focusable = true;
+            System.Windows.Automation.AutomationProperties.SetName(card, name);
+            card.Cursor = Cursors.Hand;
+            card.PreviewMouseLeftButtonDown += (_, _) => ChooseBackend(kind, picked: true);
+            card.KeyDown += (_, e) =>
+            {
+                // 卡本身有焦点时，空格就是"选它"（Enter 留给「下一步」）。
+                if (e.Key == Key.Space && ReferenceEquals(e.OriginalSource, card))
+                {
+                    ChooseBackend(kind, picked: true);
+                    e.Handled = true;
+                }
+            };
+        }
+
+        _keyBox!.PasswordChanged += (_, _) => ChooseBackend(TranslationBackendKind.OwnKey, picked: true);
+
+        ChooseBackend(OnboardingBackendChoice.Preselect(_baseline, _firstRun), picked: false);
+    }
+
+    /// <summary><paramref name="picked"/> 为 false 是预选（打开屏幕时），不算用户同意。</summary>
+    private void ChooseBackend(TranslationBackendKind kind, bool picked)
+    {
+        _backendChoice = kind;
+        _backendPicked |= picked;
+
+        if (_freeCard is not null && _ownCard is not null)
+        {
+            MarkSelected(_freeCard, selected: kind == TranslationBackendKind.Free);
+            MarkSelected(_ownCard, selected: kind == TranslationBackendKind.OwnKey);
+        }
+    }
+
     private void CommitTranslate()
     {
+        // 票 41：选中的是免费引擎卡——用户没在自备密钥那张卡里作答，那一组（预设、地址、模型、
+        // 密钥）原样不动，只落译文语言；翻译方式只在"向前走完这一屏"或"亲手点了它"时写入
+        // Free，跳过与回退时预选不算同意（ADR-0013 决策 4：选「跳过，用默认设置」的仍是自备密钥）。
+        if (_backendChoice == TranslationBackendKind.Free)
+        {
+            var freeLanguage = _languageState?.Text ?? _baseline.TargetLanguage;
+            var kind = OnboardingBackendChoice.KindToWrite(
+                _backendChoice, _backendPicked, completedScreen: _leavingForward);
+
+            TryUpdate(latest => latest with
+            {
+                TargetLanguage = freeLanguage,
+                TranslationBackend = kind ?? latest.TranslationBackend,
+            });
+            return;
+        }
+
         var presetId = _presetState?.Text ?? _baseline.BackendPresetId;
         var preset = ProviderPresets.Find(presetId);
         var typedKey = _keyBox?.Password is { Length: > 0 } key ? key : null;

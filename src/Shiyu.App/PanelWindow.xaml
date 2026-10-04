@@ -264,7 +264,9 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- 未配置翻译服务时的引导卡（票 08）：给一条去路，不给一段异常。 -->
+            <!-- 未配置翻译服务时的引导卡（票 08）：给一条去路，不给一段异常。
+                 票 41 起多一条零配置的路——「用免费引擎」。点击就是同意，所以文本发往
+                 哪里、这是网页接口这两件事就写在这张卡上，没有任何静默切换（ADR-0013）。 -->
             <Border x:Name="SetupCard" Visibility="Collapsed" Margin="0,10,0,0"
                     Padding="12,10" CornerRadius="{DynamicResource Radius.Card}"
                     Background="{DynamicResource Brush.SurfaceSubtle}"
@@ -272,15 +274,20 @@
                 <StackPanel>
                     <TextBlock Text="还没有配置翻译服务" FontSize="{DynamicResource Type.Body}"
                                FontWeight="{DynamicResource Weight.Emphasis}"/>
-                    <TextBlock Text="翻译需要一个你自己的 API 密钥：设置 → 服务里选一家服务商预设（有免费的），点「申请密钥」，粘进来即可。"
+                    <TextBlock Text="可以直接用免费引擎，无需账号和密钥：被翻译的文本发给微软必应翻译的网页接口，不可用时改发腾讯交互翻译（网页接口而非正式 API，可能随时变更或限流）。更好的质量与 AI 动作需要自备密钥：设置 → 翻译里选一家服务商预设，点「申请密钥」，粘进来即可。"
                                TextWrapping="Wrap" Margin="0,4,0,0"
                                FontSize="{DynamicResource Type.Caption}"
                                LineHeight="{DynamicResource Line.CaptionMulti}"
                                LineStackingStrategy="BlockLineHeight"
                                Foreground="{DynamicResource Brush.TextSecondary}"/>
-                    <Button x:Name="SetupButton" Content="去配置" HorizontalAlignment="Left"
-                            Margin="0,8,0,0" Padding="14,4" Cursor="Hand" Click="OnOpenSetup"
-                            ToolTip="打开设置的服务页"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="UseFreeButton" Content="用免费引擎"
+                                Padding="14,4" Cursor="Hand" Click="OnUseFreeEngine"
+                                ToolTip="改用免费引擎，并立即翻译这段文本"/>
+                        <Button x:Name="SetupButton" Content="去配置" Margin="8,0,0,0"
+                                Padding="14,4" Cursor="Hand" Click="OnOpenSetup"
+                                ToolTip="打开设置的翻译页，填自己的密钥"/>
+                    </StackPanel>
                     <TextBlock Text="用公共通道？暂未开放" Margin="0,8,0,0"
                                FontSize="{DynamicResource Type.Caption}"
                                Foreground="{DynamicResource Brush.TextTertiary}"

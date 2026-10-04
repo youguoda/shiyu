@@ -32,9 +32,28 @@ public sealed class HotkeyRegistry(MessageWindow window) : IDisposable
 {
     private readonly MessageWindow _window = window;
     private readonly Dictionary<int, Action> _handlers = [];
+
+    /// <summary>
+    /// 向系统注册 / 注销的出口。生产就是 Win32 的 RegisterHotKey / UnregisterHotKey；
+    /// 只有测试经 internal 构造函数换成假的"热键表"（票 41：作用域与注册表退役的
+    /// 交界要有测试，而测试不能去占真实的全局热键）。
+    /// </summary>
+    private readonly Func<IntPtr, int, uint, uint, bool> _register = NativeMethods.RegisterHotKey;
+
+    private readonly Action<IntPtr, int> _unregister =
+        static (handle, id) => NativeMethods.UnregisterHotKey(handle, id);
+
     private int _nextId = 1;
     private bool _listening;
     private bool _disposed;
+
+    internal HotkeyRegistry(
+        MessageWindow window, Func<IntPtr, int, uint, uint, bool> register, Action<IntPtr, int> unregister)
+        : this(window)
+    {
+        _register = register;
+        _unregister = unregister;
+    }
 
     /// <summary>
     /// Registers a hotkey, returning null on success or what went wrong.
@@ -56,7 +75,7 @@ public sealed class HotkeyRegistry(MessageWindow window) : IDisposable
         var id = _nextId++;
         var modifiers = (uint)(hotkey.Modifiers | HotkeyModifiers.NoRepeat);
 
-        if (!NativeMethods.RegisterHotKey(_window.Handle, id, modifiers, hotkey.Key))
+        if (!_register(_window.Handle, id, modifiers, hotkey.Key))
         {
             return new HotkeyConflict(
                 hotkey,
@@ -84,7 +103,7 @@ public sealed class HotkeyRegistry(MessageWindow window) : IDisposable
         var id = _nextId++;
         var modifiers = (uint)(hotkey.Modifiers | HotkeyModifiers.NoRepeat);
 
-        if (!NativeMethods.RegisterHotKey(_window.Handle, id, modifiers, hotkey.Key))
+        if (!_register(_window.Handle, id, modifiers, hotkey.Key))
         {
             return null;
         }
@@ -105,7 +124,17 @@ public sealed class HotkeyRegistry(MessageWindow window) : IDisposable
             }
 
             _released = true;
-            NativeMethods.UnregisterHotKey(registry._window.Handle, id);
+
+            // 注册表已退役：它 Dispose 时就把自己的 id（含这一枚）全注销了。新注册表
+            // 共用同一个消息窗口、id 又从 1 编号，这个 id 此后可能已被发给别的热键
+            // ——再按 id 注销一次，注销掉的就是别人的（票 41：面板在场时写设置，
+            // 旧作用域放得晚了，丢的是新注册的同号热键，Esc 或某个常驻键）。
+            if (registry._disposed)
+            {
+                return;
+            }
+
+            registry._unregister(registry._window.Handle, id);
             registry._handlers.Remove(id);
         }
     }
@@ -146,7 +175,7 @@ public sealed class HotkeyRegistry(MessageWindow window) : IDisposable
 
         foreach (var id in _handlers.Keys)
         {
-            NativeMethods.UnregisterHotKey(_window.Handle, id);
+            _unregister(_window.Handle, id);
         }
 
         _handlers.Clear();

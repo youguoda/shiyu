@@ -300,6 +300,18 @@ public class PromptTemplateLibraryTests
     }
 
     [Fact]
+    public void The_free_engine_takes_no_templates()
+    {
+        // 票 41 × 42 的接缝写明一条：网页翻译没有 prompt 这一层——免费引擎下面板的
+        // 模板按钮隐藏、请求按标准模板构建，回声换向照常工作。上面的循环也覆盖它，
+        // 但这条退化时要一眼看出是哪一家。
+        var settings = new AppSettings { TranslationBackend = TranslationBackendKind.Free };
+
+        Assert.IsType<FreeEngineBackend>(settings.BuildTranslationBackend());
+        Assert.False(settings.PromptTemplatesApply);
+    }
+
+    [Fact]
     public void The_verdict_is_derived_not_stored()
     {
         var json = new AppSettings().ToBackupJson(includeKey: false);

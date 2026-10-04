@@ -5,9 +5,11 @@ using System.Text.Json.Serialization;
 namespace Shiyu.Core;
 
 /// <summary>
-/// 翻译走哪条路：公共通道免费但额度有限，自备密钥是高级路径。
-/// 声明顺序即设置界面分段选择的下标顺序（Relay=0 是第一项），两者由
-/// 测试钉在一起——改一边不改另一边会把"公共通道"接到自备密钥上。
+/// 翻译走哪条路：免费引擎零配置、自备密钥是"更好的质量 + AI 动作"的升级路径，
+/// 公共通道未上线（ADR-0009）。
+/// 声明顺序即设置界面分段选择的下标顺序（Relay=0、OwnKey=1、Free=2），两者由
+/// 测试钉在一起——改一边不改另一边会把"公共通道"接到自备密钥上。新增的
+/// 一律追加在末尾：设置文件存的是枚举名，下标只在界面分段里用。
 /// </summary>
 public enum TranslationBackendKind
 {
@@ -16,6 +18,12 @@ public enum TranslationBackendKind
 
     /// <summary>用户自己的 OpenAI 兼容接口与凭据。</summary>
     OwnKey,
+
+    /// <summary>
+    /// 免费引擎（票 41、ADR-0013）：必应网页接口为主、腾讯交互翻译兜底，无账号无密钥。
+    /// 它没有 prompt，不是通用模型——Agent 动作、批量翻译、LLM 词典仍只走自备密钥。
+    /// </summary>
+    Free,
 }
 
 /// <summary>
@@ -34,10 +42,11 @@ public sealed record AppSettings
     public string? SourceLanguage { get; init; }
 
     /// <summary>
-    /// Which road a translation takes. Own key stays the shipped default for
-    /// now: switching an existing user's traffic onto the relay is a decision
-    /// about where their text travels, and that belongs to the onboarding flow
-    /// (new users) or their own hand — never to a silent upgrade.
+    /// 翻译走哪条路。类型默认值仍是自备密钥（ADR-0013 决策 4），尽管首次引导
+    /// 预选的是免费引擎：文本发往哪里是一个关于数据去向的决定，只属于看过披露
+    /// 的新用户（走完引导翻译屏才写入 Free）或用户自己的手（设置里改、未配置
+    /// 引导卡上点「用免费引擎」）——绝不是一次静默升级。所以存量用户的文件
+    /// 原样读回，选「跳过，用默认设置」的新用户也仍是自备密钥。
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter<TranslationBackendKind>))]
     public TranslationBackendKind TranslationBackend { get; init; } = TranslationBackendKind.OwnKey;
@@ -278,13 +287,14 @@ public sealed record AppSettings
     /// 翻译此刻是否真的有一条能走的路。公共通道在上线条件满足前
     /// （<see cref="RelayChannel.Available"/> 为 false）不构成可用的路：
     /// 选中它的用户只有配好自备密钥才算配置完成——面板据此决定显示
-    /// 译文还是配置引导卡。
+    /// 译文还是配置引导卡。免费引擎无需任何配置，恒为 true（票 41）。
     /// </summary>
     [JsonIgnore]
     public bool IsTranslationConfigured
-        => TranslationBackend == TranslationBackendKind.Relay && RelayChannel.Available
-            ? RelayEndpoint.Trim().Length > 0
-            : Backend.IsConfigured;
+        => TranslationBackend == TranslationBackendKind.Free
+            || (TranslationBackend == TranslationBackendKind.Relay && RelayChannel.Available
+                ? RelayEndpoint.Trim().Length > 0
+                : Backend.IsConfigured);
 
     /// <summary>
     /// The live backend for the chosen road, in the same spirit as
@@ -292,9 +302,17 @@ public sealed record AppSettings
     /// translation port gets built here so every window shares one truth.
     /// 公共通道未上线（<see cref="RelayChannel.Available"/> 为 false）时
     /// 一律落到自备密钥后端——没配密钥的话后端自己会给出人话。
+    /// 免费引擎（票 41）每次翻译都新建一个后端，状态（必应会话缓存、"必应不健康"
+    /// 的冷却）放在进程级持有者里，不在实例上；它不是 <see cref="IStreamingModel"/>，
+    /// 动作与批量翻译拿不到它。
     /// </summary>
     public ITranslationBackend BuildTranslationBackend()
     {
+        if (TranslationBackend == TranslationBackendKind.Free)
+        {
+            return new FreeEngineBackend();
+        }
+
         if (TranslationBackend == TranslationBackendKind.Relay && RelayChannel.Available)
         {
             return new RelayBackend(
