@@ -2,7 +2,7 @@
 
 **来源：** UI 报告 §3.8、§6.4、§6.5、U-12、U-13；优化报告 O-34；样稿 `docs/review/mockups/library.png`
 **Blocked by:** 19
-**Status:** ready-for-human（v3/lib24 分支 8782d72/d771601/f355c2c：917+3 测试绿、run-all 24 项 23 PASS/0 FAIL/1 SKIP——connector SKIP 为既有基线、双静态绿、Debug/Release 0 错误；人工目验项列于票尾）
+**Status:** done（0.9.0 验收轮通过后发布；验收记录见文末）
 
 **What to build:**
 - **窗口：** 系统窗框，1100 × 640；宽度 ≥ 960 时双栏，更窄时单栏。
@@ -30,3 +30,5 @@
 - 备注 N / 归组 G / 标签 T 三个弹层，以及撤销条 5 秒进度线悬停暂停。
 
 **实现要点（给复核）：** Esc 分层与日期分组在 Core（`LibraryKeyboard`/`HistoryGroups`，+6 单测）；窗口分五个文件（主/列表/详情/弹层/键盘）；IME 打开时字母键以 `Key.ImeProcessed` 报达，管理窗已归一到真实键——窄条同形问题留给票 25 的 KeyMap 收编。
+
+**验收（2026-10-04，v3 收官）：** 用户在本机走完 0.9.0 验收轮——accept3 → accept18 构建、走查四至七轮；docs/manual-test-v5.md 是发版闸门（"全部通过即可发 v0.9.0 正式版"），验收中发现的问题已在发布前修复（如 B2 d2dd0ff、B4 f94f77e）——随后发布 0.9.0 / 0.9.1，用户确认关闭本票。机器可测部分：探针 28/0/1、测试全绿。关闭前的状态：ready-for-human（v3/lib24 分支 8782d72/d771601/f355c2c：917+3 测试绿、run-all 24 项 23 PASS/0 FAIL/1 SKIP——connector SKIP 为既有基线、双静态绿、Debug/Release 0 错误；人工目验项列于票尾）

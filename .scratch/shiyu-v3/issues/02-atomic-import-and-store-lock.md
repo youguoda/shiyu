@@ -3,7 +3,7 @@
 **来源：** 优化报告 O-02、O-03、O-15；判断报告 P0-2
 **Blocked by:** —
 **Branch:** `v3/import`（已并 master，29dfe10）
-**Status:** ready-for-human
+**Status:** done（0.9.0 验收轮通过后发布；验收记录见文末）
 
 实施记录（2026-10-01/02）：O-15 全部公开成员进 `_gate` 锁 + `INSERT … RETURNING`（309e2aa）；O-03 三阶段原子导入（19dea35，实测发现 `ClearAll` 本就不删盘上文件）；O-02 `SettingsJson` 随结果返回、UI 线程恢复、`TryParse` 先校验（c6a4fc9）。Core 676→686 全绿。已知取舍：导入 apply 阶段持锁期间 UI 读写等待；提交后移图失败沿用保留清理姿态；强杀可留 `images.import` 残目录（下次导入清）。
 
@@ -18,3 +18,5 @@
 - [x] 中途损坏的备份覆盖导入后，条目数、分组数、内容与导入前完全一致，图片目录无新增文件
 - [x] `Import` 返回 `SettingsJson`、不调用回调；`AppSettings.TryParse` 单测
 - [ ] 实机（隔离数据目录）：设置窗开着时覆盖导入，主题、热键、置顶按备份生效，无错误弹窗
+
+**验收（2026-10-04，v3 收官）：** 用户在本机走完 0.9.0 验收轮——accept3 → accept18 构建、走查四至七轮；docs/manual-test-v5.md 是发版闸门（"全部通过即可发 v0.9.0 正式版"），验收中发现的问题已在发布前修复（如 B2 d2dd0ff、B4 f94f77e）——随后发布 0.9.0 / 0.9.1，用户确认关闭本票。机器可测部分：探针 28/0/1、测试全绿。关闭前的状态：ready-for-human
