@@ -66,8 +66,8 @@ public sealed record AppSettings
 
     /// <summary>
     /// 面板启动时用的提示词模板 id（票 42）。默认标准：与模板落地之前逐字相同。
-    /// 指向不存在的模板（被删、文件被手改坏）时由 <see cref="PromptTemplates"/> 在
-    /// 数据层回落到标准，界面不必处理。
+    /// 指向不存在的模板（被删、文件被手改坏）时由 <see cref="Shiyu.Core.PromptTemplates"/>
+    /// 在数据层回落到标准，界面不必处理。
     /// </summary>
     public string DefaultPromptTemplateId { get; init; } = PromptTemplate.StandardId;
 
@@ -76,6 +76,12 @@ public sealed record AppSettings
     /// 共用同一份。未知 id 在读取时滤掉。
     /// </summary>
     public IReadOnlyList<string> TemplateCycle { get; init; } = PromptTemplate.DefaultCycle;
+
+    /// <summary>
+    /// 用户自建的提示词模板（票 42 阶段二），形状同 <see cref="ExclusionRules"/>。读取时
+    /// 缺字段、占了保留 id、id 重复的条目一律当作不存在（见 <see cref="Shiyu.Core.PromptTemplates"/>）。
+    /// </summary>
+    public IReadOnlyList<StoredPromptTemplate> PromptTemplates { get; init; } = [];
 
     /// <summary>
     /// 「公共通道暂未开放」的一次性提示是否已经给过（票 08 迁移）。存量

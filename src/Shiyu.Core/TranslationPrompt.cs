@@ -51,6 +51,27 @@ public static class TranslationPrompt
         };
     }
 
+    /// <summary>
+    /// 把一个模板还原成能放进自建模板编辑框的文本（「复制为自建」）：<c>{target}</c>
+    /// 保持占位、不附示例（自建模板没有语对可看，附了会把模型往示例的语言带）、源语言
+    /// 按"未声明"写。改写类的模板正文本来就是这段文本。放进自建模板以后，照常代入
+    /// 译文语言、照常追加框定句。
+    /// </summary>
+    public static string TextOf(PromptTemplate template)
+    {
+        if (ShapeOf(template) == PromptShape.Rewrite)
+        {
+            return template.Text!.ReplaceLineEndings("\n");
+        }
+
+        // 目标写成占位符本身：它认不成任何语言，所以不会附示例。标准档的字面量
+        // 自带平台换行，统一成 \n 再交给编辑框。
+        return Build(new TranslationRequest(string.Empty, PromptTemplate.TargetPlaceholder)
+        {
+            Template = template,
+        }).System.ReplaceLineEndings("\n");
+    }
+
     internal enum PromptShape
     {
         Standard,

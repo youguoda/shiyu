@@ -63,3 +63,12 @@ public sealed record PromptTemplate(string Id, string Name, PromptTemplateKind K
     /// <summary>是不是四个内置模板之一（只读，设置里可以「复制为自建」）。</summary>
     public bool IsBuiltIn => PromptTemplates.IsReserved(Id);
 }
+
+/// <summary>
+/// 用户自建模板的存储形状（票 42 阶段二），形状同 <see cref="StoredExclusionRule"/>：
+/// 随设置一起备份与恢复。自建模板一律是改写类，没有 Kind 字段可存。
+/// </summary>
+/// <param name="Id">GUID 字符串，终身稳定——默认模板与循环列表都按它引用，改名不改 id。</param>
+/// <param name="Name">名字：必填、不得与任何模板重名；建议不超过 6 个字（面板按钮放得下）。</param>
+/// <param name="Prompt">提示词正文：必填、不超过 4000 字；写了 <c>{target}</c> 就代入译文语言。</param>
+public sealed record StoredPromptTemplate(string Id, string Name, string Prompt);

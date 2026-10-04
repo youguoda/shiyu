@@ -39,8 +39,44 @@ public static class PromptTemplates
             or PromptTemplate.FormalId
             or PromptTemplate.PromptOptimizeId;
 
+    /// <summary>自建提示词的字数上限：再长的多半是误粘了一整篇文章。</summary>
+    public const int MaxPromptLength = 4000;
+
+    /// <summary>新自建模板的 id：GUID 字符串，终身稳定。</summary>
+    public static string NewId() => Guid.NewGuid().ToString();
+
     /// <summary>全部可用的模板：内置在前、只读，之后是自建的。</summary>
-    public static IReadOnlyList<PromptTemplate> All(AppSettings settings) => BuiltIn;
+    public static IReadOnlyList<PromptTemplate> All(AppSettings settings)
+        => [.. BuiltIn, .. Custom(settings)];
+
+    /// <summary>
+    /// 设置里存着的自建模板，转成改写类模板。文件被手改坏时能用的留着、其余当作
+    /// 不存在：null 条目、缺 id/名字/正文、占了保留 id、id 重复，都不抛、也不整体丢弃。
+    /// </summary>
+    public static IReadOnlyList<PromptTemplate> Custom(AppSettings settings)
+    {
+        var templates = new List<PromptTemplate>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var stored in settings.PromptTemplates ?? [])
+        {
+            // seen.Add 排在最后：一条坏条目不该占掉后面好条目的 id。
+            if (stored is null
+                || string.IsNullOrWhiteSpace(stored.Id)
+                || IsReserved(stored.Id)
+                || string.IsNullOrWhiteSpace(stored.Name)
+                || string.IsNullOrWhiteSpace(stored.Prompt)
+                || !seen.Add(stored.Id))
+            {
+                continue;
+            }
+
+            templates.Add(new PromptTemplate(
+                stored.Id, stored.Name.Trim(), PromptTemplateKind.Rewrite, stored.Prompt));
+        }
+
+        return templates;
+    }
 
     /// <summary>按 id 解析；缺失、空白或不认识的 id 一律回落到标准。</summary>
     public static PromptTemplate Resolve(AppSettings settings, string? id)
@@ -111,6 +147,143 @@ public static class PromptTemplates
 
         return settings with { TemplateCycle = ids };
     }
+
+    // --- 自建模板（阶段二）：校验与写设置 -----------------------------------------------
+    //
+    // 写设置的逻辑都在这里（纯函数，有测试），设置里的编辑器只负责收集三项输入、
+    // 把校验的话说给用户、把结果交给 SettingsStore。不暴露温度和模型：CONTEXT.md
+    // 说了不做高级参数面板。
+
+    /// <summary>
+    /// 校验一份自建模板；合法答 null，否则答一句人话。先查 id（保留 id 不可占用），再查
+    /// 名字（非空、不与任何模板重名——不区分大小写，内置模板也算在内；编辑时不与自己
+    /// 比），最后查提示词（非空、不超过 <see cref="MaxPromptLength"/> 字）。
+    /// </summary>
+    /// <param name="isNew">新建（id 不得已被占用）还是编辑（id 必须已存在）。</param>
+    public static string? Validate(AppSettings settings, StoredPromptTemplate candidate, bool isNew)
+    {
+        var id = candidate.Id;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return "模板标识不能为空。";
+        }
+
+        if (IsReserved(id))
+        {
+            return "这个标识是内置模板保留的，不能占用。";
+        }
+
+        var exists = (settings.PromptTemplates ?? []).Any(stored => stored?.Id == id);
+        if (isNew && exists)
+        {
+            return "这个标识已经有模板在用了。";
+        }
+
+        if (!isNew && !exists)
+        {
+            return "要修改的模板不存在（可能已被删除）。";
+        }
+
+        var name = candidate.Name?.Trim() ?? string.Empty;
+        if (name.Length == 0)
+        {
+            return "名字不能为空。";
+        }
+
+        if (All(settings).Any(template => template.Id != id
+                && string.Equals(template.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return $"已经有叫「{name}」的模板了（内置模板也算在内），换一个名字。";
+        }
+
+        var prompt = candidate.Prompt?.Trim() ?? string.Empty;
+        if (prompt.Length == 0)
+        {
+            return "提示词不能为空。";
+        }
+
+        if (prompt.Length > MaxPromptLength)
+        {
+            return $"提示词最多 {MaxPromptLength} 字，现在有 {prompt.Length} 字。";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 新建：校验不过原样返回设置（调用方先 <see cref="Validate"/> 取话说）。名字与提示词
+    /// 收掉首尾空白再存。<paramref name="inCycle"/> 即编辑框里的"出现在切换里"。
+    /// </summary>
+    public static AppSettings AddCustom(AppSettings settings, StoredPromptTemplate template, bool inCycle)
+    {
+        if (Validate(settings, template, isNew: true) is not null)
+        {
+            return settings;
+        }
+
+        var stored = Tidy(settings).Append(Trimmed(template)).ToList();
+        return SetInCycle(settings with { PromptTemplates = stored }, template.Id, inCycle);
+    }
+
+    /// <summary>编辑：按 id 原位替换名字与提示词，并按"出现在切换里"改循环。</summary>
+    public static AppSettings UpdateCustom(AppSettings settings, StoredPromptTemplate template, bool inCycle)
+    {
+        if (Validate(settings, template, isNew: false) is not null)
+        {
+            return settings;
+        }
+
+        var stored = Tidy(settings)
+            .Select(existing => existing.Id == template.Id ? Trimmed(template) : existing)
+            .ToList();
+        return SetInCycle(settings with { PromptTemplates = stored }, template.Id, inCycle);
+    }
+
+    /// <summary>
+    /// 删除：从自建列表与循环里拿掉；它正被用作默认时，默认回落为标准（读取端本来也会
+    /// 回落，这里把设置文件写干净）。内置模板与不存在的 id 原样返回——内置只读。
+    /// </summary>
+    public static AppSettings DeleteCustom(AppSettings settings, string id)
+    {
+        if (IsReserved(id) || !(settings.PromptTemplates ?? []).Any(stored => stored?.Id == id))
+        {
+            return settings;
+        }
+
+        return settings with
+        {
+            PromptTemplates = Tidy(settings).Where(stored => stored.Id != id).ToList(),
+            TemplateCycle = (settings.TemplateCycle ?? []).Where(entry => entry != id).ToList(),
+            DefaultPromptTemplateId = settings.DefaultPromptTemplateId == id
+                ? PromptTemplate.StandardId
+                : settings.DefaultPromptTemplateId,
+        };
+    }
+
+    /// <summary>
+    /// 「复制为自建」：给任何一个模板（内置的、自建的）做一份副本——新 id、不重名的名字
+    /// （"口语副本"，重了就"口语副本2"）、提示词文本是它还原出来的文本。副本是还没存的
+    /// 候选，交给 <see cref="AddCustom"/> 才算数。
+    /// </summary>
+    public static StoredPromptTemplate Duplicate(AppSettings settings, PromptTemplate source)
+    {
+        var taken = All(settings).Select(template => template.Name.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var name = source.Name + "副本";
+        for (var number = 2; taken.Contains(name); number++)
+        {
+            name = $"{source.Name}副本{number}";
+        }
+
+        return new StoredPromptTemplate(NewId(), name, TranslationPrompt.TextOf(source));
+    }
+
+    /// <summary>设置里存着的自建条目，去掉 null（手改坏的文件里可能有）。</summary>
+    private static IEnumerable<StoredPromptTemplate> Tidy(AppSettings settings)
+        => (settings.PromptTemplates ?? []).Where(stored => stored is not null);
+
+    private static StoredPromptTemplate Trimmed(StoredPromptTemplate template)
+        => template with { Name = template.Name.Trim(), Prompt = template.Prompt.Trim() };
 
     /// <summary>
     /// 循环里的下一个。当前模板不在循环里（比如默认模板没勾进切换）时从第一个开始；
