@@ -3,7 +3,14 @@
 **来源：** Xtranslate 调研复核（docs/research/2026-09-27-xtranslate-analysis.md §7、§12 第 6 条）；
 ADR-0011 的补充
 **Blocked by:** —（11 已完成）
-**Status:** ready-for-agent（修复票，不受 WIP 上限约束，见 issue-tracker.md）
+**Branch:** `v3/keyorigin29`
+**Status:** ready-for-human（修复票，不受 WIP 上限约束，见 issue-tracker.md；余实机一项，见验收）
+
+实施记录（2026-10-04，提交 b61760c Core、cd52426 App，本记录与 ADR-0011 补充在第三个提交）：Core——新 `KeyOrigin.Of(baseUrl)`（scheme + host + port，取自 `System.Uri`，与 HttpClient 发请求时是同一个解析器；路径、查询、用户信息不进来源；没写协议的地址按 https 读，补上协议后配对仍在；残缺地址给确定值）；`AppSettings.BackendApiKeyOrigin`（明文存）、`KeyFor(baseUrl)`（来源一致才返回已存的密钥，没记来源的密钥也不放行——失败即关闭）、`Backend` 经它取密钥（不一致时 `IsConfigured` 为 false，后端一个请求都不发）、`WithApiKey`（写密钥的唯一入口，密钥与来源成对写下）、`KeepingKeyOf`（备份恢复时备份无密钥则保留本机的密钥连同来源）；`TryParse` 迁移（有密钥无来源 → 以当时的服务地址补上，只补空缺，下次保存落盘；`ToBackupJson` 不变，来源留着无害）；`ServiceForm`（设置窗与引导共用的表单值：凭据留空 = 沿用已存的，只沿用属于表单上这个来源的那把；`NeedsOwnKey`、`KeyHint`；`ToString` 不打印密钥）；`ConnectionTestVerdict.NeedsKey` + `ConnectionProbe.TestAsync(ServiceForm …)`（第四种结果「请先填写这家服务商的密钥。」，不发请求，不算失败）。App——两处 readForm 改交 `ServiceForm`；`ServicePresetRow.KeyHint`（"已保存的密钥属于 {旧主机}，请填写 {当前服务商} 的密钥" + 该预设的「申请密钥」链接，设置窗与引导各放在自己的凭据框下面；预设选择、地址手改、凭据框内容、已存设置变化时重判），测试连接第四态用次级色；设置窗「保存凭据」、引导里填的密钥、备份导入三处写密钥的路径全部成对写来源；`OwnKeyDictionary` 改问 `Backend.IsConfigured`。ADR-0011 补充一节。测试 946（943 + 3）→ 1018（1015 + 3）：新增 72 条（来源推导；来源一致才带密钥、只改路径仍一致、切走再切回；线上 handler 断言不发请求/带 Authorization；保存写来源、迁移、DPAPI 落盘不回归；备份往返含真实归档；表单与第四态；结构看门人），改 1 条旧测（`RelayChannelGateTests`：自备密钥"已配置"的前提改为经 `WithApiKey` 保存——票 29 之后"配置好"包含来源）。构建 0 错误、警告与基线相同的 5 条，两项静态检查干净。
+
+未验证项：不能启动用户的拾语实例，窗口里的真实渲染没有亲眼见过——设置·翻译页凭据框下方提示的宽度、换行与暗色主题观感，以及引导第三屏同位置的提示。已做的替代：用一次性 STA 进程载入编译好的 `Shiyu.App.dll`（不启动 App），驱动 `ServicePresetRow`：预设选择、地址手改降级为自定义、键入密钥后提示收起、测试连接第四态与普通拒绝、切回原服务商，提示文案、可见性与链接逻辑都如预期。复验：见下方实机项；探针法——在隔离数据目录的 settings.json 种 `BackendBaseUrl=https://open.bigmodel.cn/api/paas/v4`、`BackendModel=glm-4-flash-250414`、`BackendApiKey=k`、`BackendApiKeyOrigin=https://api.deepseek.com`，开设置·翻译页应见提示，点测试连接应得第四种结果，触发面板应见"还没有配置"引导卡。
+
+已知限制：单格仍是单格（票面「不做」项）——在 B 家填了新密钥，A 家的就被覆盖；升级前已经切过预设、旧密钥早已发往新地址的用户，迁移只能"维持现有的配对"（密钥绑到当时的地址），拦不住已经发生的那次；探针脚本若在应用保存过设置之后再改 URL 与密钥，需同时清掉 `BackendApiKeyOrigin`。
 
 **问题（2026-10-04 代码核对）：** 自备密钥只有一个格子（`AppSettings.BackendApiKey`），不记它是
 为哪家服务商填的。于是：
@@ -49,14 +56,20 @@ DPAPI（票 11）保护的是密钥在磁盘上的样子，管不到它被发往
 
 **验收：**
 
-- [ ] 单测：来源一致才带密钥；只改路径仍算一致；不一致时 `Backend.IsConfigured` 为 false，且
+- [x] 单测：来源一致才带密钥；只改路径仍算一致；不一致时 `Backend.IsConfigured` 为 false，且
       请求不带 Authorization（用 handler 断言）
-- [ ] 单测：迁移（有密钥、无来源 → 补上来源）；保存凭据时写下来源；切到别家再切回，密钥恢复
+- [x] 单测：迁移（有密钥、无来源 → 补上来源）；保存凭据时写下来源；切到别家再切回，密钥恢复
       可用
-- [ ] 单测：两处 `readForm` 在来源不一致且框空时返回空密钥；测试连接给出第四种结果，且没有
-      发出请求
-- [ ] 单测：备份与恢复的往返——来源随设置走；不含密钥的备份恢复后，保留本机的密钥与来源
-- [ ] `OwnKeyDictionary` 等处改走 `Backend.IsConfigured`（测试）
+- [x] 单测：两处 `readForm` 在来源不一致且框空时返回空密钥；测试连接给出第四种结果，且没有
+      发出请求（readForm 是 WPF 里的 lambda，只剩"取控件值 → `ServiceForm`"，规则本身在
+      `ServiceForm.Key` 里测）
+- [x] 单测：备份与恢复的往返——来源随设置走；不含密钥的备份恢复后，保留本机的密钥与来源
+- [x] `OwnKeyDictionary` 等处改走 `Backend.IsConfigured`（测试）（App 层摸不到单测，靠结构
+      看门人 `StoredKeyGateTests`：除 `AppSettings` 外没有人直接读写 `BackendApiKey`）
 - [ ] 实机（进人工清单）：DeepSeek 预设填好密钥 → 切到智谱预设 → 翻译时出现"还没有配置"引导
       卡，而不是 401 报错
-- [ ] 全量测试绿
+- [x] 全量测试绿
+
+## Comments
+
+2026-10-04 0.9.1 正式版发布后，用户要求执行本票，豁免 WIP 闸门。
