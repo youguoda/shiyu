@@ -120,8 +120,8 @@ internal partial class BarWindow : Window
         // entry Touching its way back to the top never showed (O-37).
         _store.Changed += OnStoreChanged;
 
-        // 预览/连接窗是独立顶层窗，不是本窗的视觉孩子：本窗无论经哪条路
-        // 不可见或关闭（Alt+F4、系统收窗、未来新增的隐藏路径），它们都
+        // 预览窗是独立顶层窗，不是本窗的视觉孩子：本窗无论经哪条路
+        // 不可见或关闭（Alt+F4、系统收窗、未来新增的隐藏路径），它都
         // 不能比宿主活得久（用户实录：窄条关了预览弹窗留在桌面上）。
         // Dismiss/失焦路径已各自清理；这里是结构兜底，不替代它们。
         IsVisibleChanged += (_, e) =>
@@ -129,22 +129,19 @@ internal partial class BarWindow : Window
             if (!(bool)e.NewValue)
             {
                 _preview?.TakeDown();
-                _connector?.HideCurve();
             }
         };
         Closed += (_, _) =>
         {
             _preview?.TakeDown();
             _preview?.Close();
-            _connector?.HideCurve();
-            _connector?.Close();
         };
 
         _previewPolicy = PreviewPolicy.For(settings, () => Environment.TickCount64);
         _refreshPolicy = new BarRefreshPolicy(settings.LightweightWhenHidden);
 
         // 在不在条里，决定一条外部写要不要把列表带回最新（见 StoreChanged）。
-        // 预览与连接窗都不抢激活，悬停预览不算离开。
+        // 预览窗不抢激活，悬停预览不算离开。
         Activated += (_, _) => _refreshPolicy.Activated();
         Deactivated += (_, _) => _refreshPolicy.Deactivated();
 
@@ -243,10 +240,10 @@ internal partial class BarWindow : Window
         Topmost = topmost;
         SyncTopmostChrome();
 
-        // Degradation policy (票 39 评审定案): the layers ANCHORED to this
-        // window — the preview panel and its connector — follow the bar's
-        // z-tier, so a covered bar is never shadowed by its own floating
-        // panes. The badge and the translation panel are independent
+        // Degradation policy (票 39 评审定案): the layer ANCHORED to this
+        // window — the preview panel — follows the bar's z-tier, so a
+        // covered bar is never shadowed by its own floating pane. The
+        // badge and the translation panel are independent
         // surfaces summoned by copies anywhere, not bar layers; they keep
         // their own Topmost.
         SyncFloatingLayers();
@@ -309,11 +306,6 @@ internal partial class BarWindow : Window
         if (_preview is not null)
         {
             _preview.Topmost = Topmost;
-        }
-
-        if (_connector is not null)
-        {
-            _connector.Topmost = Topmost;
         }
     }
 
@@ -644,11 +636,11 @@ internal partial class BarWindow : Window
     {
         base.OnLocationChanged(e);
 
-        // 窄条被拖走时预览与连接线锚的屏幕位置即刻作废——收掉，孤悬的面板
-        // 比没有面板误导得多（验收 B4 双屏拖动 20 次实录：预览连桥留在
-        // 原屏）。松手后的下一次悬停会重新开一个锚对的。第六轮的生命周期
-        // 兜底覆盖了隐藏与关闭，唯独没覆盖"窗口还在、只是动了"。
-        if (_preview is { IsVisible: true } || _connector is { IsVisible: true })
+        // 窄条被拖走时预览锚的屏幕位置即刻作废——收掉，孤悬的面板比没有
+        // 面板误导得多（验收 B4 双屏拖动 20 次实录：预览留在原屏）。松手
+        // 后的下一次悬停会重新开一个锚对的。第六轮的生命周期兜底覆盖了
+        // 隐藏与关闭，唯独没覆盖"窗口还在、只是动了"。
+        if (_preview is { IsVisible: true })
         {
             RunPreviewCommand(_previewPolicy.BarHidden());
         }

@@ -56,14 +56,6 @@ internal partial class PreviewWindow : Window
 
     public event Action? PointerLeftPanel;
 
-    /// <summary>
-    /// The panel's rectangle in physical pixels, every time it settles or
-    /// glides a step (ticket 18's connector follows it). First raise happens
-    /// with the panel already in place — the connector teleports on open,
-    /// exactly as the panel does.
-    /// </summary>
-    public event Action<ScreenRect>? PanelMoved;
-
     public PreviewWindow(FileTypeIcons fileIcons, FileExistenceCache fileProbe)
     {
         InitializeComponent();
@@ -164,10 +156,6 @@ internal partial class PreviewWindow : Window
                 (anchor.Top + anchor.Bottom) / 2)),
             gap: (int)Math.Round(PreviewPlacement.Gap * scaleX));
 
-        // Which edge faces the bar decides where the bridge line lives; the
-        // anchor's horizontal extent is the BAR's outer edge (U-03).
-        _bridgeOnLeft = placed.X >= anchor.Right;
-
         if (!wasVisible)
         {
             // The spike's rule: a layered window appears at full opacity — a
@@ -179,11 +167,6 @@ internal partial class PreviewWindow : Window
             _ = helper.EnsureHandle();
             TransientWindow.MoveTo(helper.Handle, placed, _band);
             Show();
-            PanelMoved?.Invoke(new ScreenRect(
-                placed.X,
-                placed.Y,
-                placed.X + (int)Math.Ceiling(width * scaleX),
-                placed.Y + (int)Math.Ceiling(height * scaleY)));
             return;
         }
 
@@ -194,50 +177,23 @@ internal partial class PreviewWindow : Window
             // The glide is driven in physical pixels on purpose — WPF's
             // Left/Top know nothing of a window positioned by SetWindowPos
             // and would snap it back to a stale value mid-animation.
-            SlideTo(placed, (int)Math.Ceiling(width * scaleX), (int)Math.Ceiling(height * scaleY));
+            SlideTo(placed);
         }
         else
         {
             var handle = new WindowInteropHelper(this).Handle;
             TransientWindow.MoveTo(handle, placed, _band);
-            PanelMoved?.Invoke(new ScreenRect(
-                placed.X,
-                placed.Y,
-                placed.X + (int)Math.Ceiling(width * scaleX),
-                placed.Y + (int)Math.Ceiling(height * scaleY)));
         }
     }
 
     private System.Windows.Threading.DispatcherTimer? _slide;
 
     /// <summary>
-    /// 同色桥（§3.3 P2 / §4.7，票 20）：与卡片对齐时的连接表达——面向窄
-    /// 条那条边上一条 2 DIP accent 边线，代替多余的解释曲线。显示哪条
-    /// 边由最近一次落点决定（ShowFor），显隐由窄条按对齐条件决定。
-    /// </summary>
-    private bool _bridgeOnLeft = true;
-
-    /// <summary>Shows the bridge on the bar-facing edge (the aligned case — no curve).</summary>
-    public void ShowBridge()
-    {
-        BridgeLeft.Visibility = _bridgeOnLeft ? Visibility.Visible : Visibility.Collapsed;
-        BridgeRight.Visibility = _bridgeOnLeft ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    /// <summary>Hides the bridge (the offset case draws the connector curve instead).</summary>
-    public void HideBridge()
-    {
-        BridgeLeft.Visibility = Visibility.Collapsed;
-        BridgeRight.Visibility = Visibility.Collapsed;
-    }
-
-    /// <summary>
     /// Lerps the window to its new spot with SetWindowPos over the standard
     /// fast duration — reduced motion lands here as one instant step, the
-    /// same deal every other motion in the app gets. Each step announces the
-    /// new rectangle so the connector glides in step with the panel.
+    /// same deal every other motion in the app gets.
     /// </summary>
-    private void SlideTo(ScreenPoint target, int physicalWidth, int physicalHeight)
+    private void SlideTo(ScreenPoint target)
     {
         _slide?.Stop();
 
@@ -248,12 +204,7 @@ internal partial class PreviewWindow : Window
             var duration = MotionPlan.Duration(animationsAllowed: true);
             var clock = Stopwatch.StartNew();
 
-            void Step(ScreenPoint at)
-            {
-                TransientWindow.MoveTo(handle, at, _band);
-                PanelMoved?.Invoke(new ScreenRect(
-                    at.X, at.Y, at.X + physicalWidth, at.Y + physicalHeight));
-            }
+            void Step(ScreenPoint at) => TransientWindow.MoveTo(handle, at, _band);
 
             _slide = new System.Windows.Threading.DispatcherTimer
             {

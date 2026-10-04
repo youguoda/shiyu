@@ -22,8 +22,6 @@ public class TextTokenHygieneTests
     // (仓库相对路径, 行内须包含的标记)。命中标记的行视为已核实的装饰例外。
     private static readonly (string Path, string Marker)[] AllowedOpacityLiterals =
     [
-        // 连接曲线的描边深浅：图形，不是文字。
-        ("src/Shiyu.App/ConnectorWindow.cs", "_stroke.Opacity"),
         // 深链定位的三段衰减水洗层：Border 覆盖层，不是文字。
         ("src/Shiyu.App/SettingsWindow.xaml.cs", "wash.Opacity"),
         // 预览窗自绘阴影的强度（DropShadowEffect 的 Opacity）。

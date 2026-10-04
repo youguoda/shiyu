@@ -28,20 +28,17 @@ internal partial class BarWindow
         switch (command)
         {
             case PreviewCommand.Open when CardById(_previewPolicy.Card) is { } opening:
-                _connectorAnchor = AnchorFor(opening) ?? WindowRect();
-                EnsurePreview().ShowFor(opening, PlacementAnchor(_connectorAnchor.Value), slide: false,
+                EnsurePreview().ShowFor(opening, PlacementAnchor(AnchorFor(opening) ?? WindowRect()), slide: false,
                     scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
                 break;
 
             case PreviewCommand.Retarget when CardById(_previewPolicy.Card) is { } moving:
-                _connectorAnchor = AnchorFor(moving) ?? WindowRect();
-                EnsurePreview().ShowFor(moving, PlacementAnchor(_connectorAnchor.Value), slide: true,
+                EnsurePreview().ShowFor(moving, PlacementAnchor(AnchorFor(moving) ?? WindowRect()), slide: true,
                     scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
                 break;
 
             case PreviewCommand.Close:
                 _preview?.TakeDown();
-                _connector?.HideCurve();
                 break;
         }
 
@@ -52,28 +49,18 @@ internal partial class BarWindow
     }
 
     /// <summary>
-    /// The card tooltip and the hover preview are the same channel: the tip
-    /// fires first (system delay), and once the preview panel is in place it
-    /// repeats the entry text in full — the two floating together only stack
-    /// one over the other (user report 2026-10-03). While a preview is up the
-    /// hovered card's tooltip is stashed off (clearing it closes an open tip
-    /// <summary>
     /// Where ShowFor anchors the panel (U-03): horizontally to the BAR's outer
     /// edge — the card used to carry the anchor and the panel pressed ~8 DIP
     /// into the bar's window — while the vertical half stays the card's, so
-    /// "top-aligned with the row" survives (§3.3). The connector keeps the
-    /// card rect itself: the curve points at the row, not at the window.
+    /// "top-aligned with the row" survives (§3.3). That alignment is the whole
+    /// tie between panel and row now: the connector line and its bridge were
+    /// removed at the user's request (2026-10-05).
     /// </summary>
     private ScreenRect PlacementAnchor(ScreenRect card)
     {
         var bar = WindowRect();
         return new ScreenRect(bar.Left, card.Top, bar.Right, card.Bottom);
     }
-
-    private ConnectorWindow? _connector;
-
-    /// <summary>The row the panel (and its connector) currently belongs beside.</summary>
-    private ScreenRect? _connectorAnchor;
 
     // 卡片悬停教学已迁至预览面板尾行（2026-10-05）：系统 ToolTip 的关闭
     // 行为两次留下空壳（用户实录），收起/恢复它的那套逻辑随之整体退役。
@@ -85,7 +72,6 @@ internal partial class BarWindow
             _preview = new PreviewWindow(_fileIcons, _fileProbe);
             _preview.PointerRestingOnPanel += () => RunPreviewCommand(_previewPolicy.PreviewEntered());
             _preview.PointerLeftPanel += () => RunPreviewCommand(_previewPolicy.PreviewLeft());
-            _preview.PanelMoved += OnPreviewPanelMoved;
 
             // Born into the bar's z-tier (票 39): the panel never hovers above
             // windows the bar itself is under.
@@ -93,39 +79,6 @@ internal partial class BarWindow
         }
 
         return _preview;
-    }
-
-    /// <summary>
-    /// The connector redraws with every step the panel takes — first arrival
-    /// included, which is the teleport the ticket asks for: a line flying in
-    /// from the previous row's position would read as a glitch, not as craft.
-    ///
-    /// The curve is conditional now (§4.7, ticket 20): squarely-beside is the
-    /// common case and gets the 2 DIP accent bridge on the panel's card-facing
-    /// edge instead; only a real offset (clamped or squeezed) earns the curve.
-    /// </summary>
-    private void OnPreviewPanelMoved(ScreenRect panel)
-    {
-        if (_connectorAnchor is not { } anchor)
-        {
-            return;
-        }
-
-        var (scaleX, scaleY) = ScreenGeometry.ScaleForRect(panel);
-
-        if (PreviewConnector.ShouldDrawCurve(anchor, panel, scaleX, scaleY))
-        {
-            _preview?.HideBridge();
-            _connector ??= new ConnectorWindow();
-            _connector.ShowCurve(
-                anchor, panel, new System.Windows.Interop.WindowInteropHelper(_preview).Handle,
-                ZBandPolicy.FollowsHost(Topmost));
-        }
-        else
-        {
-            _connector?.HideCurve();
-            _preview?.ShowBridge();
-        }
     }
 
     /// <summary>The panel follows the pointer only between realised cards; off-list the bar anchors it.</summary>

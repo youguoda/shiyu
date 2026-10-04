@@ -26,8 +26,8 @@
       外壳（§4.7，票 20）：只画 SurfaceMaterial 材质底；圆角 8、轮廓与
       投影归 DWM（DwmEffects 在句柄上设，拒收时 OnSourceInitialized 落
       Backdrop.DegradeShell 的自绘描边+阴影与 12 DIP 透明边距）。
-      同色桥（§3.3 P2）：与卡片对齐时的连接表达——面向窄条那条边上一
-      条 2 DIP accent 边线，由窄条按对齐条件决定显隐，不画曲线。
+      与卡片之间不画连接（用户需求 2026-10-05 删去连接线与同色桥）：
+      面板紧挨窄条、顶与行对齐，位置本身就说明它属于哪一行。
     -->
     <Border x:Name="Root" CornerRadius="{DynamicResource Radius.Overlay}"
             Background="{DynamicResource Brush.SurfaceMaterial}"
@@ -39,13 +39,6 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-
-            <Border x:Name="BridgeLeft" Grid.RowSpan="2" Width="2" Margin="0,8"
-                    HorizontalAlignment="Left"
-                    Background="{DynamicResource Brush.Accent}" Visibility="Collapsed"/>
-            <Border x:Name="BridgeRight" Grid.RowSpan="2" Width="2" Margin="0,8"
-                    HorizontalAlignment="Right"
-                    Background="{DynamicResource Brush.Accent}" Visibility="Collapsed"/>
 
             <DockPanel Grid.Row="0" Margin="0,0,0,6">
                 <TextBlock x:Name="WhenText" DockPanel.Dock="Right"

@@ -405,9 +405,6 @@ internal static class NativeMethods
 
     internal const int GwlExStyle = -20;
     internal const uint WsExNoActivate = 0x08000000;
-
-    /// <summary>WS_EX_TRANSPARENT: hit-testing passes through to windows below.</summary>
-    internal const uint WsExTransparent = 0x00000020;
     internal const uint WsExTopmost = 0x00000008;
     internal static readonly IntPtr HwndTopmost = new(-1);
 
@@ -438,14 +435,6 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr MonitorFromPoint(Point point, uint flags);
-
-    /// <summary>
-    /// The monitor with the largest intersection with the rect (nearest on a
-    /// tie or a miss) — the right anchor for a DPI question about a REGION,
-    /// where the point form would answer for whichever corner was handed in.
-    /// </summary>
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern IntPtr MonitorFromRect(ref Rect rect, uint flags);
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);

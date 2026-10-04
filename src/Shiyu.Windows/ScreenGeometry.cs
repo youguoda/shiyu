@@ -109,36 +109,6 @@ public static class ScreenGeometry
         return (dpiX / 96.0, dpiY / 96.0);
     }
 
-    /// <summary>
-    /// The monitor scale for a REGION in physical pixels (U-03): the connector
-    /// sheet spans the card, the gap and the panel, and its drawing must
-    /// convert through the scale of the monitor that region actually sits on —
-    /// MonitorFromRect picks the one with the largest intersection. Reading
-    /// the window's own PresentationSource instead answers with whatever
-    /// monitor it LAST lived on, which is stale for a beat after every
-    /// cross-DPI move and lands the curve inside the panel.
-    /// </summary>
-    public static (double ScaleX, double ScaleY) ScaleForRect(ScreenRect rect)
-    {
-        var native = new NativeMethods.Rect
-        {
-            Left = rect.Left,
-            Top = rect.Top,
-            Right = rect.Right,
-            Bottom = rect.Bottom,
-        };
-
-        var monitor = NativeMethods.MonitorFromRect(ref native, NativeMethods.MonitorDefaultToNearest);
-
-        if (monitor == IntPtr.Zero
-            || GetDpiForMonitor(monitor, DpiType.Effective, out var dpiX, out var dpiY) != 0)
-        {
-            return (1.0, 1.0);
-        }
-
-        return (dpiX / 96.0, dpiY / 96.0);
-    }
-
     private enum DpiType
     {
         Effective = 0,

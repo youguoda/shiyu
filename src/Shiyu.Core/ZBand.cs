@@ -18,9 +18,9 @@ public static class ZBandPolicy
 {
     /// <summary>
     /// The band for a surface bound to the bar — the bar itself on summon,
-    /// and the panes anchored to it (the preview panel, its connector). It is
-    /// the bar's own band: a covered bar must never be shadowed by its own
-    /// floating panes. Surfaces NOT bound to the bar (the badge, the
+    /// and the pane anchored to it (the preview panel). It is the bar's own
+    /// band: a covered bar must never be shadowed by its own floating pane.
+    /// Surfaces NOT bound to the bar (the badge, the
     /// translation panel, the quick bar) stay in the topmost band by design —
     /// they are summoned by copies anywhere and rely on the bit to be seen.
     /// </summary>
