@@ -313,31 +313,44 @@ internal partial class PreviewWindow : Window
     /// <summary>
     /// The panel's final size, from <see cref="PreviewSizing"/> with the
     /// caller-measured text numbers. Images hand in their stored pixels; files
-    /// their row count.
+    /// their row count. The teach row (2026-10-05) rides under every kind, so
+    /// its wrapped height joins the estimate — without it the panel opened
+    /// short and clipped the row against its bottom edge.
     /// </summary>
     private (double Width, double Height) Measure(BarCard card)
     {
         var lineHeight = DesignTokens.LineForContent;
 
-        switch (card.Kind)
+        var size = card.Kind switch
         {
-            case EntryKind.Image:
-                return PreviewSizing.ForImage(card.PixelWidth, card.PixelHeight);
+            EntryKind.Image => PreviewSizing.ForImage(card.PixelWidth, card.PixelHeight),
+            EntryKind.Files => PreviewSizing.ForFiles(card.Files.Count, FileRowHeight),
+            _ => TextSize(card, lineHeight),
+        };
 
-            case EntryKind.Files:
-                return PreviewSizing.ForFiles(card.Files.Count, FileRowHeight);
-
-            default:
-                var box = PreviewSizing.MaxWidth - PreviewSizing.ChromeHorizontal;
-                var formatted = Formatted(
-                    card.Text,
-                    DesignTokens.TypeContent,
-                    constrain: box);
-                var lineCount = (int)Math.Ceiling(formatted.Height / lineHeight);
-                var textWidth = Math.Min(formatted.Width, box);
-
-                return PreviewSizing.ForText(lineCount, textWidth, lineHeight);
+        if (card.ShowToolTip && card.DragHint is { Length: > 0 })
+        {
+            var box = PreviewSizing.MaxWidth - PreviewSizing.ChromeHorizontal;
+            var hint = Formatted(card.DragHint, DesignTokens.TypeCaption, constrain: box);
+            // 8 margin above the divider + 1 divider + 6 padding + the lines,
+            // plus a rounding row: an estimate a hair tall beats a clipped row.
+            size = (size.Width, size.Height + 15 + Math.Ceiling(hint.Height / DesignTokens.LineForCaption) * DesignTokens.LineForCaption + DesignTokens.LineForCaption);
         }
+
+        return size;
+    }
+
+    private (double Width, double Height) TextSize(BarCard card, double lineHeight)
+    {
+        var box = PreviewSizing.MaxWidth - PreviewSizing.ChromeHorizontal;
+        var formatted = Formatted(
+            card.Text,
+            DesignTokens.TypeContent,
+            constrain: box);
+        var lineCount = (int)Math.Ceiling(formatted.Height / lineHeight);
+        var textWidth = Math.Min(formatted.Width, box);
+
+        return PreviewSizing.ForText(lineCount, textWidth, lineHeight);
     }
 
     /// <summary>One file row: a line and its breathing room, in the mono-content size.</summary>
