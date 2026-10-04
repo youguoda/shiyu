@@ -624,7 +624,7 @@ public partial class LibraryWindow
         foreach (var row in _aiRows)
         {
             row.IsEnabled = ready;
-            row.ToolTip = ready ? null : "需要自备密钥 · 去设置 → 服务";
+            row.ToolTip = ready ? null : "需要自备密钥 · 去 设置 → 翻译";
         }
     }
 
