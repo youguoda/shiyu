@@ -265,12 +265,17 @@ internal partial class BarWindow
                 CycleTag(+1);
                 break;
 
-            case Key.Left when !IsTyping:
+            // ←→ cycle kinds. The old !IsTyping guard never fired where it
+            // mattered: summon aims the search box, so the box holds focus
+            // with an EMPTY query and the arrows did nothing at all (user
+            // report 2026-10-05). Same shape as Space below: an empty query
+            // hands the key to the window, mid-query it stays with the caret.
+            case Key.Left when SearchBox.Text.Length == 0 || !IsTyping:
                 e.Handled = true;
                 CycleKind(-1);
                 break;
 
-            case Key.Right when !IsTyping:
+            case Key.Right when SearchBox.Text.Length == 0 || !IsTyping:
                 e.Handled = true;
                 CycleKind(+1);
                 break;
