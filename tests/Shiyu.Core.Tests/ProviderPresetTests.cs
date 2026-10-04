@@ -343,12 +343,12 @@ public class RelayChannelGateTests
         // 闸门关着：选中公共通道不等于有一条能走的路。
         Assert.False(onRelay.IsTranslationConfigured);
 
+        // 票 29：自备密钥是"绑着来源的密钥"——经唯一的写入口保存，才算配好。
         var onOwnKey = new AppSettings
         {
             BackendBaseUrl = "https://api.example.com/v1",
             BackendModel = "m",
-            BackendApiKey = "k",
-        };
+        }.WithApiKey("k");
         Assert.True(onOwnKey.IsTranslationConfigured);
     }
 

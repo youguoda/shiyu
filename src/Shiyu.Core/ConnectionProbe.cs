@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace Shiyu.Core;
 
-/// <summary>「测试连接」的三种结局——人话区分，不带一个英文异常。</summary>
+/// <summary>「测试连接」的四种结局——人话区分，不带一个英文异常。</summary>
 public enum ConnectionTestVerdict
 {
     /// <summary>请求走通了：地址对、密钥对、模型对（附耗时）。</summary>
@@ -16,6 +16,12 @@ public enum ConnectionTestVerdict
 
     /// <summary>连不上、超时，或地址/模型名不对（404 等）。</summary>
     Unreachable,
+
+    /// <summary>
+    /// 第四种（票 29）：没发请求——表单上这家服务商还没有它自己的密钥（已存的那
+    /// 把属于别家，不能发过去）。这不算失败，所以不归入上面任何一种。
+    /// </summary>
+    NeedsKey,
 }
 
 /// <param name="Elapsed">Success 时的耗时，给用户看"这条线路值不值得"。</param>
@@ -85,6 +91,24 @@ public static class ConnectionProbe
                 Message: "连接超时——地址可能不正确，或网络不通。");
         }
     }
+
+    /// <summary>
+    /// 表单入口（票 29）：凭据框留空时沿用已存的密钥，但只沿用属于表单上这个
+    /// 来源的那一把。留空而已存的密钥属于别家时不发请求，直接给第四种结果
+    /// （<see cref="ConnectionTestVerdict.NeedsKey"/>）——这不算失败，旧密钥
+    /// 也就不会随测试发往新地址。其余情形与另一个重载一字不差。
+    /// </summary>
+    public static Task<ConnectionTestOutcome> TestAsync(
+        ServiceForm form,
+        ProviderPreset? preset = null,
+        HttpClient? httpClient = null,
+        TimeSpan? probeTimeout = null,
+        CancellationToken cancellation = default)
+        => form.NeedsOwnKey
+            ? Task.FromResult(new ConnectionTestOutcome(
+                ConnectionTestVerdict.NeedsKey,
+                Message: "请先填写这家服务商的密钥。"))
+            : TestAsync(form.Options, preset, httpClient, probeTimeout, cancellation);
 
     private static HttpRequestMessage BuildRequest(
         TranslationBackendOptions options, ProviderPreset? preset)

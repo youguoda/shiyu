@@ -77,6 +77,14 @@ public sealed record AppSettings
     /// </summary>
     public string BackendApiKey { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 上面这把密钥是为哪家服务商保存的：保存时服务地址的 scheme + host +
+    /// port（票 29，见 <see cref="KeyOrigin"/>）。不是秘密，明文存。它与密钥
+    /// 是一对——只经 <see cref="WithApiKey"/> 写入，只经 <see cref="KeyFor"/>
+    /// 取出：来源与服务地址不一致时密钥不会被带上。
+    /// </summary>
+    public string BackendApiKeyOrigin { get; init; } = string.Empty;
+
     /// <summary>How long image originals are kept before being cleaned up.</summary>
     public int ImageRetentionDays { get; init; } = 30;
 
@@ -242,8 +250,10 @@ public sealed record AppSettings
     /// <summary>Source-app and content-pattern rules the user added themselves.</summary>
     public IReadOnlyList<StoredExclusionRule> ExclusionRules { get; init; } = [];
 
+    // 密钥经 KeyFor 取：来源与服务地址不一致时是空串，Backend.IsConfigured
+    // 随之为 false——请求不带 Authorization，面板走"还没有配置"的引导卡（票 29）。
     [JsonIgnore]
-    public TranslationBackendOptions Backend => new(BackendBaseUrl, BackendModel, BackendApiKey);
+    public TranslationBackendOptions Backend => new(BackendBaseUrl, BackendModel, KeyFor(BackendBaseUrl));
 
     /// <summary>
     /// 翻译此刻是否真的有一条能走的路。公共通道在上线条件满足前
@@ -371,6 +381,14 @@ public sealed record AppSettings
                 parsed = parsed with { BackendApiKey = plain ?? string.Empty };
             }
 
+            // 票 29：旧文件有密钥、没有来源——以此刻的服务地址补上，维持现有的
+            // 配对，下次保存时落盘。只补空缺：已记下的来源是用户当时的事实，
+            // 不能被"现在的地址"改写（那会把旧密钥悄悄洗给新地址）。
+            if (parsed.BackendApiKey.Length > 0 && string.IsNullOrEmpty(parsed.BackendApiKeyOrigin))
+            {
+                parsed = parsed with { BackendApiKeyOrigin = KeyOrigin.Of(parsed.BackendBaseUrl) };
+            }
+
             settings = parsed;
             return true;
         }
@@ -434,11 +452,63 @@ public sealed record AppSettings
     /// working credential. With it: the plain key, because the protected form
     /// is bound to this machine's user; the caller only ever embeds it inside
     /// an encrypted archive, and the import re-protects on first save.
+    /// The key's origin (票 29) is not a secret and travels either way; a
+    /// restore that finds no key keeps this machine's key and origin
+    /// (<see cref="KeepingKeyOf"/>), so the origin in a keyless backup is moot.
     /// </summary>
     public string ToBackupJson(bool includeKey)
         => includeKey
             ? JsonSerializer.Serialize(this, Format)
             : JsonSerializer.Serialize(this with { BackendApiKey = string.Empty }, Format);
+
+    // --- 密钥只发给它所属的服务商（票 29） -----------------------------------------
+
+    /// <summary>
+    /// 发给 <paramref name="baseUrl"/> 的密钥：来源与它一致才返回已存的那把，
+    /// 否则是空串。没有记下来源的密钥也是空串——失败即关闭：谁绕开
+    /// <see cref="WithApiKey"/> 只写了密钥，得到的是"没配置"，不是泄露。
+    /// </summary>
+    public string KeyFor(string baseUrl)
+        => BackendApiKey is { Length: > 0 }
+            && BackendApiKeyOrigin is { Length: > 0 } stored
+            && KeyOrigin.Of(baseUrl) is { Length: > 0 } wanted
+            && string.Equals(KeyOrigin.Of(stored), wanted, StringComparison.OrdinalIgnoreCase)
+                ? BackendApiKey
+                : string.Empty;
+
+    /// <summary>
+    /// 已存了密钥，但它不属于 <paramref name="baseUrl"/> 这个来源——界面据此
+    /// 说"请填写这家的密钥"，而不是"还没填"。没有地址就谈不上"这家"。
+    /// </summary>
+    public bool HasKeyForOtherOrigin(string baseUrl)
+        => BackendApiKey is { Length: > 0 }
+            && KeyOrigin.Of(baseUrl).Length > 0
+            && KeyFor(baseUrl).Length == 0;
+
+    /// <summary>
+    /// 保存一把密钥——唯一的写入口：密钥与它的来源（此刻的服务地址）成对
+    /// 写下。设置窗的「保存凭据」、引导里填的密钥都走这里。空密钥连来源一并
+    /// 清掉。
+    /// </summary>
+    public AppSettings WithApiKey(string key)
+        => key.Length == 0
+            ? this with { BackendApiKey = string.Empty, BackendApiKeyOrigin = string.Empty }
+            : this with { BackendApiKey = key, BackendApiKeyOrigin = KeyOrigin.Of(BackendBaseUrl) };
+
+    /// <summary>
+    /// 备份恢复落地时的密钥取舍（票 11 的语义不变，加上来源）：备份没带密钥
+    /// （默认，ADR-0011）就保留<paramref name="local"/>——本机现有的——密钥，
+    /// 连同它的来源：两者是一对，拆开就是把 A 家的密钥配上备份里 B 家的地址。
+    /// 备份自己带了密钥就照单全收，它的来源随设置一起来。
+    /// </summary>
+    public AppSettings KeepingKeyOf(AppSettings local)
+        => BackendApiKey.Length > 0
+            ? this
+            : this with
+            {
+                BackendApiKey = local.BackendApiKey,
+                BackendApiKeyOrigin = local.BackendApiKeyOrigin,
+            };
 
     public ExclusionPolicy BuildExclusionPolicy()
         => new(ExclusionPolicy.Presets.Concat(
