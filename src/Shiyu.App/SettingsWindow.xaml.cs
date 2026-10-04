@@ -66,6 +66,7 @@ public partial class SettingsWindow : Window
     private PasswordBox? _secretBox;
     private ServicePresetRow? _presetRow;
     private ExclusionRulesCard? _exclusions;
+    private PromptTemplatesCard? _templates;
     private ActionsListCard? _actionsList;
     private TextBlock? _linkValue;
 
@@ -912,6 +913,7 @@ public partial class SettingsWindow : Window
         "hotkeys.cheatsheet" => KeyMapCard(),
         "service.preset" => PresetRow(state),
         "exclusions" => ExclusionsRow(item, state),
+        "translate.templates" => TemplatesRow(item),
         "bar.actions" => ActionsListRow(item, state),
         _ => new TextBlock(),
     };
@@ -1024,6 +1026,32 @@ public partial class SettingsWindow : Window
                 Commit(item, state);
             });
         return _exclusions.Element;
+    }
+
+    /// <summary>
+    /// 提示词模板（票 42）：每个开关单字段即改即生效。写走 SettingsStore——这是在设置
+    /// 窗里写，属于常规路径，不涉及面板 Esc 那个问题（面板里点模板按钮才不写设置）。
+    /// </summary>
+    private FrameworkElement TemplatesRow(SettingsItem item)
+    {
+        _templates = new PromptTemplatesCard(
+            _baseline,
+            () => _store.Current,
+            change =>
+            {
+                try
+                {
+                    _store.Update(change, AppPaths.SettingsFile);
+                    CardOf(item)?.ClearError();
+                    return true;
+                }
+                catch (SettingsSaveException failure)
+                {
+                    CardOf(item)?.ShowError(failure.Message + " 本次改动没有生效，可以重试。");
+                    return false;
+                }
+            });
+        return _templates.Element;
     }
 
     private FrameworkElement ActionsListRow(SettingsItem item, ItemState state)
@@ -1886,6 +1914,9 @@ public partial class SettingsWindow : Window
     /// </summary>
     private void OnSettingsChanged(AppSettings updated)
     {
+        // 提示词模板卡自己按设置现算（Custom 控件没有通用的跟随）。
+        _templates?.Refresh(updated);
+
         foreach (var item in AllItems())
         {
             if (_edited.TryGetValue(item.Id, out var state)

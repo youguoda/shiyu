@@ -183,23 +183,23 @@ prompt 在服务端；票 41 的免费引擎根本没有 prompt。
 
 阶段一：
 
-- [ ] `PromptTemplate` / `PromptTemplates`（四个内置模板、按 id 解析、失效回落标准）+
+- [x] `PromptTemplate` / `PromptTemplates`（四个内置模板、按 id 解析、失效回落标准）+
       `TranslationRequest.Template`
-- [ ] `TranslationPrompt` 按模板构建，测试覆盖：
+- [x] `TranslationPrompt` 按模板构建，测试覆盖：
       标准逐字不变（字节比对）；
       口语、正式含共享规则与目标语言插值，user 段有 `<text>` 包裹；
       few-shot 只在中↔英语对出现（日语目标时断言没有示例）；
       提示词优化含框定句，且 `{target}` 已代入；
       温度依次为 0.2 / 0.3 / 0.2 / 0.3，且仍受预设限幅（智谱上限 1.0、Kimi 不发温度，各测一例）
-- [ ] `TranslationSession`：改写类不做回声重试（脚本后端原样回文 → 状态为 Finished，且只调用
+- [x] `TranslationSession`：改写类不做回声重试（脚本后端原样回文 → 状态为 Finished，且只调用
       一次）；翻译类照旧；回声重试保留模板
-- [ ] 清洗按类别：改写类保留"Notes:"段，只剥首尾的 `<text>`（测试）
-- [ ] `AppSettings.DefaultPromptTemplateId`、`TemplateCycle`、`PromptTemplatesApply`（OwnKey
-      为真；Relay 在通道未上线时也为真；Free 为假）
-- [ ] 设置「提示词模板」控件：四个内置模板的"设为默认"与"出现在切换里"
-- [ ] 面板模板按钮：循环、立即重跑、不写设置、换向后再换模板不丢方向、无 `{target}` 时只显示
+- [x] 清洗按类别：改写类保留"Notes:"段，只剥首尾的 `<text>`（测试）
+- [x] `AppSettings.DefaultPromptTemplateId`、`TemplateCycle`、`PromptTemplatesApply`（OwnKey
+      为真；Relay 在通道未上线时也为真；Free 为假——`Free` 为假的断言待票 41 合入后补，实现已自然覆盖）
+- [x] 设置「提示词模板」控件：四个内置模板的"设为默认"与"出现在切换里"
+- [x] 面板模板按钮：循环、立即重跑、不写设置、换向后再换模板不丢方向、无 `{target}` 时只显示
       模板名、改写类隐藏模式分段、单词态与免费引擎下隐藏、a11y 名随状态更新
-- [ ] CONTEXT.md 术语表补"提示词模板"。建议释义："决定面板与反向输入框怎样处理当下这段文字
+- [x] CONTEXT.md 术语表补"提示词模板"。建议释义："决定面板与反向输入框怎样处理当下这段文字
       的一段 prompt。翻译类（标准/口语/正式）译成译文语言；改写类（内置的提示词优化与全部自建
       模板）按模板自己的指令输出。内置模板受加戏条款约束；自建模板的措辞归用户，框架只保证防
       执行的框定。与**动作**不同：动作作用于历史条目（ADR-0005），模板作用于当下这段文字。"
@@ -222,6 +222,38 @@ prompt 在服务端；票 41 的免费引擎根本没有 prompt。
         好的提示词，而不是一段 Python 代码，且没有凭空添加需求。
       - 自建模板：新建"润色"→ 出现在面板的循环里 → 能用；删除后回落正常。
       - 全部内置模板的提示词文案经用户过目（prompt 是产品文案）。
+
+## 实现记录
+
+### 阶段一（2026-10-04，分支 v3/tpl42）
+
+- **提交**：「票 42：提示词模板——Core（阶段一）」「票 42：提示词模板——面板按钮与设置控件（阶段一）」。
+- **测试**：946（943 + 3）→ 1120（1117 + 3）。新增 174 条：标准档逐字钉（先钉住改动前的输出，改动后仍绿）、
+  模板库与循环、few-shot 语对门控、框定句与 `{target}` 代入、温度与限幅（智谱、Kimi 各一例）、会话与清洗
+  按类别、面板取舍（`PanelTemplateState`）、设置落盘、schema 与关键词。
+- **票面没写透、实现时定的几处**：
+  1. 标准档的 system 字面量一字未动（它不在 diff 里），方法改名为私有的 `StandardSystem`；
+     `TranslationPrompt.For` 保留为 `Build(request).System`。字节比对在统一成 `\n` 之后做：源文件里的多行
+     字面量随检出方式（autocrlf）是 CRLF 或 LF，换行不属于措辞。
+  2. `TranslationRequest.Temperature` 的语义改为"调用方指定了就用调用方的，否则跟随模板"（私有可空字段）。
+     原有的覆盖口与既有测试照旧。
+  3. 清洗：口语、正式的 user 段包了 `<text>`，模型偶尔回显，所以它们也先剥首尾的 `<text>` 再走全量清洗；
+     标准档不变（它的输入不包裹，译文里的 `<text>` 是正文）。
+  4. `PromptTemplatesApply` 写成 `BuildTranslationBackend() is OpenAiCompatibleBackend`，不另列一份分支条件：
+     票 41 加 `Free` 后自然为假，不必回头改。`Free` 为假的断言等 41 合入后补
+     （`PromptTemplateLibraryTests.The_verdict_follows_the_backend_that_is_actually_built` 已对枚举全部取值
+     循环断言，41 加了枚举值它就会自动覆盖）。
+  5. few-shot 门控："拉丁 → Chinese"按文字系统算，声明的源语言是法/德/西语也附英→中示例；声明了不认识的
+     语言（如 Esperanto）不猜，只给规则。
+  6. 默认模板与"出现在切换里"是两个独立的开关；循环的顺序就是设置里列出的顺序（关了再开不会跑到队尾）。
+  7. 循环里除当前模板外没有别的可换时，点按钮不重跑。
+  8. 换模板重跑时顺手把"已存入"复位（否则能再存的按钮上还写着"已存入"）。
+  9. 口语、正式的规则里保留了"已是目标语言就原样返回"——回声换向重试要靠它接上。
+- **未验证（本代理不启动拾语，没有实机）与复验方法**：
+  - 面板模板按钮的外观与头部排布（"中文 ⇄ 英语 · 口语"、六个字的截断、与模式分段并排不拥挤）；点击后立即
+    重跑、Esc 仍然有效、先换向再换模板方向不丢——用探针 `panel` 命令加人工点一遍。
+  - 设置·翻译·提示词模板那一节的外观与两个开关；搜索"提示词""prompt""vibe coding"能落到它。
+  - 探针 a11y 全件具名扫描（面板与设置窗）：新增件都设了 `AutomationProperties.Name`，未跑探针。
 
 ## Comments
 
