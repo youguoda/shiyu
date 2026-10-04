@@ -143,15 +143,17 @@ public partial class App : Application
 
         // The probe keeps out of the real instance's wake-up channel: the
         // "another instance started" broadcast goes to every Shiyu process,
-        // and a probe answering it would throw a library window at the user.
+        // and a probe answering it would throw a settings window at the user.
         if (!shell.IsProbe)
         {
             _singleInstance.WatchForOtherInstances(messageWindow);
 
-            // Starting Shiyu again is how a user who forgot it was running
-            // asks to see it, so bring the library up rather than only saying
-            // "already running" and leaving them no further along.
-            _singleInstance.AnotherInstanceStarted += () => shell.ShowLibrary?.Invoke();
+            // Starting Shiyu again — a pinned taskbar icon, the Start menu —
+            // is how a user asks to see it, so bring settings up rather than
+            // only saying "already running" and leaving them no further
+            // along. Same destination as a click on the tray icon (用户需求
+            // 2026-10-05: clicking the app's icon opens settings).
+            _singleInstance.AnotherInstanceStarted += () => shell.ShowSettings?.Invoke();
         }
 
         _modules.Retention.Start(shell);

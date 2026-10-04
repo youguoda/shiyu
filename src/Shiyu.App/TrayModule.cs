@@ -46,9 +46,11 @@ internal sealed class TrayModule
         // each item goes through the shell's relay slots, never at a module.
         tray.Command += key => Run(shell, key);
 
-        // Left click keeps going straight to the library — the thing the user
-        // most often wants (the reason it survived the §5.2 redesign).
-        tray.OpenLibraryRequested += () => shell.ShowLibrary?.Invoke();
+        // 点应用图标进设置（用户需求 2026-10-05，此前进管理窗）：拾语平时
+        // 没有窗口，点它就是来调它。管理窗仍在右键菜单里，也是窄条品牌钮
+        // 与自己的热键的去处。再次启动拾语（任务栏固定图标、开始菜单）走
+        // 同一个去处，见 App 的 AnotherInstanceStarted。
+        tray.Clicked += () => shell.ShowSettings?.Invoke();
 
         // An unparseable settings file was renamed aside, not overwritten:
         // that deserves one honest sentence once a tray exists to say it in.

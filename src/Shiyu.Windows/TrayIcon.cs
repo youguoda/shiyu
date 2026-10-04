@@ -54,8 +54,8 @@ public sealed class TrayIcon : IDisposable
     /// <summary>Raised with the clicked row's Key — the one event every menu action comes through.</summary>
     public event Action<string>? Command;
 
-    /// <summary>Raised on a left click: straight to the library, the thing the user most often wants.</summary>
-    public event Action? OpenLibraryRequested;
+    /// <summary>Raised on a left click. Where it leads is the owner's call; the icon only reports it.</summary>
+    public event Action? Clicked;
 
     public TrayIcon(MessageWindow window, string tooltip)
     {
@@ -103,11 +103,11 @@ public sealed class TrayIcon : IDisposable
         var trigger = (uint)(message.LParam.ToInt64() & 0xFFFF);
         switch (trigger)
         {
-            // Left click goes straight to the library — the thing the user most
-            // often wants — while the menu stays one right click away.
+            // Left click is the icon's one direct action; the menu stays one
+            // right click away.
             case NativeMethods.WmLeftButtonUp:
                 message.Handle();
-                OpenLibraryRequested?.Invoke();
+                Clicked?.Invoke();
                 break;
 
             case NativeMethods.WmRightButtonUp:
