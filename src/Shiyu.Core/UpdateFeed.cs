@@ -4,9 +4,14 @@ namespace Shiyu.Core;
 
 /// <summary>
 /// A release version, parsed the way tags actually look: "v1.2.3", "1.2.3",
-/// "1.2", "1". Comparison is field by field — a version is not a string.
+/// "1.2", "1", with an optional prerelease suffix "1.2.3-rc1" / "1.2.3-accept18".
+/// Comparison is field by field — a version is not a string. At equal numbers,
+/// the FINAL release outranks any prerelease (semver): without that, an
+/// acceptance build ("0.9.0-accept18") parsed to null and silently read as
+/// "already newest" against 0.9.0 itself — every rc/accept install was
+/// stranded off the update channel (user report on release day).
 /// </summary>
-public readonly record struct UpdateVersion(int Major, int Minor, int Patch)
+public readonly record struct UpdateVersion(int Major, int Minor, int Patch, string? Prerelease = null)
     : IComparable<UpdateVersion>
 {
     public static UpdateVersion? Parse(string? text)
@@ -17,6 +22,27 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch)
         }
 
         var trimmed = text.Trim().TrimStart('v', 'V');
+
+        // Build metadata after '+' never affects ordering; drop it first.
+        var plus = trimmed.IndexOf('+');
+        if (plus >= 0)
+        {
+            trimmed = trimmed[..plus];
+        }
+
+        // A prerelease suffix ("-rc1", "-accept18") rides along; the numbers
+        // ahead of it must still be all digits.
+        var dash = trimmed.IndexOf('-');
+        var suffix = dash >= 0 ? trimmed[(dash + 1)..] : null;
+        if (dash >= 0)
+        {
+            trimmed = trimmed[..dash];
+        }
+
+        if (suffix is { Length: 0 })
+        {
+            return null;
+        }
 
         var parts = trimmed.Split('.');
         if (parts.Length is < 1 or > 3 || parts.Any(part => part.Length == 0 || !part.All(char.IsDigit)))
@@ -30,10 +56,10 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch)
             numbers.Add(0);
         }
 
-        return new UpdateVersion(numbers[0], numbers[1], numbers[2]);
+        return new UpdateVersion(numbers[0], numbers[1], numbers[2], suffix);
     }
 
-    public string Text => $"{Major}.{Minor}.{Patch}";
+    public string Text => Prerelease is null ? $"{Major}.{Minor}.{Patch}" : $"{Major}.{Minor}.{Patch}-{Prerelease}";
 
     public int CompareTo(UpdateVersion other)
     {
@@ -44,7 +70,26 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch)
         }
 
         byField = Minor.CompareTo(other.Minor);
-        return byField != 0 ? byField : Patch.CompareTo(other.Patch);
+        if (byField != 0)
+        {
+            return byField;
+        }
+
+        byField = Patch.CompareTo(other.Patch);
+        if (byField != 0)
+        {
+            return byField;
+        }
+
+        // Equal numbers: final beats prerelease; two prereleases order by
+        // suffix (ordinal is enough for our own rc1/accept18 naming).
+        return (Prerelease is null, other.Prerelease is null) switch
+        {
+            (true, true) => 0,
+            (true, false) => 1,
+            (false, true) => -1,
+            _ => string.CompareOrdinal(Prerelease, other.Prerelease),
+        };
     }
 }
 

@@ -40,6 +40,31 @@ public class UpdateFeedTests
         Assert.Equal(UpdateVersion.Parse("1.2.3"), UpdateVersion.Parse("v1.2.3"));
     }
 
+    [Fact]
+    public void Prerelease_suffixes_parse_and_lose_to_the_final_release()
+    {
+        // 0.9.0-accept18 parsed to null before, silently reading as "already
+        // newest" against 0.9.0 — every rc/accept install was stranded.
+        var accepted = UpdateVersion.Parse("0.9.0-accept18");
+        Assert.NotNull(accepted);
+        Assert.Equal("0.9.0-accept18", accepted!.Value.Text);
+
+        Assert.True(UpdateVersion.Parse("0.9.0")!.Value.CompareTo(accepted.Value) > 0);
+        Assert.True(accepted.Value.CompareTo(UpdateVersion.Parse("0.9.0")!.Value) < 0);
+
+        // Build metadata never affects ordering.
+        Assert.Equal(accepted.Value, UpdateVersion.Parse("0.9.0-accept18+deadbeef")!.Value);
+
+        // Two prereleases order by suffix ordinal (rc1 < rc2 — documented as
+        // enough for our own naming; it is NOT numeric-aware for rc10),
+        // and a newer trio beats any suffix.
+        Assert.True(UpdateVersion.Parse("0.9.0-rc1")!.Value.CompareTo(UpdateVersion.Parse("0.9.0-rc2")!.Value) < 0);
+        Assert.True(UpdateVersion.Parse("0.9.1-rc1")!.Value.CompareTo(UpdateVersion.Parse("0.9.0")!.Value) > 0);
+
+        // A dangling dash or an empty suffix is not a version.
+        Assert.Null(UpdateVersion.Parse("1.2.3-"));
+    }
+
     private const string ReleaseJson = """
         {
           "tag_name": "v1.4.2",
