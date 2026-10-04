@@ -17,13 +17,17 @@ namespace Shiyu.App;
 /// 走 <see cref="SettingsBindings.Apply"/>；地址与模型由各自的行自己写，
 /// 这里只负责选中即代填、手改即降级为自定义（数据层另有
 /// <see cref="ProviderPresets.ResolveFor"/> 兜底）。
+///
+/// 票 29：表单的值经 <see cref="ServiceForm"/> 交进来——"凭据留空 = 沿用已
+/// 存的"只沿用属于这个来源的那把。已存的密钥属于别家时，<see cref="KeyHint"/>
+/// 在凭据框下方说明，「测试连接」给出第四种结果而不发请求。
 /// </summary>
 internal sealed class ServicePresetRow
 {
     private const string CustomTag = "";
 
     private readonly ItemState _state;
-    private readonly Func<(string BaseUrl, string Model, string ApiKey)> _readForm;
+    private readonly Func<ServiceForm> _readForm;
     private readonly Action<ProviderPreset> _applyPreset;
 
     private readonly ComboBox _picker = new() { MinWidth = 230, HorizontalAlignment = HorizontalAlignment.Left };
@@ -50,14 +54,39 @@ internal sealed class ServicePresetRow
         Visibility = Visibility.Collapsed,
     };
 
+    // 凭据框下方的提示（票 29）：话 + 该预设的「申请密钥」链接。
+    private readonly TextBlock _keyHintText = new()
+    {
+        TextWrapping = TextWrapping.Wrap,
+        LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+    };
+    private readonly Button _keyHintLink = new()
+    {
+        Content = "申请密钥 ↗",
+        Padding = new Thickness(10, 3, 10, 3),
+        Margin = new Thickness(0, 6, 0, 0),
+        HorizontalAlignment = HorizontalAlignment.Left,
+        Cursor = Cursors.Hand,
+        Visibility = Visibility.Collapsed,
+        ToolTip = "到服务商的控制台申请一个 API 密钥（在浏览器里打开）",
+    };
+
     private bool _syncing;
 
     public FrameworkElement Element { get; }
 
+    /// <summary>
+    /// 已存的密钥与表单上的服务商对不上时的提示："已保存的密钥属于 {旧主机}，
+    /// 请填写 {当前服务商} 的密钥"，外加该预设的「申请密钥」链接；对得上就收起。
+    /// 宿主窗口把它放在自己的凭据框下面，并在凭据框内容或已存设置变化时调
+    /// <see cref="RefreshKeyHint"/>（地址、预设的变化这一行自己知道）。
+    /// </summary>
+    public FrameworkElement KeyHint { get; }
+
     public ServicePresetRow(
         AppSettings baseline,
         ItemState state,
-        Func<(string BaseUrl, string Model, string ApiKey)> readForm,
+        Func<ServiceForm> readForm,
         Action<ProviderPreset> applyPreset)
     {
         _state = state;
@@ -66,8 +95,49 @@ internal sealed class ServicePresetRow
 
         BuildPicker(baseline);
         _keyLink.Click += (_, _) => OpenKeyUrl();
+        _keyHintLink.Click += (_, _) => OpenKeyUrl();
         _test.Click += async (_, _) => await TestConnectionAsync();
         Element = Build();
+        KeyHint = BuildKeyHint();
+    }
+
+    private FrameworkElement BuildKeyHint()
+    {
+        _keyHintText.SetResourceReference(TextBlock.FontSizeProperty, "Type.Caption");
+        _keyHintText.SetResourceReference(TextBlock.LineHeightProperty, "Line.CaptionMulti");
+        _keyHintText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+
+        // 宽度封顶：凭据卡的控件列是 Auto 宽，不封顶这句话会把卡片撑出窗外。
+        var panel = new StackPanel
+        {
+            MaxWidth = 320,
+            Margin = new Thickness(0, 6, 0, 0),
+            Visibility = Visibility.Collapsed,
+        };
+        panel.Children.Add(_keyHintText);
+        panel.Children.Add(_keyHintLink);
+        return panel;
+    }
+
+    /// <summary>
+    /// 按表单此刻的值重判提示：密钥框里正填着东西、已存的密钥配得上这个
+    /// 来源、或根本没有已存的密钥，都不出声。
+    /// </summary>
+    public void RefreshKeyHint()
+    {
+        var preset = ProviderPresets.Find(_state.Text);
+        var hint = _readForm().KeyHint(preset?.DisplayName);
+
+        KeyHint.Visibility = hint is null ? Visibility.Collapsed : Visibility.Visible;
+        if (hint is null)
+        {
+            return;
+        }
+
+        _keyHintText.Text = hint;
+
+        // 自定义地址没有"申请密钥"可指——链接只属于预设。
+        _keyHintLink.Visibility = preset is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private FrameworkElement Build()
@@ -134,17 +204,20 @@ internal sealed class ServicePresetRow
     /// <summary>地址或模型被改动后由宿主窗口调来：与所选预设不符就降级为「自定义」。</summary>
     public void NoteAddressEdited()
     {
+        // 地址一变，已存的密钥还配不配得上它就要重判（票 29）。
+        RefreshKeyHint();
+
         if (_syncing || _state.Text.Length == 0)
         {
             return;
         }
 
         var preset = ProviderPresets.Find(_state.Text);
-        var (baseUrl, model, _) = _readForm();
+        var form = _readForm();
         if (preset is null
-            || baseUrl.TrimEnd('/') != preset.BaseUrl
-            || (model.Trim() != preset.DefaultModel
-                && !preset.AltModels.Contains(model.Trim(), StringComparer.Ordinal)))
+            || form.BaseUrl.TrimEnd('/') != preset.BaseUrl
+            || (form.Model.Trim() != preset.DefaultModel
+                && !preset.AltModels.Contains(form.Model.Trim(), StringComparer.Ordinal)))
         {
             DemoteToCustom();
         }
@@ -167,6 +240,7 @@ internal sealed class ServicePresetRow
         {
             _state.Text = CustomTag;
             _keyLink.Visibility = Visibility.Collapsed;
+            RefreshKeyHint();
             return;
         }
 
@@ -178,6 +252,9 @@ internal sealed class ServicePresetRow
         _state.Text = id;
         _keyLink.Visibility = Visibility.Visible;
         _applyPreset(preset);
+
+        // 换了服务商：已存的密钥配不配得上它，在预设落定之后重判（票 29）。
+        RefreshKeyHint();
     }
 
     private void DemoteToCustom()
@@ -187,6 +264,9 @@ internal sealed class ServicePresetRow
         SelectByTag(CustomTag);
         _keyLink.Visibility = Visibility.Collapsed;
         _syncing = false;
+
+        // 提示里的"当前服务商"从预设名换成了地址里的主机。
+        RefreshKeyHint();
     }
 
     private void SelectByTag(string tag)
@@ -232,10 +312,13 @@ internal sealed class ServicePresetRow
 
     private async Task TestConnectionAsync()
     {
-        var (baseUrl, model, apiKey) = _readForm();
-        if (string.IsNullOrWhiteSpace(baseUrl)
-            || string.IsNullOrWhiteSpace(model)
-            || string.IsNullOrWhiteSpace(apiKey))
+        // 第四种结果（已存的密钥属于别家、框又空着）有自己的话，且不算失败：
+        // 不在"没填好"的老话之列，交给探针去答。
+        var form = _readForm();
+        if (!form.NeedsOwnKey
+            && (string.IsNullOrWhiteSpace(form.BaseUrl)
+                || string.IsNullOrWhiteSpace(form.Model)
+                || string.IsNullOrWhiteSpace(form.Key)))
         {
             ShowResult("请先填好服务地址、模型与密钥，再测试连接。", "Brush.TextSecondary");
             return;
@@ -248,7 +331,7 @@ internal sealed class ServicePresetRow
         // 密钥只进 Authorization 头，不进结果文案。默认首字节 15 秒恰好是
         // 测试连接想要的等待上限（O-23 之后不再有总时长语义）。
         var outcome = await ConnectionProbe.TestAsync(
-            new TranslationBackendOptions(baseUrl.Trim(), model.Trim(), apiKey),
+            form,
             ProviderPresets.Find(_state.Text),
             httpClient: HttpClients.Shared);
 
@@ -258,6 +341,7 @@ internal sealed class ServicePresetRow
             outcome.Verdict switch
             {
                 ConnectionTestVerdict.Success => "Brush.Accent",
+                ConnectionTestVerdict.NeedsKey => "Brush.TextSecondary",
                 ConnectionTestVerdict.InvalidKey => "Brush.Danger",
                 _ => "Brush.Danger",
             });

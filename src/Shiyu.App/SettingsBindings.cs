@@ -130,11 +130,9 @@ internal static class SettingsBindings
         "service.model" => current with { BackendModel = text },
 
         // Blank means keep: the user should not have to retype a secret to
-        // change an unrelated setting.
-        "service.api-key" => current with
-        {
-            BackendApiKey = text.Length > 0 ? text : current.BackendApiKey,
-        },
+        // change an unrelated setting. A typed key is written together with
+        // the service address it was saved under (票 29) — never alone.
+        "service.api-key" => text.Length > 0 ? current.WithApiKey(text) : current,
         "store.directory" => current with { DataDirectoryOverride = text.Trim() },
         _ => current,
     };

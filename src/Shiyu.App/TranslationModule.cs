@@ -126,11 +126,13 @@ internal sealed class TranslationModule
             ?? BuildOwnKeyBackend();
 
     /// <summary>
-    /// 自备密钥的 LLM 词典路：有 key 才有路。8s 预算罩住流式取卡——比免费
+    /// 自备密钥的 LLM 词典路：有能用的自备后端才有路——"能用"问
+    /// Backend.IsConfigured，它已经算上了密钥的来源（票 29：密钥属于别家时
+    /// 这条路缺席，而不是带着空密钥白跑一趟）。8s 预算罩住流式取卡——比免费
     /// 路宽一个数量级，因为它是兜底，慢到也仍然胜过没有卡。
     /// </summary>
     private IDictionaryApi? OwnKeyDictionary()
-        => string.IsNullOrWhiteSpace(_shell!.Settings.BackendApiKey)
+        => !_shell!.Settings.Backend.IsConfigured
             ? null
             : new BudgetedDictionary(
                 new LlmDictionaryApi(BuildOwnKeyBackend()),

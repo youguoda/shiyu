@@ -66,11 +66,10 @@ internal sealed class SettingsModule
 
             // A backup made without the key (the default, ADR-0011) must not
             // wipe the key this machine already has: the user asked to import
-            // history, not to log out of their translation service.
-            if (restored.BackendApiKey.Length == 0)
-            {
-                restored = restored with { BackendApiKey = _shell!.Settings.BackendApiKey };
-            }
+            // history, not to log out of their translation service. The key
+            // stays together with its origin (票 29): the backup may point at
+            // another service, and then the old key simply goes unused.
+            restored = restored.KeepingKeyOf(_shell!.Settings);
 
             try
             {

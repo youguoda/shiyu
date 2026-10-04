@@ -682,9 +682,13 @@ internal sealed class OnboardingWindow : Window
             _presetState,
             readForm: () =>
             {
+                // 凭据留空 = 沿用已存的——只沿用属于这个地址的那把（票 29）。
                 var preset = ProviderPresets.Find(_presetState.Text);
-                var key = _keyBox?.Password is { Length: > 0 } typed ? typed : _baseline.BackendApiKey;
-                return (preset?.BaseUrl ?? _baseline.BackendBaseUrl, preset?.DefaultModel ?? _baseline.BackendModel, key);
+                return new ServiceForm(
+                    _baseline,
+                    preset?.BaseUrl ?? _baseline.BackendBaseUrl,
+                    preset?.DefaultModel ?? _baseline.BackendModel,
+                    _keyBox?.Password ?? string.Empty);
             },
             applyPreset: _ => { });
 
@@ -702,6 +706,11 @@ internal sealed class OnboardingWindow : Window
         });
         keyRow.Children.Add(_keyBox);
         ownBody.Children.Add(keyRow);
+
+        // 已存的密钥属于别家时，凭据框下方说清楚（票 29）；框里开始填了就不再提示。
+        _keyBox.PasswordChanged += (_, _) => presetRow.RefreshKeyHint();
+        ownBody.Children.Add(presetRow.KeyHint);
+        presetRow.RefreshKeyHint();
 
         var ownCard = Card("自备密钥", "选中即填好服务地址与模型；「申请密钥」直达服务商，「测试连接」当场验证。", ownBody);
         MarkSelected(ownCard, selected: true);
@@ -734,14 +743,20 @@ internal sealed class OnboardingWindow : Window
         var typedKey = _keyBox?.Password is { Length: > 0 } key ? key : null;
         var language = _languageState?.Text ?? _baseline.TargetLanguage;
 
-        TryUpdate(latest => latest with
+        TryUpdate(latest =>
         {
-            TranslationBackend = TranslationBackendKind.OwnKey,
-            BackendPresetId = preset?.Id ?? latest.BackendPresetId,
-            BackendBaseUrl = preset?.BaseUrl ?? latest.BackendBaseUrl,
-            BackendModel = preset?.DefaultModel ?? latest.BackendModel,
-            BackendApiKey = typedKey ?? latest.BackendApiKey,
-            TargetLanguage = language,
+            var updated = latest with
+            {
+                TranslationBackend = TranslationBackendKind.OwnKey,
+                BackendPresetId = preset?.Id ?? latest.BackendPresetId,
+                BackendBaseUrl = preset?.BaseUrl ?? latest.BackendBaseUrl,
+                BackendModel = preset?.DefaultModel ?? latest.BackendModel,
+                TargetLanguage = language,
+            };
+
+            // 票 29：填了密钥就连同它的来源一起写——来源取这一步刚落下的地址，
+            // 不是旧地址。没填就不动已存的那一对：换了服务商，它自然不再被带上。
+            return typedKey is null ? updated : updated.WithApiKey(typedKey);
         });
     }
 

@@ -119,6 +119,9 @@ public partial class SettingsWindow : Window
         ApplyParentVisibility();
         HookPresetDemotion();
 
+        // 打开窗时就可能已经对不上（比如导入的备份换了服务地址）：先判一次。
+        _presetRow?.RefreshKeyHint();
+
         Loaded += (_, _) => ReflowNav();
         SizeChanged += (_, _) => ReflowNav();
 
@@ -761,7 +764,20 @@ public partial class SettingsWindow : Window
         box.Width = 220;
         row.Children.Add(box);
         row.Children.Add(save);
-        return row;
+
+        // 已存的密钥属于别家时，凭据框下方说清楚（票 29）。话与「申请密钥」链接
+        // 由预设行产出——它知道表单上是哪一家；这里只给它一个落脚处，并在框里
+        // 的内容变化时叫它重判（正在填就不再提示）。
+        if (_presetRow is null)
+        {
+            return row;
+        }
+
+        box.PasswordChanged += (_, _) => _presetRow?.RefreshKeyHint();
+        var stack = new StackPanel();
+        stack.Children.Add(row);
+        stack.Children.Add(_presetRow.KeyHint);
+        return stack;
     }
 
     private FrameworkElement DirectoryFor(SettingsItem item, ItemState state)
@@ -1058,11 +1074,11 @@ public partial class SettingsWindow : Window
                     ? modelBox.Text
                     : string.Empty;
 
-                // 与保存语义一致：凭据留空 = 保留已存的那个。
-                var key = _secretBox?.Password is { Length: > 0 } typed
-                    ? typed
-                    : _baseline.BackendApiKey;
-                return (url, model, key);
+                // 与保存语义一致：凭据留空 = 保留已存的那个——但只保留属于这个
+                // 地址的那个（票 29）：ServiceForm 按来源取，别家的旧密钥不会
+                // 随"测试连接"发往新地址。
+                return new ServiceForm(
+                    _baseline, url, model, _secretBox?.Password ?? string.Empty);
             },
             applyPreset: preset =>
             {
@@ -1896,6 +1912,9 @@ public partial class SettingsWindow : Window
         }
 
         _baseline = updated;
+
+        // 密钥与来源可能刚被存下或被导入换掉：提示按新的基线重判（票 29）。
+        _presetRow?.RefreshKeyHint();
     }
 
     /// <summary>把一项的最新值推进编辑器状态与控件。凭据除外：它永不回显。</summary>
