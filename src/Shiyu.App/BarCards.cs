@@ -583,23 +583,27 @@ internal partial class BarWindow
     {
         // This window's own writes already produced exactly the visual change
         // they meant to — favourite and note update their card in place, pin
-        // reloads itself — so a reload here would only reset the scroll under
+        // reloads itself — so a reload here would only rebuild the list under
         // the user (O-37). The depth is read on the writer's thread; a benign
         // race with a background write costs one extra reload, never a miss.
-        if (_refreshPolicy.StoreChanged(selfWrite: _selfWrites > 0) == BarRefreshCommand.None)
+        // The verdict travels whole: besides the reload it may say where the
+        // list should stand afterwards (back at the newest when the user is
+        // elsewhere).
+        var command = _refreshPolicy.StoreChanged(selfWrite: _selfWrites > 0);
+        if (command == BarRefreshCommand.None)
         {
             return;
         }
 
         if (Dispatcher.CheckAccess())
         {
-            RunRefresh(BarRefreshCommand.Reload);
+            RunRefresh(command);
         }
         else
         {
             // External writes arrive on the pipeline's thread; the cards
             // belong to the dispatcher's.
-            Dispatcher.BeginInvoke(() => RunRefresh(BarRefreshCommand.Reload));
+            Dispatcher.BeginInvoke(() => RunRefresh(command));
         }
     }
 
@@ -647,6 +651,26 @@ internal partial class BarWindow
         _browser.Reset();
         RefreshTagChoices();
         Rebuild();
+    }
+
+    /// <summary>
+    /// The newest entry in view and active (the policy's ScrollToNewest).
+    /// A rebuild alone leaves the virtualized list at its old pixel offset:
+    /// a bar once scrolled to the bottom reloaded straight back there,
+    /// paging every page in again on the way, and showed the oldest records
+    /// (用户实录 2026-10-04).
+    ///
+    /// The offset is queued on the ScrollViewer, whose queue runs before the
+    /// ScrollChanged that would have reported the stale bottom: no page is
+    /// fetched for a position the list is about to leave (probe bar-newest
+    /// holds it — one page loaded afterwards, not the whole history).
+    /// </summary>
+    private void ScrollToNewest()
+    {
+        // The list's own viewer is the first one down its template; the
+        // cards' text boxes nest theirs deeper.
+        Tree.FindDescendant<ScrollViewer>(Cards)?.ScrollToTop();
+        Select(VisibleRows.FirstOrDefault());
     }
 
     private void RemoveCard(BarCard card)

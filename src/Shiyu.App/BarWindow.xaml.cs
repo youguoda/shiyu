@@ -143,6 +143,11 @@ internal partial class BarWindow : Window
         _previewPolicy = new PreviewPolicy(settings.PreviewHoverDelayMs, () => Environment.TickCount64);
         _refreshPolicy = new BarRefreshPolicy(settings.LightweightWhenHidden);
 
+        // 在不在条里，决定一条外部写要不要把列表带回最新（见 StoreChanged）。
+        // 预览与连接窗都不抢激活，悬停预览不算离开。
+        Activated += (_, _) => _refreshPolicy.Activated();
+        Deactivated += (_, _) => _refreshPolicy.Deactivated();
+
         // Win11 material behind the sheet (ticket 30): the window went layered
         // in XAML, which is the only surface the backdrop renders on. The
         // shell contract rides along (ticket 20): DWM draws the contour, and
@@ -345,8 +350,8 @@ internal partial class BarWindow : Window
         _returnTo = ForegroundWindow.Current();
 
         // Whatever changed while hidden was ignored for a reason: showing
-        // again reads the world as it is now, in one go (the policy's Shown
-        // verdict, O-37).
+        // again reads the world as it is now, in one go, from the newest
+        // entry (the policy's Shown verdict, O-37).
         RunRefresh(_refreshPolicy.Shown());
         MoveBesideCursorIfWanted();
         ShowFocused();
@@ -378,16 +383,9 @@ internal partial class BarWindow : Window
         _browser.Query = string.Empty;
         UpdateFilterChrome();
 
-        // 会话从"全部历史"开始也意味着从最新的那条开始：滚动与选择一并
-        // 归零。常驻模式按设计记住滚动（用户上次翻到哪儿，重开还在哪儿），
-        // 但那条记忆不能跟进粘贴模式——带着底部位置出现，用户看到的是
-        // 最旧的条目（验收 B2 实录 2026-10-05）。
-        if (_cards.Count > 0)
-        {
-            Cards.ScrollIntoView(_cards[0]);
-            Select(_cards[0]);
-        }
-
+        // 会话从"全部历史"开始也意味着从最新的那条开始：Shown 的裁决自带
+        // 回到最新（验收 B2 实录 2026-10-05 曾在这里单独补过一刀，只管
+        // 粘贴模式；用户实录 2026-10-04 证明常驻模式同样需要，于是收进策略）。
         RunRefresh(_refreshPolicy.Shown());
         PlaceBeside(anchor);
         ShowFocused();
@@ -542,6 +540,13 @@ internal partial class BarWindow : Window
         if (command.HasFlag(BarRefreshCommand.EnterLightweight))
         {
             EnterLightweight();
+        }
+
+        // After the reload, never before: the position is about the list as
+        // it now stands.
+        if (command.HasFlag(BarRefreshCommand.ScrollToNewest))
+        {
+            ScrollToNewest();
         }
     }
 

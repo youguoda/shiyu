@@ -25,8 +25,9 @@ internal sealed class BarModule
 
     /// <summary>
     /// Summons or hides the resident narrow bar. One instance, reused: a bar
-    /// that keeps its position and scroll between summons is a place the user
-    /// learns to find things.
+    /// that keeps its place on screen between summons is a place the user
+    /// learns to find things. The list inside does not keep its scroll —
+    /// every summon opens at the newest entry (用户实录 2026-10-04).
     /// </summary>
     public void Toggle()
     {
@@ -40,6 +41,11 @@ internal sealed class BarModule
         // 呼出与收起都算「用过这个键」：试一试的清单只问用户会不会唤起窄条。
         _shell!.NoteBarSummoned();
     }
+
+#if DEBUG
+    /// <summary>探针命令 bar-newest 的入口（见 BarWindow.ProbeStartsAtNewest）。</summary>
+    internal void ProbeStartsAtNewest() => EnsureBar()?.ProbeStartsAtNewest();
+#endif
 
     /// <summary>
     /// 快速粘贴（票 26 并入，原 QuickBarWindow 的位）：以粘贴模式呼出同一扇

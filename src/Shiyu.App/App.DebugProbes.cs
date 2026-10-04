@@ -98,6 +98,12 @@ public partial class App
                 shell.ToggleBar?.Invoke();
                 break;
 
+            // 把列表翻到底后重开、外部写、粘贴呼出：都必须回到最新的那条
+            // （用户实录 2026-10-04：打开窄条有时停在最底部）。
+            case "bar-newest":
+                _modules!.Bar.ProbeStartsAtNewest();
+                break;
+
             case "quickbar":
                 // 票 26 合并后 quickbar 命令映射到粘贴模式的窄条：探针仍能
                 // 检"快速粘贴"这条意图，定位参数（384 DIP）在探针脚本里同步。
