@@ -27,10 +27,21 @@ public sealed class TrayIcon : IDisposable
     private static readonly uint TaskbarCreated =
         NativeMethods.RegisterWindowMessageW("TaskbarCreated");
 
+    /// <summary>
+    /// Where the .NET host puts the exe's ApplicationIcon: resource id 32512 in
+    /// the exe itself. It is the same number as IDI_APPLICATION, which is how
+    /// the tray long showed Windows' generic blank icon while looking right in
+    /// code — LoadIconW(NULL, IDI_APPLICATION) asks the system, not the exe.
+    /// </summary>
+    private static readonly IntPtr AppIconResource = new(32512);
+
     private readonly MessageWindow _window;
     private NativeMethods.NotifyIconData _data;
     private bool _added;
     private bool _disposed;
+
+    /// <summary>The icon this instance loaded and must destroy; zero when it fell back to the shared system icon.</summary>
+    private IntPtr _ownedIcon;
 
     /// <summary>
     /// Supplies the whole menu: action rows with their accelerator column and
@@ -50,6 +61,7 @@ public sealed class TrayIcon : IDisposable
     {
         _window = window;
         _window.MessageReceived += OnMessage;
+        _ownedIcon = LoadAppIcon();
 
         _data = new NativeMethods.NotifyIconData
         {
@@ -58,7 +70,9 @@ public sealed class TrayIcon : IDisposable
             uID = 1,
             uFlags = NativeMethods.NifMessage | NativeMethods.NifIcon | NativeMethods.NifTip,
             uCallbackMessage = NativeMethods.WmTrayIcon,
-            hIcon = NativeMethods.LoadIconW(IntPtr.Zero, NativeMethods.IdiApplication),
+            hIcon = _ownedIcon != IntPtr.Zero
+                ? _ownedIcon
+                : NativeMethods.LoadIconW(IntPtr.Zero, NativeMethods.IdiApplication),
             szTip = Truncate(tooltip, 127),
             szInfo = string.Empty,
             szInfoTitle = string.Empty,
@@ -202,5 +216,24 @@ public sealed class TrayIcon : IDisposable
             NativeMethods.Shell_NotifyIconW(NativeMethods.NimDelete, ref _data);
             _added = false;
         }
+
+        if (_ownedIcon != IntPtr.Zero)
+        {
+            NativeMethods.DestroyIcon(_ownedIcon);
+            _ownedIcon = IntPtr.Zero;
+        }
+    }
+
+    /// <summary>
+    /// The app's own icon at the tray's exact size for this DPI (16/20/24/32 px at
+    /// 100/125/150/200%), so the shell shows the small-size master instead of
+    /// shrinking the 32 px one into mush. Zero when the process carries no such
+    /// resource (a bare host, tests): the caller falls back to the system icon.
+    /// </summary>
+    internal static IntPtr LoadAppIcon()
+    {
+        var size = NativeMethods.GetSystemMetricsForDpi(NativeMethods.SmCxSmIcon, NativeMethods.GetDpiForSystem());
+        return NativeMethods.LoadImageW(
+            NativeMethods.GetModuleHandleW(null), AppIconResource, NativeMethods.ImageIcon, size, size, 0);
     }
 }

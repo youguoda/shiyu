@@ -240,6 +240,24 @@ internal static class NativeMethods
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern IntPtr LoadIconW(IntPtr instance, IntPtr iconName);
 
+    internal const uint ImageIcon = 1;
+
+    /// <summary>
+    /// Loads an icon resource at an exact size — LoadIconW only knows the large
+    /// system size and leaves the shell to shrink it. The handle is owned by the
+    /// caller (no LR_SHARED) and must go back through <see cref="DestroyIcon"/>.
+    /// </summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern IntPtr LoadImageW(IntPtr instance, IntPtr name, uint type, int width, int height, uint flags);
+
+    internal const int SmCxSmIcon = 49;
+
+    [DllImport("user32.dll")]
+    internal static extern int GetSystemMetricsForDpi(int index, uint dpi);
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetDpiForSystem();
+
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern bool Shell_NotifyIconW(uint message, ref NotifyIconData data);
 
