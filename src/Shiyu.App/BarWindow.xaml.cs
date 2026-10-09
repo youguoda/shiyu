@@ -352,9 +352,10 @@ internal partial class BarWindow : Window
     /// <summary>
     /// 以粘贴模式呼出（票 26 合并后，快速粘贴的唯一入口）：意图是"出现在
     /// 我要贴的地方，贴完就走"。锚点取文本插入符——键盘呼出时用户正打字的
-    /// 地方——取不到退回鼠标；无视「呼出时移到鼠标旁」开关，这是两种意图里
-    /// 更急的一种。搜索词清零（会话永远从全部历史开始，系统 Win+V 的心智），
-    /// 搜索框预聚焦，↑↓/Enter/编号沿用常驻键位；失焦即隐是本模式专属。
+    /// 地方，窄条左上角落在这一行的正下方——取不到退回鼠标指针尖；无视
+    /// 「光标旁呼出」开关，这是两种意图里更急的一种。搜索词清零（会话永远
+    /// 从全部历史开始，系统 Win+V 的心智），搜索框预聚焦，↑↓/Enter/编号沿用
+    /// 常驻键位；失焦即隐是本模式专属。
     /// </summary>
     public void SummonForPaste()
     {
@@ -364,7 +365,7 @@ internal partial class BarWindow : Window
         // Activate the foreground is us and the query would never answer
         // again. The return-target is noted in the same breath, same reason.
         _returnTo = ForegroundWindow.Current();
-        var anchor = ScreenGeometry.CaretPosition() ?? ScreenGeometry.CursorPosition();
+        var anchor = ScreenGeometry.CaretBounds() ?? BarPlacement.Pointer(ScreenGeometry.CursorPosition());
 
         // A fresh session starts unfiltered. Clearing arms the debounce; the
         // summon reads now instead (the same disarm the old quick bar did),
@@ -402,7 +403,8 @@ internal partial class BarWindow : Window
 
     /// <summary>
     /// Like the system's Win+V panel: appear where the user is, not where the
-    /// window was last left. Off, the remembered geometry stands — a bar that
+    /// window was last left — the bar's top-left corner on the pointer tip
+    /// (用户需求 2026-10-09). Off, the remembered geometry stands — a bar that
     /// always comes back to the same place is also a place the user learns.
     /// </summary>
     private void MoveBesideCursorIfWanted()
@@ -412,29 +414,32 @@ internal partial class BarWindow : Window
             return;
         }
 
-        PlaceBeside(ScreenGeometry.CursorPosition());
+        PlaceBeside(BarPlacement.Pointer(ScreenGeometry.CursorPosition()));
     }
 
     /// <summary>
     /// The shared placement body（票 26 从 MoveBesideCursorIfWanted 抽出）：
-    /// 锚点成了参数——常驻问设置后给鼠标，粘贴模式给插入符。
+    /// 锚点成了参数——常驻问设置后给鼠标指针尖，粘贴模式给插入符那一行。
+    /// 落点规则在 <see cref="BarPlacement"/>（Core）：左上角对准锚点，放不下
+    /// 才挪，挪也只挪到刚好放得下。
     /// </summary>
-    private void PlaceBeside(ScreenPoint anchor)
+    private void PlaceBeside(ScreenRect anchor)
     {
-        var workArea = ScreenGeometry.WorkAreaAt(anchor);
+        var corner = new ScreenPoint(anchor.Left, anchor.Top);
+        var workArea = ScreenGeometry.WorkAreaAt(corner);
 
         // The scale comes from the monitor itself (GetDpiForMonitor), not from
         // WPF: on the first summon the PresentationSource does not exist yet,
         // and its silent 1.0 fallback made Place see DIU-sized dimensions —
         // no flip, no clamp, the bar's real bottom off the work area (ticket
         // 30's screenshot probe).
-        var (scaleX, scaleY) = ScreenGeometry.ScaleAt(anchor);
+        var (scaleX, scaleY) = ScreenGeometry.ScaleAt(corner);
 
         // Declared Width/Height, never Actual*: nothing has been laid out on
         // the first summon, so the Actual values are 0.
         var width = Width;
         var height = Math.Min(Height, workArea.Height / scaleY);
-        var placed = BadgePlacement.Place(
+        var placed = BarPlacement.Place(
             anchor,
             (int)Math.Ceiling(width * scaleX),
             (int)Math.Ceiling(height * scaleY),

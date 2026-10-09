@@ -23,6 +23,14 @@ public static class ScreenGeometry
     /// 原点去。锚点取插入符矩形的左下角——文字生长的地方。
     /// </summary>
     public static ScreenPoint? CaretPosition()
+        => CaretBounds() is { } caret ? new ScreenPoint(caret.Left, caret.Bottom) : null;
+
+    /// <summary>
+    /// The caret as its vertical line, top to bottom, zero wide（窄条用：放不下
+    /// 时要知道这一行的上沿，才能翻到行的上方而不挡住正在打字的那行，用户需求
+    /// 2026-10-09）. Null under the same rules as <see cref="CaretPosition"/>.
+    /// </summary>
+    public static ScreenRect? CaretBounds()
     {
         const int CaretVisible = 0x0002; // GUIF_CARETVISIBLE
 
@@ -50,16 +58,16 @@ public static class ScreenGeometry
             return null;
         }
 
-        var left = new NativeMethods.Point { X = info.rcCaret.Left, Y = info.rcCaret.Top };
+        var top = new NativeMethods.Point { X = info.rcCaret.Left, Y = info.rcCaret.Top };
         var bottom = new NativeMethods.Point { X = info.rcCaret.Left, Y = info.rcCaret.Bottom };
 
-        if (!NativeMethods.ClientToScreen(info.hWndCaret, ref left)
+        if (!NativeMethods.ClientToScreen(info.hWndCaret, ref top)
             || !NativeMethods.ClientToScreen(info.hWndCaret, ref bottom))
         {
             return null;
         }
 
-        return new ScreenPoint(left.X, bottom.Y);
+        return new ScreenRect(top.X, top.Y, top.X, bottom.Y);
     }
 
     /// <summary>

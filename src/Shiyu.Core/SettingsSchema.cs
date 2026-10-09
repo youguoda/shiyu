@@ -130,7 +130,7 @@ public static class SettingsSchema
             new SettingsSection("bar.behaviour", "呼出与置顶",
                 new SettingsItem(
                     "bar.at-cursor", "光标旁呼出", SettingsControl.Toggle,
-                    Hint: "窄条出现在光标/输入位置附近，与系统 Win+V 面板一致；关闭则固定在你上次拖放的位置。",
+                    Hint: "窄条以左上角对准鼠标指针出现，屏幕边上放不下时就近挪回屏幕内；关闭则固定在你上次拖放的位置。快速粘贴（Ctrl+Shift+V）总是出现在输入光标所在行的正下方。",
                     Keywords: ["位置", "光标", "呼出", "弹出", "输入"],
                     Icon: "E7B3"),
                 new SettingsItem(
