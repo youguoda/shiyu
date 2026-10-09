@@ -18,6 +18,34 @@ param([string]$Exe = '')
 
 . (Join-Path $PSScriptRoot 'lib.ps1')
 
+# Window class names: only Shiyu's own WPF windows ("HwndWrapper[Shiyu.App;;...]")
+# count as layers. An input method parks its status bar in whichever process has
+# the keyboard focus - observed 2026-10-09: "FyPY_Status", 257x66, attributed to
+# the probe pid - and that is the user's IME, not a connector coming back.
+if (-not ('Shiyu.Probe.WindowClass' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace Shiyu.Probe
+{
+    public static class WindowClass
+    {
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr h, StringBuilder sb, int max);
+
+        public static string Of(IntPtr h)
+        {
+            var sb = new StringBuilder(256);
+            GetClassName(h, sb, sb.Capacity);
+            return sb.ToString();
+        }
+    }
+}
+'@
+}
+
 if ($Exe -eq '') { $Exe = Get-DefaultProbeExe }
 Reset-Checks
 
@@ -61,13 +89,14 @@ try {
     Send-ProbeKey $bar $VK_SPACE
     Start-Sleep -Milliseconds 1600   # panel measure + placement
 
-    # The panel carries a window title; anything else visible from this pid
-    # besides the bar would be a stray layer (the old connector sheet had none).
+    # The panel carries a window title; any other visible Shiyu window from this
+    # pid besides the bar would be a stray layer (the old connector sheet had none).
     $preview = [IntPtr]::Zero
     $strays = @()
     foreach ($h in [Shiyu.Probe.Native]::ListWindows()) {
         if ([Shiyu.Probe.Native]::PidOf($h) -ne $p.Id) { continue }
         if ($h -eq $bar) { continue }
+        if (-not [Shiyu.Probe.WindowClass]::Of($h).StartsWith('HwndWrapper[Shiyu.App')) { continue }
         if ($preview -eq [IntPtr]::Zero -and [Shiyu.Probe.Native]::TitleLenOf($h) -gt 0) {
             $preview = $h
         } else {
