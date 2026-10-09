@@ -184,6 +184,19 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void The_content_size_defaults_to_standard_and_round_trips_by_name()
+    {
+        // 内容字号（2026-10-09）：没写这一项的设置文件就是原来的 18；存的是档名，不是数字。
+        Assert.True(AppSettings.TryParse("{}", out var fresh));
+        Assert.Equal(ContentFontSize.Standard, fresh.ContentFontSize);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(new AppSettings { ContentFontSize = ContentFontSize.Larger });
+        Assert.Contains("\"Larger\"", json);
+        Assert.True(AppSettings.TryParse(json, out var larger));
+        Assert.Equal(ContentFontSize.Larger, larger.ContentFontSize);
+    }
+
+    [Fact]
     public void The_auto_copy_switch_is_off_until_the_user_turns_it_on()
     {
         // 「自动复制译文」会改写用户的剪贴板：升级上来的设置文件没有这一项，必须读成关。

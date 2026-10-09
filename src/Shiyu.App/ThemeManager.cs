@@ -40,9 +40,18 @@ internal sealed class ThemeManager : IDisposable
 
     private AppTheme _mode;
     private string _applied;
+    private ThemePalette _palette = DesignTokens.Light;
 
     /// <summary>Whether the palette currently applied is Dark — Backdrop reads it.</summary>
     public static bool CurrentIsDark { get; private set; }
+
+    /// <summary>
+    /// The content type ramp in force（内容字号，ADR-0012 排版 2）. XAML reaches it through
+    /// the Type.Content* / Line.Content* resources; code that measures reading text with
+    /// FormattedText or clamps by whole lines reads it here, so the arithmetic matches what
+    /// the resources render.
+    /// </summary>
+    public static ContentRamp Content { get; private set; } = ContentRamp.For(ContentFontSize.Standard);
 
     /// <summary>
     /// While the mode is System, Windows itself is watched — through the
@@ -93,6 +102,22 @@ internal sealed class ThemeManager : IDisposable
         SwapTo(Resolve(mode));
     }
 
+    /// <summary>
+    /// 内容字号即时生效（用户需求 2026-10-09）：只换内容这一族令牌，控件字号原样——
+    /// 值字典整份重建，与换调色板同一条路，每个 DynamicResource 一次拿到新值。
+    /// </summary>
+    public void ApplyContentSize(ContentFontSize size)
+    {
+        var ramp = ContentRamp.For(size);
+        if (ramp == Content)
+        {
+            return;
+        }
+
+        Content = ramp;
+        Application.Current.Resources.MergedDictionaries[0] = BuildValues(_palette);
+    }
+
     private void FollowSystemIfItMoved()
     {
         var effective = Resolve(_mode);
@@ -125,6 +150,7 @@ internal sealed class ThemeManager : IDisposable
     private void SwapTo(ThemePalette palette)
     {
         _applied = palette.Name;
+        _palette = palette;
         CurrentIsDark = palette.Name == "Dark";
 
         var dictionaries = Application.Current.Resources.MergedDictionaries;
@@ -156,21 +182,25 @@ internal sealed class ThemeManager : IDisposable
         values["Font.Icon"] = new FontFamily(DesignTokens.FamilyIcon);
 
         // 字阶 v2（票 19 / ADR-0012：控件回 14，内容 18 可调；旧 Font*/Size.* 档已退役）。
+        // 内容这一族（正文、等宽、词头、紧凑）来自当下的内容字号（Content），其余固定。
+        var content = Content;
         values["Type.Caption"] = DesignTokens.TypeCaption;
         values["Type.Body"] = DesignTokens.TypeBody;
         values["Type.BodyStrong"] = DesignTokens.TypeBodyStrong;
-        values["Type.Content"] = DesignTokens.TypeContent;
-        values["Type.ContentMono"] = DesignTokens.TypeContentMono;
+        values["Type.Content"] = content.Content;
+        values["Type.ContentMono"] = content.Mono;
+        values["Type.ContentCompact"] = content.Compact;
         values["Type.Subtitle"] = DesignTokens.TypeSubtitle;
         values["Type.Title"] = DesignTokens.TypeTitle;
         values["Type.KeyCap"] = DesignTokens.TypeKeyCap;
-        values["Type.Headword"] = DesignTokens.TypeHeadword;
+        values["Type.Headword"] = content.Headword;
         values["Line.Caption"] = DesignTokens.LineForCaption;
         values["Line.CaptionMulti"] = DesignTokens.LineForCaptionMulti;
         values["Line.BodyV2"] = DesignTokens.LineForBody;
         values["Line.BodyMulti"] = DesignTokens.LineForBodyMulti;
-        values["Line.Content"] = DesignTokens.LineForContent;
-        values["Line.ContentMono"] = DesignTokens.LineForContentMono;
+        values["Line.Content"] = content.ContentLine;
+        values["Line.ContentMono"] = content.MonoLine;
+        values["Line.ContentCompact"] = content.CompactLine;
         values["Size.IconXs"] = DesignTokens.IconXs;
         values["Size.IconS"] = DesignTokens.IconS;
         values["Size.IconM"] = DesignTokens.IconM;

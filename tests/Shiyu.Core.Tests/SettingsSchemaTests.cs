@@ -25,6 +25,7 @@ public class SettingsSchemaTests
             // 常规：开机自启不再挂在“数据”下，轻量模式不再挂在“密度”下。
             ["store.start-with-windows"] = "general",
             ["theme"] = "general",
+            ["look.content-size"] = "general",
             ["look.lightweight"] = "general",
             ["store.directory"] = "general",
             ["store.usage"] = "general",

@@ -102,7 +102,13 @@ public static class SettingsSchema
                     Choices: ["跟随系统", "浅色", "深色"],
                     Hint: "界面配色跟随 Windows，或固定一档。",
                     Keywords: ["主题", "深色", "浅色", "夜间", "夜间模式", "变暗"],
-                    Icon: "E790")),
+                    Icon: "E790"),
+                new SettingsItem(
+                    "look.content-size", "内容字号", SettingsControl.Segmented,
+                    Choices: ["小", "标准", "大", "特大"],
+                    Hint: "被阅读的文字有多大：窄条卡片、预览、翻译面板的译文与反向输入框跟着变；按钮、菜单与设置项保持原样。",
+                    Keywords: ["字号", "字体", "文字", "大小", "放大", "缩小", "看不清", "阅读"],
+                    Icon: "E8D2")),
             new SettingsSection("general.performance", "性能",
                 new SettingsItem(
                     "look.lightweight", "轻量模式", SettingsControl.Toggle,

@@ -14,6 +14,49 @@ public enum AppTheme
 }
 
 /// <summary>
+/// 内容字号（ADR-0012 排版 2；用户需求 2026-10-09 落地为设置，并加「特大」一档）：被阅读
+/// 的文字——窄条卡片正文、预览、翻译面板的译文与词头、反向输入框——跟着它变。控件文字
+/// （按钮、标签、输入值、导航）固定 14，不在此列：整体放大控件字号令牌造成过按钮相撞
+/// （ADR-0012 排版 3）。
+/// </summary>
+public enum ContentFontSize
+{
+    /// <summary>16。</summary>
+    Small,
+
+    /// <summary>18，默认。</summary>
+    Standard,
+
+    /// <summary>20。</summary>
+    Large,
+
+    /// <summary>22。</summary>
+    Larger,
+}
+
+/// <summary>
+/// One content size's type ramp: the reading size and its line height (the ~1.72 ratio of
+/// 18/31), the mono variant (paths, file rows), the dictionary headword (two above the
+/// content, so it stays the larger), and the compact variant — one step down — that the
+/// reverse input box uses: a small surface beside the caret（用户需求 2026-10-09：反向输入框
+/// 有些大）. Standard reproduces the fixed tokens exactly (ContentRampTests holds it).
+/// </summary>
+public readonly record struct ContentRamp(
+    double Content, double ContentLine,
+    double Mono, double MonoLine,
+    double Headword,
+    double Compact, double CompactLine)
+{
+    public static ContentRamp For(ContentFontSize size) => size switch
+    {
+        ContentFontSize.Small => new(16, 28, 13, 23, 18, 14, 24),
+        ContentFontSize.Large => new(20, 34, 17, 29, 22, 18, 31),
+        ContentFontSize.Larger => new(22, 38, 19, 33, 24, 20, 34),
+        _ => new(18, 31, 15, 26, 20, 16, 28),
+    };
+}
+
+/// <summary>
 /// One theme's colours by semantic slot. Both shipped palettes define exactly
 /// the same slots — see DesignTokenTests for the enforcement.
 /// </summary>

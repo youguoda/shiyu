@@ -133,6 +133,7 @@ internal sealed class AppShell
         {
             NoteApplied(updated);
             Theme.Apply(updated.Theme);
+            Theme.ApplyContentSize(updated.ContentFontSize);
             SettingsChanged?.Invoke(updated);
 
             if (TakePendingDataMove())

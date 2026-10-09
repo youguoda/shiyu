@@ -196,6 +196,7 @@ internal partial class BarWindow : Window
         // rebuild the cards — that would also drop the selection.
         var affectsLayout =
             settings.BarTextLines != _settings.BarTextLines
+            || settings.ContentFontSize != _settings.ContentFontSize
             || settings.BarImageHeight != _settings.BarImageHeight
             || settings.BarFileCount != _settings.BarFileCount
             || settings.BarCardTooltips != _settings.BarCardTooltips

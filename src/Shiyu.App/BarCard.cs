@@ -251,12 +251,14 @@ internal sealed class BarCard : INotifyPropertyChanged
 
     /// <summary>
     /// The text clamp as a height of whole Content lines — the card body is
-    /// Type.Content 18/31 (票 32/39), so the clamp counts 31-DIP lines.
+    /// Type.Content (票 32/39), so the clamp counts its lines: 31 DIP at the
+    /// standard 内容字号, whatever the setting says otherwise (2026-10-09; a
+    /// change rebuilds the cards, see BarWindow.ApplySettings).
     /// Visually identical to MaxLines, usable from XAML on this build (see the
     /// template comment).
     /// </summary>
     public double TextMaxHeight
-        => TextLines * DesignTokens.LineForContent;
+        => TextLines * ThemeManager.Content.ContentLine;
 
     public int ImageHeight { get; init; }
 

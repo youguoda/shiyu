@@ -271,7 +271,7 @@ internal partial class PreviewWindow : Window
     /// </summary>
     private (double Width, double Height) Measure(BarCard card)
     {
-        var lineHeight = DesignTokens.LineForContent;
+        var lineHeight = ThemeManager.Content.ContentLine;
 
         var size = card.Kind switch
         {
@@ -324,7 +324,7 @@ internal partial class PreviewWindow : Window
         var box = PreviewSizing.MaxWidth - PreviewSizing.ChromeHorizontal;
         var formatted = Formatted(
             card.Text,
-            DesignTokens.TypeContent,
+            ThemeManager.Content.Content,
             constrain: box);
         var lineCount = (int)Math.Ceiling(formatted.Height / lineHeight);
         var textWidth = Math.Min(formatted.Width, box);
@@ -332,8 +332,8 @@ internal partial class PreviewWindow : Window
         return PreviewSizing.ForText(lineCount, textWidth, lineHeight);
     }
 
-    /// <summary>One file row: a line and its breathing room, in the mono-content size.</summary>
-    private const double FileRowHeight = 26;
+    /// <summary>One file row: a line and its breathing room, in the mono-content size of the 内容字号 in force.</summary>
+    private static double FileRowHeight => ThemeManager.Content.MonoLine;
 
     /// <summary>
     /// Measures wrapped text with the real font. This is the "worked out, not
@@ -416,7 +416,7 @@ internal partial class PreviewWindow : Window
                 var name = new TextBlock
                 {
                     Text = path,
-                    FontSize = DesignTokens.TypeContentMono,
+                    FontSize = ThemeManager.Content.Mono,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
                 DressRow(name, dead: !(_fileProbe.Lookup(path)?.Exists ?? true));

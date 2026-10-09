@@ -107,6 +107,7 @@ public partial class App : Application
         var messageWindow = new MessageWindow();
         var theme = new ThemeManager(messageWindow);
         theme.Apply(settingsStore.Current.Theme);
+        theme.ApplyContentSize(settingsStore.Current.ContentFontSize);
 
         var shell = new AppShell
         {

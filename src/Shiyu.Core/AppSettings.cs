@@ -247,6 +247,13 @@ public sealed record AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter<AppTheme>))]
     public AppTheme Theme { get; init; } = AppTheme.System;
 
+    /// <summary>
+    /// 内容字号（ADR-0012 排版 2，用户需求 2026-10-09）：被阅读的文字跟着它变，控件文字不变；
+    /// 改了即时生效（<see cref="ContentRamp"/> 给出每一档的字号与行高）。
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<ContentFontSize>))]
+    public ContentFontSize ContentFontSize { get; init; } = ContentFontSize.Standard;
+
     public string CaptureHotkey { get; init; } = "Ctrl+Shift+Z";
 
     public string ClipboardTranslateHotkey { get; init; } = "Ctrl+Shift+X";
