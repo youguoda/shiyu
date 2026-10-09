@@ -101,6 +101,10 @@ internal sealed class AppShell
 
     public Action<string>? OpenSettingsAt { get; set; }
     public Action? ShowLibrary { get; set; }
+
+    /// <summary>管理窗打开在「翻译记录」页（设置里的「查看翻译记录」用）。</summary>
+    public Action? ShowTranslationLog { get; set; }
+
     public Action? ShowSettings { get; set; }
     public Action? ShowUpdateWindow { get; set; }
     public Func<IStreamingModel>? BuildStreamingModel { get; set; }
@@ -287,6 +291,27 @@ internal sealed class AppShell
 
     /// <summary>带标题的托盘话（更新检查这类标题不是"拾语"的）。</summary>
     public void Notify(string title, string message) => Tray?.ShowNotification(title, message);
+
+    /// <summary>
+    /// 翻译记录的入口（用户需求 2026-10-09）：两个框记、留存清扫清。无状态的门面——设置与排除名单
+    /// 每次现取，哪个线程拿到的都是同一个答案。
+    /// </summary>
+    public TranslationLogger TranslationLog => new(Store, () => Settings, () => Exclusions, TimeProvider.System);
+
+    /// <summary>
+    /// 记一条翻译记录。写不进去只进日志、不打扰用户：翻译本身已经成了，不该因为记不下而报错。
+    /// </summary>
+    public void LogTranslation(string original, string translated, TranslationOrigin origin, string template)
+    {
+        try
+        {
+            TranslationLog.Log(original, translated, origin, template);
+        }
+        catch (Exception failure)
+        {
+            Log.Event(LogEvent.TranslationLogFailed, failure, ("origin", (int)origin));
+        }
+    }
 
     /// <summary>
     /// 排除名单与录制开关的换新（原单体应用函数的第 4 段）：规则在活的策略

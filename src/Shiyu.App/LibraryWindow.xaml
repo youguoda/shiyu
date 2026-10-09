@@ -104,6 +104,27 @@
 
         <!-- 菜单行 MenuRowButton 已移到 Themes/Controls.xaml（2026-10-09）：翻译面板与反向输入框的
              提示词模板列表也用它。 -->
+
+        <!--
+          翻译记录的行（用户需求 2026-10-09）：元信息（时间 · 哪个框 · 模板）、原文（次级色，
+          一行）、结果（内容字号，至多三行）。结果是用户回来找的东西，所以它最醒目。
+        -->
+        <DataTemplate x:Key="LogRowTemplate">
+            <StackPanel Margin="2,8,2,8">
+                <TextBlock Text="{Binding Meta}" FontSize="{DynamicResource Type.Caption}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding OriginalLine}" Margin="0,4,0,0"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Translated}" Margin="0,2,0,0"
+                           FontSize="{DynamicResource Type.Content}"
+                           LineHeight="{DynamicResource Line.Content}"
+                           LineStackingStrategy="BlockLineHeight"
+                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                           MaxHeight="{Binding ClampHeight}"/>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <!--
@@ -121,13 +142,27 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- ═══ 头部 48（§6.4）：搜索胶囊（内嵌筛选 token）· 筛选弹层 · 计数 ═══ -->
+        <!-- ═══ 头部 48（§6.4）：页签 · 搜索胶囊（内嵌筛选 token）· 筛选弹层 · 计数 ═══ -->
         <Grid Grid.Row="0" Margin="16,8,16,0">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+
+            <!--
+              页签（用户需求 2026-10-09）：剪贴板历史与翻译记录是两本账，各有各的搜索、
+              计数、命令栏与列表；同一扇窗里切换，不另开窗。
+            -->
+            <StackPanel x:Name="PageTabs" Grid.Column="0" Orientation="Horizontal" Margin="0,0,12,0">
+                <ToggleButton x:Name="HistoryTab" Style="{StaticResource KindTab}" Height="32"
+                              IsChecked="True" Click="OnHistoryTabClick" Content="剪贴板历史"
+                              ToolTip="复制过的内容 · Ctrl+Tab 换页"/>
+                <ToggleButton x:Name="LogTab" Style="{StaticResource KindTab}" Height="32"
+                              Click="OnLogTabClick" Content="翻译记录"
+                              ToolTip="翻译框与反向输入框的每一次翻译 · Ctrl+Tab 换页"/>
+            </StackPanel>
 
             <!--
               搜索胶囊 = SearchBox 观感的复合件：胶囊壳用 SearchBox 同一套
@@ -135,7 +170,7 @@
               token 行 + 无边框输入。token 行由 code-behind 增删；Backspace
               在输入为空时弹掉最后一个 token（§6.4 头部）。
             -->
-            <Border x:Name="SearchPill" Grid.Column="0" Height="32"
+            <Border x:Name="SearchPill" Grid.Column="1" Height="32"
                     CornerRadius="{DynamicResource Radius.Pill}"
                     Background="{DynamicResource Brush.SurfaceInput}"
                     BorderBrush="{DynamicResource Brush.StrokeStrong}" BorderThickness="1">
@@ -157,7 +192,7 @@
                 </DockPanel>
             </Border>
 
-            <Button x:Name="FilterButton" Grid.Column="1" Style="{StaticResource CommandButton}"
+            <Button x:Name="FilterButton" Grid.Column="2" Style="{StaticResource CommandButton}"
                     Margin="8,0,0,0" Click="OnFilterButtonClick" ToolTip="筛选：类型 / 日期 / 子类型 / 标签">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE71C;" FontFamily="{DynamicResource Font.Icon}"
@@ -167,14 +202,40 @@
             </Button>
 
             <!-- 等宽数字：计数不随数字宽度跳动（§6.4 头部）。 -->
-            <TextBlock x:Name="CountLabel" Grid.Column="2" Margin="12,0,2,0" MinWidth="72"
+            <TextBlock x:Name="CountLabel" Grid.Column="3" Margin="12,0,2,0" MinWidth="72"
+                       TextAlignment="Right" VerticalAlignment="Center"
+                       Typography.NumeralAlignment="Tabular"
+                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+
+            <!-- 翻译记录页的头部：同一套搜索胶囊（没有筛选 token——一张表、两段文字）与计数。 -->
+            <Border x:Name="LogSearchPill" Grid.Column="1" Grid.ColumnSpan="2" Height="32"
+                    Visibility="Collapsed"
+                    CornerRadius="{DynamicResource Radius.Pill}"
+                    Background="{DynamicResource Brush.SurfaceInput}"
+                    BorderBrush="{DynamicResource Brush.StrokeStrong}" BorderThickness="1">
+                <DockPanel Margin="12,0,12,0">
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE721;"
+                               FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}"
+                               Foreground="{DynamicResource Brush.TextTertiary}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"
+                               IsHitTestVisible="False"/>
+                    <TextBox x:Name="LogSearchBox" Padding="0" MinWidth="60"
+                             Background="Transparent" BorderThickness="0"
+                             VerticalContentAlignment="Center"
+                             local:InputProps.Placeholder="搜索原文或译文…"
+                             TextChanged="OnLogSearchTextChanged"/>
+                </DockPanel>
+            </Border>
+            <TextBlock x:Name="LogCountLabel" Grid.Column="3" Margin="12,0,2,0" MinWidth="72"
+                       Visibility="Collapsed"
                        TextAlignment="Right" VerticalAlignment="Center"
                        Typography.NumeralAlignment="Tabular"
                        Foreground="{DynamicResource Brush.TextSecondary}"/>
         </Grid>
 
         <!-- ═══ 命令栏 40（§6.4）：左动作组 · 删除 · 右 ⋯ ═══ -->
-        <DockPanel Grid.Row="1" Margin="16,6,16,0" LastChildFill="False">
+        <DockPanel x:Name="HistoryCommands" Grid.Row="1" Margin="16,6,16,0" LastChildFill="False">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                 <Button x:Name="CopyButton" Style="{StaticResource CommandButton}" Click="OnCopySelected"
                         ToolTip="复制到剪贴板 · Enter&#10;管理窗没有粘贴目标，Enter 是复制">
@@ -231,8 +292,65 @@
             </Button>
         </DockPanel>
 
+        <!-- 翻译记录页的命令栏：复制译文 · 复制原文 · 删除 · 右侧清空全部（不可撤销，走确认）。 -->
+        <DockPanel x:Name="LogCommands" Grid.Row="1" Margin="16,6,16,0" LastChildFill="False"
+                   Visibility="Collapsed">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <Button x:Name="LogCopyButton" Style="{StaticResource CommandButton}" Click="OnLogCopyTranslation"
+                        ToolTip="复制译文 · Enter">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8C8;" FontFamily="{DynamicResource Font.Icon}"
+                                   FontSize="{DynamicResource Size.IconS}" VerticalAlignment="Center"/>
+                        <TextBlock Text="复制译文" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="LogCopyOriginalButton" Style="{StaticResource CommandButton}"
+                        Click="OnLogCopyOriginal" ToolTip="复制原文 · O">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8C8;" FontFamily="{DynamicResource Font.Icon}"
+                                   FontSize="{DynamicResource Size.IconS}" VerticalAlignment="Center"/>
+                        <TextBlock Text="复制原文" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Border Width="1" Height="16" Margin="10,0,8,0" VerticalAlignment="Center"
+                        Background="{DynamicResource Brush.Divider}"/>
+
+                <Button x:Name="LogDeleteButton" Style="{StaticResource CommandButton}" Width="36" Padding="0"
+                        Click="OnLogDelete" ToolTip="删除 · D">
+                    <TextBlock Text="&#xE74D;" FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}" HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Button>
+            </StackPanel>
+
+            <Button x:Name="LogClearButton" DockPanel.Dock="Right" Style="{StaticResource CommandButton}"
+                    Margin="0" Click="OnLogClearAll" ToolTip="删除全部翻译记录（剪贴板历史不受影响）">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE894;" FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}" VerticalAlignment="Center"/>
+                    <TextBlock Text="清空全部" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </DockPanel>
+
+        <!-- 翻译记录页的内容：列表与空态；撤销条在切页时搬过来（同一个 ToastHost）。 -->
+        <Grid x:Name="LogContent" Grid.Row="2" Margin="16,8,16,12" Visibility="Collapsed">
+            <ListBox x:Name="LogList" SelectionMode="Extended"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     ItemTemplate="{StaticResource LogRowTemplate}"
+                     MouseDoubleClick="OnLogDoubleClick"
+                     SelectionChanged="OnLogSelectionChanged"/>
+            <local:EmptyState x:Name="LogEmpty" Glyph="&#xE81C;" Visibility="Collapsed"
+                              VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="24,0,24,0"/>
+        </Grid>
+
         <!-- ═══ 内容（§6.4）：InfoBar · 列表 | 详情 · 全屏预览浮层 ═══ -->
-        <Grid Grid.Row="2" Margin="16,8,16,12">
+        <Grid x:Name="HistoryContent" Grid.Row="2" Margin="16,8,16,12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -249,7 +367,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- 列表侧：滚动列表 + 吸顶分组头（浮层）+ 撤销条（浮层） -->
-                <Grid Grid.Column="0">
+                <Grid x:Name="ListSide" Grid.Column="0">
                     <local:LibraryList x:Name="EntryList"
                                        Style="{DynamicResource BareList}"
                                        SelectionMode="Extended"

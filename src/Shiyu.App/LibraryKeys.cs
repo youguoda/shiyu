@@ -169,6 +169,23 @@ public partial class LibraryWindow
         };
         var none = Keyboard.Modifiers == ModifierKeys.None;
 
+        // Ctrl+Tab 换页（KeyMap "switch-page"）：页签上的 Enter / Space 在历史页先被下面接走
+        // （复制、预览），键盘用户靠它在两本账之间来回。
+        if (key == Key.Tab && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            SwitchPage(log: !_logPageActive);
+            return;
+        }
+
+        // 翻译记录页有自己的一小套键（LibraryTranslationLog）：历史页的键在那里没有对象，
+        // 让它们越界就是对着看不见的列表置顶、删除。
+        if (_logPageActive)
+        {
+            OnLogPageKeyDown(e, key);
+            return;
+        }
+
         switch (key)
         {
             case Key.F when Keyboard.Modifiers == ModifierKeys.Control:

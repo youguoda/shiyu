@@ -38,6 +38,15 @@ internal sealed class ReverseInputModule
         var log = await _window.ProbeSelectableOutput(text, System.IO.Path.Combine(directory, "reverse-select.png"));
         System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "reverse-select.log"), log + "done" + Environment.NewLine);
     }
+
+    /// <summary>探针命令 translation-log 的反向输入框一段（见 ReverseInputWindow.ProbeTranslationLog）。</summary>
+    internal async Task<string> ProbeTranslationLog(string text)
+    {
+        Show();
+        return _window is null
+            ? "reverse|missing" + Environment.NewLine
+            : await _window.ProbeTranslationLog(text);
+    }
 #endif
 
     /// <summary>
@@ -62,7 +71,11 @@ internal sealed class ReverseInputModule
                 () => shell.OpenSettingsAt?.Invoke("service.preset"),
                 shell.TellUser,
                 // 「自动复制译文」（用户需求 2026-10-05）：经 shell 找翻译模块存，与面板同一处。
-                (original, translated) => shell.KeepTranslation?.Invoke(original, translated));
+                (original, translated) => shell.KeepTranslation?.Invoke(original, translated),
+
+                // 翻译记录（用户需求 2026-10-09）：贴回时、或带着落定的结果关窗时记一笔。
+                (original, translated, template)
+                    => shell.LogTranslation(original, translated, TranslationOrigin.ReverseInput, template));
             _window.Summon();
         }
         catch (Exception failure)

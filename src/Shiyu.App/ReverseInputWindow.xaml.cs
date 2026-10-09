@@ -62,13 +62,17 @@ internal partial class ReverseInputWindow : Window
     /// <summary>不出声地存一条译文（原文、译文）：「自动复制译文」开着时贴回后用。</summary>
     private readonly Action<string, string>? _keepTranslation;
 
+    /// <summary>记一条翻译记录（原文、结果、模板名）；开关与排除名单由接收方把关。</summary>
+    private readonly Action<string, string, string>? _logTranslation;
+
     public ReverseInputWindow(
         AppSettings settings,
         Func<ITranslationBackend> backend,
         ReversePaste paste,
         Action openSettings,
         Action<string> tell,
-        Action<string, string>? keepTranslation = null)
+        Action<string, string>? keepTranslation = null,
+        Action<string, string, string>? logTranslation = null)
     {
         InitializeComponent();
 
@@ -78,9 +82,24 @@ internal partial class ReverseInputWindow : Window
         _openSettings = openSettings;
         _tell = tell;
         _keepTranslation = keepTranslation;
+        _logTranslation = logTranslation;
         _template = PromptTemplates.ResolveReverseDefault(settings);
 
         Backdrop.AttachShell(this, Shell, () => BackdropKind.Acrylic);
+
+        // 拖动（用户需求 2026-10-09）：按在外框、底栏这些非控件处就拖；输入框、输出里的选字与两枚
+        // chip 照旧。拖过之后长高以拖到的位置为准；只管这一次——下次呼出回到插入符旁（PlaceBeside）。
+        Shell.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (DragGrip.IsGrip(e.OriginalSource, Shell))
+            {
+                e.Handled = true;
+                if (DragGrip.Run(this, e))
+                {
+                    KeepWhereDragged();
+                }
+            }
+        };
 
         _tick.Tick += (_, _) =>
         {
@@ -225,6 +244,22 @@ internal partial class ReverseInputWindow : Window
     }
 
     /// <summary>
+    /// 用户把窗口拖到了别处：此后的长高以拖到的位置为准（<see cref="ReverseInputPlacement.Dragged"/>），
+    /// 钳的是它此刻所在的那块屏幕——拖到另一台显示器上也不会被拽回原来那台。
+    /// </summary>
+    private void KeepWhereDragged()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (!WindowRects.TryGet(handle, out var rect))
+        {
+            return;
+        }
+
+        _placement = ReverseInputPlacement.Dragged(new ScreenPoint(rect.Left, rect.Top));
+        _workArea = ScreenGeometry.WorkAreaAt(new ScreenPoint(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+    }
+
+    /// <summary>
     /// 失焦即隐藏，但显示后 300ms 内的失焦忽略（防止刚弹出就被自己触发关掉）。只隐藏，不还原前台：
     /// 焦点此刻正落在用户点下去的窗口上，Restore 只会把它抢回来。模板列表开着时它是我们自己的弹层，
     /// 不算失焦。
@@ -236,8 +271,21 @@ internal partial class ReverseInputWindow : Window
             return;
         }
 
+        LogSettled();
         Apply(_session.Escape());
         HideNow();
+    }
+
+    /// <summary>
+    /// 不贴回就关窗（Esc、失焦、再按一次热键）时，屏幕上落定的结果照样记进翻译记录：用户可能
+    /// 是看完、用鼠标选了几句就走了。还在跑的、对着旧输入的不记——那不是这句话的答案。
+    /// </summary>
+    private void LogSettled()
+    {
+        if (_session.SettledOutput is { } output)
+        {
+            _logTranslation?.Invoke(_session.Text, output, _session.Template.Name);
+        }
     }
 
     private void HideNow()
@@ -251,6 +299,7 @@ internal partial class ReverseInputWindow : Window
     /// <summary>Esc：取消在途请求并关闭，不贴回；回到原来的窗口（与窄条的 Esc 同）。</summary>
     private void CancelAndClose()
     {
+        LogSettled();
         Apply(_session.Escape());
         HideNow();
         _returnTo.Restore();
@@ -419,6 +468,9 @@ internal partial class ReverseInputWindow : Window
     private void Commit(string text)
     {
         var target = _returnTo;
+
+        // 翻译记录：贴回的就是这一次的结果，贴不贴得成都记（用户要的是这段文字）。
+        _logTranslation?.Invoke(_session.Text, text, _session.Template.Name);
         HideNow();
 
         // 上一次的还原还没轮到（400ms 内又贴了一次）：先结清，让这次的快照是用户真正的剪贴板，

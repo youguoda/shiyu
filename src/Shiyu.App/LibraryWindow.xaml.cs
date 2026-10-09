@@ -222,6 +222,16 @@ public partial class LibraryWindow : Window
         Rebuild();
     }
 
+    /// <summary>窗口被再次呼出：两页都可能在它藏着时变过，当前页那一本重读。</summary>
+    public void ReloadOnReturn()
+    {
+        Reload();
+        if (_logPageActive)
+        {
+            ReloadLog();
+        }
+    }
+
     private void ReloadPreservingSelection()
     {
         var chosen = EntryList.SelectedItems.OfType<EntryItem>().Select(item => item.Id).ToHashSet();
@@ -835,6 +845,9 @@ public partial class LibraryWindow : Window
 
     private void CommitUndoExpiry()
     {
+        // 翻译记录的删除早已落库，撤销窗口一关，留着的那份就不用了。
+        _undoLog = null;
+
         if (_undoItems is { } items)
         {
             foreach (var (entry, _) in items)
@@ -853,6 +866,12 @@ public partial class LibraryWindow : Window
 
     private void UndoDelete()
     {
+        if (_undoLog is { } records)
+        {
+            UndoLogDelete(records);
+            return;
+        }
+
         if (_undoItems is not { } items)
         {
             return;

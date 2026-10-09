@@ -3,9 +3,12 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Shiyu.Core;
+using Shiyu.Windows;
 
 namespace Shiyu.App;
 
@@ -65,6 +68,61 @@ internal partial class ReverseInputWindow
             encoder.Save(stream);
         }
 
+        return log.ToString();
+    }
+
+    /// <summary>
+    /// 探针命令 translation-log 的反向输入框一段（用户需求 2026-10-09：两个框都能拖、翻译记下来）。
+    /// 放一句话进去、等它落定，然后：
+    ///   - 问拖动的把手：底栏提示是把手；输入框、输出框、两枚 chip 不是（选字、点按钮照旧）；
+    ///   - 把窗口挪到远处、走拖动收尾，再让内容长高：窗口应留在拖到的地方，而不是被拽回插入符旁；
+    ///   - 走 Esc 的路径关窗：落定的结果应记进翻译记录（由调用方查库）。
+    /// 系统的移动循环要真鼠标，探针不碰用户的鼠标——拖动本身只能由人来试，这里验的是它前后两头。
+    /// </summary>
+    internal async Task<string> ProbeTranslationLog(string text)
+    {
+        var log = new StringBuilder();
+
+        async Task<bool> Settled()
+        {
+            for (var waited = 0; waited < 80; waited++)
+            {
+                if (_session.SettledOutput is not null && OutputBox.Visibility == Visibility.Visible)
+                {
+                    await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                    return true;
+                }
+
+                await Task.Delay(100);
+            }
+
+            return false;
+        }
+
+        InputBox.Text = text;
+        log.AppendLine(FormattableString.Invariant($"settled|ok={await Settled()}|output={_session.SettledOutput}"));
+
+        log.AppendLine(FormattableString.Invariant(
+            $"grip|hint={DragGrip.IsGrip(HintText, Shell)}|input={DragGrip.IsGrip(InputBox, Shell)}|output={DragGrip.IsGrip(OutputBox, Shell)}|template={DragGrip.IsGrip(TemplateChip, Shell)}|direction={DragGrip.IsGrip(DirectionChip, Shell)}"));
+
+        // 落点离原位尽量远：原来在右半边就挪到左边，反之亦然；纵向留出长高的余地。
+        var handle = new WindowInteropHelper(this).Handle;
+        WindowRects.TryGet(handle, out var start);
+        var middle = _workArea.Left + _workArea.Width / 2;
+        var target = new ScreenPoint(
+            start.Left + start.Width / 2 > middle ? _workArea.Left + 40 : _workArea.Right - start.Width - 40,
+            start.Top > _workArea.Top + 200 ? _workArea.Top + 40 : _workArea.Top + 240);
+        TransientWindow.MoveTo(handle, target, ZBand.Topmost);
+        KeepWhereDragged();
+
+        InputBox.Text = string.Join("\n", text, text, text, text);
+        var grown = await Settled();
+        WindowRects.TryGet(handle, out var after);
+        log.AppendLine(FormattableString.Invariant(
+            $"drag|settled={grown}|from={start.Left},{start.Top},{start.Height}|target={target.X},{target.Y}|after={after.Left},{after.Top},{after.Height}"));
+
+        CancelAndClose();
+        log.AppendLine(FormattableString.Invariant($"closed|visible={IsVisible}"));
         return log.ToString();
     }
 }

@@ -1178,4 +1178,51 @@ public class ReverseInputSessionTests
 
         Assert.Contains("重试", session.Hint);
     }
+
+    // --- 落定的输出（翻译记录只记它，用户需求 2026-10-09） ----------------------------------
+
+    [Fact]
+    public void Only_a_finished_answer_to_the_current_text_is_settled()
+    {
+        var (session, clock) = Open();
+        Assert.Null(session.SettledOutput);
+
+        var run = TypeAndRun(session, clock, "你好");
+        session.Partial(run.Seq, "Hel");
+        Assert.Null(session.SettledOutput);
+
+        Finish(session, run, "Hello");
+        Assert.Equal("Hello", session.SettledOutput);
+
+        // 接着打字：屏幕上淡显的旧输出不是这句话的答案。
+        session.TextChanged("你好，明天见");
+        Assert.True(session.OutputFaded);
+        Assert.Null(session.SettledOutput);
+    }
+
+    [Fact]
+    public void A_failed_or_escaped_attempt_settles_nothing()
+    {
+        var (session, clock) = Open();
+        var run = TypeAndRun(session, clock, "你好");
+        session.Failed(run.Seq, null, "boom");
+        Assert.Null(session.SettledOutput);
+
+        var retry = TypeAndRun(session, clock, "你好呀");
+        Finish(session, retry, "Hi");
+        session.Escape();
+        Assert.Null(session.SettledOutput);
+    }
+
+    [Fact]
+    public void A_finished_rewrite_is_settled_before_the_second_enter()
+    {
+        var (session, _) = Open(PromptTemplates.PromptOptimize);
+        session.TextChanged("写个脚本");
+
+        var run = session.Enter().Run!;
+        session.Completed(run.Seq, "Write a script.");
+
+        Assert.Equal("Write a script.", session.SettledOutput);
+    }
 }

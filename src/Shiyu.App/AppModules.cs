@@ -61,6 +61,7 @@ internal sealed class AppModules
         shell.DragSelected = modules.Selection.OnDragSelected;
         shell.OpenSettingsAt = modules.Settings.ShowAt;
         shell.ShowLibrary = modules.Library.Show;
+        shell.ShowTranslationLog = modules.Library.ShowTranslationLog;
         shell.ShowSettings = modules.Settings.Show;
         shell.ShowUpdateWindow = modules.Update.ShowWindow;
         shell.BuildStreamingModel = modules.Translation.BuildStreamingModel;

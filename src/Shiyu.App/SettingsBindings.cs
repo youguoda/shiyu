@@ -60,6 +60,7 @@ internal static class SettingsBindings
         "theme" => (int)settings.Theme,
         "look.content-size" => (int)settings.ContentFontSize,
         "service.backend-kind" => (int)settings.TranslationBackend,
+        "translate.log-retention" => TranslationLogRetention.ChoiceOf(settings.TranslationLogRetentionDays),
         _ => 0,
     };
 
@@ -77,6 +78,7 @@ internal static class SettingsBindings
         "bar.card-tooltips" => settings.BarCardTooltips,
         "look.preview-on-hover" => settings.PreviewOnHover,
         "translate.auto-copy" => settings.AutoCopyTranslation,
+        "translate.log" => settings.TranslationLogEnabled,
         "store.protect" => settings.ProtectEntries,
         "store.protect-favorites" => settings.ProtectFavorites,
         "store.protect-pinned" => settings.ProtectPinned,
@@ -108,6 +110,11 @@ internal static class SettingsBindings
         "bar.card-tooltips" => current with { BarCardTooltips = AsBool(text) },
         "look.preview-on-hover" => current with { PreviewOnHover = AsBool(text) },
         "translate.auto-copy" => current with { AutoCopyTranslation = AsBool(text) },
+        "translate.log" => current with { TranslationLogEnabled = AsBool(text) },
+        "translate.log-retention" => current with
+        {
+            TranslationLogRetentionDays = TranslationLogRetention.DaysAt(choice),
+        },
         "store.protect" => current with { ProtectEntries = AsBool(text) },
         "store.protect-favorites" => current with { ProtectFavorites = AsBool(text) },
         "store.protect-pinned" => current with { ProtectPinned = AsBool(text) },

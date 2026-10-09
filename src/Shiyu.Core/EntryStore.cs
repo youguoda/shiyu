@@ -135,7 +135,7 @@ public sealed partial class EntryStore : IDisposable
     /// <summary>
     /// The shape the code expects. Bumped whenever a migration is added below.
     /// </summary>
-    private const int SchemaVersion = 14;
+    private const int SchemaVersion = 15;
 
     /// <summary>
     /// The columns every list path reads: everything except the payloads that
@@ -362,6 +362,23 @@ public sealed partial class EntryStore : IDisposable
             // window of the text is a token — so 剪贴板 finds 剪贴板历史
             // exactly as LIKE did, without walking the table.
             CreateFullTextIndex();
+        }
+
+        if (from < 15)
+        {
+            // 翻译记录（用户需求 2026-10-09）：翻译框与反向输入框的每次翻译一行，与剪贴板
+            // 条目分开——它们不进窄条，按自己的周期清空，删掉也不碰任何条目。
+            Execute("""
+                CREATE TABLE IF NOT EXISTS translation_log (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    original    TEXT    NOT NULL,
+                    translated  TEXT    NOT NULL,
+                    origin      TEXT    NOT NULL,
+                    template    TEXT    NOT NULL,
+                    created_at  INTEGER NOT NULL
+                );
+                """);
+            Execute("CREATE INDEX IF NOT EXISTS idx_translation_log_created_at ON translation_log (created_at DESC);");
         }
 
         if (from != SchemaVersion)

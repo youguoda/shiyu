@@ -13,6 +13,15 @@ namespace Shiyu.App;
 public partial class PanelWindow
 {
     /// <summary>
+    /// 探针命令 translation-log 的面板一段（用户需求 2026-10-09：翻译框能拖）：文字与语言名是
+    /// 拖动的把手；按钮、模板列表各管自己的按下。
+    /// </summary>
+    internal string ProbeGrips()
+        => FormattableString.Invariant(
+            $"panelGrip|original={DragGrip.IsGrip(OriginalText, Shell, TemplateList)}|label={DragGrip.IsGrip(SourceLabel, Shell, TemplateList)}|copy={DragGrip.IsGrip(CopyButton, Shell, TemplateList)}|close={DragGrip.IsGrip(CloseButton, Shell, TemplateList)}|list={DragGrip.IsGrip(TemplateList, Shell, TemplateList)}")
+            + Environment.NewLine;
+
+    /// <summary>
     /// 探针命令 panel-templates（用户需求 2026-10-09：翻译面板也像反向输入框一样挑模板）。
     /// 等译完，点 chip 看列表：是不是全部模板、当前的打勾；挑另一个，看列表收起、chip 换名、
     /// 面板还在；再开列表按 Esc，看收起的是列表、不是面板。只写 ASCII（名字比对在这边做）。

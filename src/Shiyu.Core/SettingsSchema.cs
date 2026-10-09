@@ -306,6 +306,26 @@ public static class SettingsSchema
                     Hint: "翻译完成后，译文自动复制到剪贴板并存入历史，在窄条里就能找到。反向输入框贴回后，译文也留在剪贴板上，不再还原成原来的内容。提示词优化的结果不在此列。",
                     Keywords: ["译文", "复制", "自动", "剪贴板", "历史", "窄条", "保存", "存入", "反向输入"],
                     Icon: "E8C8")),
+
+            // 用户需求 2026-10-09：翻译记录与剪贴板历史分开存、分开清。周期与清空不挂在开关下面——
+            // 关掉保存后，已有的记录仍要能按周期清、能一键清。
+            new SettingsSection("translate.log", "翻译记录",
+                new SettingsItem(
+                    "translate.log", "保存翻译记录", SettingsControl.Toggle,
+                    Hint: "翻译框与反向输入框的每一次翻译都记下原文、译文、时间、来自哪个框和所用模板，在管理窗口的「翻译记录」页查找、复制、删除。只存在本机，与剪贴板历史分开，不进窄条。",
+                    Keywords: ["翻译记录", "翻译历史", "历史", "记录", "保存", "原文", "译文", "反向输入", "翻译框", "找回"],
+                    Icon: "E81C"),
+                new SettingsItem(
+                    "translate.log-retention", "自动清空", SettingsControl.Segmented,
+                    Hint: "早于这个时间的翻译记录自动删除；选「永不」则一直保留。",
+                    Choices: ["7 天", "30 天", "90 天", "永不"],
+                    Keywords: ["清空", "周期", "保留", "过期", "自动删除", "翻译记录", "翻译历史"],
+                    Icon: "E823"),
+                new SettingsItem(
+                    "translate.log-clear", "立即清空", SettingsControl.Custom,
+                    Hint: "删除全部翻译记录；剪贴板历史不受影响。",
+                    Keywords: ["清空", "删除", "翻译记录", "立即", "一键"],
+                    Icon: "E74D")),
             new SettingsSection("translate.trigger", "拖选",
                 new SettingsItem(
                     "hotkeys.selection-badge", "拖选后出翻译徽标", SettingsControl.Toggle,

@@ -616,7 +616,7 @@ public class StorageScaleTests
             command.CommandText = "SELECT COUNT(*) FROM entries WHERE sub_type IS NULL AND kind = 0;";
             Assert.Equal(0L, command.ExecuteScalar());
             command.CommandText = "PRAGMA user_version;";
-            Assert.Equal(14L, command.ExecuteScalar());
+            Assert.Equal(15L, command.ExecuteScalar());
         }
 
         // And the second open is an ordinary one: nothing left to migrate, the

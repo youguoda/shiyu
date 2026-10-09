@@ -113,6 +113,8 @@ public static class KeyMap
         new("select-all", "全选", "E8FD", Library: "Ctrl+A", On: KeySurfaceSet.Library),
         new("cycle-region", "区域循环", null, Library: "F6", On: KeySurfaceSet.Library),
         new("close-window", "关闭窗口", null, Library: "Ctrl+W", On: KeySurfaceSet.Library),
+        new("switch-page", "切换页签", null, Library: "Ctrl+Tab", Condition: "剪贴板历史 / 翻译记录",
+            On: KeySurfaceSet.Library),
 
         // 两窗共用的教学与速查动作（§5.2 四级教学 L1）。
         new("hints", "显示键帽", "E765", Bar: "按住 Ctrl", Settings: "按住 Ctrl",

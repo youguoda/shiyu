@@ -18,6 +18,9 @@ public enum LogEvent
     AgentActionFailed,
     DictionaryLookupFailed,
 
+    /// <summary>翻译记录写不进库（用户需求 2026-10-09）。翻译本身已成，只留痕迹不打扰。</summary>
+    TranslationLogFailed,
+
     // 更新
     UpdateChecked,
     UpdateCheckFailed,

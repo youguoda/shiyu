@@ -83,7 +83,11 @@ internal sealed class TranslationModule
                     latest => latest with { TranslationBackend = TranslationBackendKind.Free }),
 
                 // 「自动复制译文」（用户需求 2026-10-05）：译完即存，不出声。
-                keepTranslation: KeepTranslation);
+                keepTranslation: KeepTranslation,
+
+                // 翻译记录（用户需求 2026-10-09）：开关与排除名单在 shell 那一头把关。
+                logTranslation: (original, translated, template)
+                    => shell.LogTranslation(original, translated, TranslationOrigin.Panel, template));
             await _panel.TranslateAsync(text, Displayed);
         }
         catch (Exception failure)
@@ -192,6 +196,9 @@ internal sealed class TranslationModule
         System.IO.File.WriteAllText(
             System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-templates.log"), log + "done" + Environment.NewLine);
     }
+
+    /// <summary>探针命令 translation-log 的面板把手一段（见 PanelWindow.ProbeGrips）。</summary>
+    internal string ProbePanelGrips() => _panel?.ProbeGrips() ?? "panelGrip|missing" + Environment.NewLine;
 #endif
 
     /// <summary>

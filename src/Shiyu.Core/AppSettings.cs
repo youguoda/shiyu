@@ -210,6 +210,19 @@ public sealed record AppSettings
     /// </summary>
     public bool AutoCopyTranslation { get; init; }
 
+    /// <summary>
+    /// 保存翻译记录（用户需求 2026-10-09）：翻译框与反向输入框的每一次翻译记一笔「原文 → 译文」，
+    /// 在管理窗口的「翻译记录」页找回。默认开——用户要的就是"能找回"；记录只在本机、与剪贴板
+    /// 历史同库，不想留的人关掉即可（已有的记录照旧按 <see cref="TranslationLogRetentionDays"/> 清）。
+    /// </summary>
+    public bool TranslationLogEnabled { get; init; } = true;
+
+    /// <summary>
+    /// 翻译记录留多少天，到期自动清空；0 是永不。设置页只给四档（<see cref="TranslationLogRetention"/>），
+    /// 不在档上的值按"不早于它删"归到档上。
+    /// </summary>
+    public int TranslationLogRetentionDays { get; init; } = 30;
+
     /// <summary>Set once the first-run guide has run or been skipped; it never returns on its own.</summary>
     public bool OnboardingCompleted { get; init; }
 

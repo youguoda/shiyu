@@ -63,6 +63,9 @@ public class SettingsSchemaTests
             ["service.api-key"] = "translate",
             ["translate.templates"] = "translate",
             ["translate.auto-copy"] = "translate",
+            ["translate.log"] = "translate",
+            ["translate.log-retention"] = "translate",
+            ["translate.log-clear"] = "translate",
             ["hotkeys.selection-badge"] = "translate",
             ["translate.hotkey-ref"] = "translate",
 

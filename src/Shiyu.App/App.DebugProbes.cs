@@ -240,6 +240,91 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 translation-log（用户需求 2026-10-09：两个框都能拖、翻译记下来、按周期清空）。
+    /// 面板译一句；反向输入框译一句、挪到远处让它长高、再按 Esc 关掉——两条都该进记录，来处与
+    /// 模板记对。然后管理窗开在「翻译记录」页、设置窗落到「翻译记录」一节，各渲一张 PNG。
+    /// 配 SHIYU_FAKE_BACKEND=1（"[EN] " + 原文，不碰网络）。日志一行一事，值里不带换行。
+    /// </summary>
+    private async void ProbeTranslationLog(AppShell shell)
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+
+        async Task<bool> Until(Func<bool> condition, int timeoutMs)
+        {
+            for (var waited = 0; waited < timeoutMs; waited += 100)
+            {
+                if (condition())
+                {
+                    return true;
+                }
+
+                await Task.Delay(100);
+            }
+
+            return condition();
+        }
+
+        async Task Settle()
+        {
+            for (var round = 0; round < 6; round++)
+            {
+                await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            }
+        }
+
+        string Newest()
+        {
+            var newest = shell.Store.TranslationLog(limit: 1).FirstOrDefault();
+            return FormattableString.Invariant(
+                $"records={shell.Store.CountTranslationLog()}|origin={newest?.Origin}|template={newest?.Template}|original={Shiyu.Core.TranslationLogText.OneLine(newest?.Original ?? string.Empty)}|translated={Shiyu.Core.TranslationLogText.OneLine(newest?.Translated ?? string.Empty)}");
+        }
+
+        try
+        {
+            _modules!.Translation.ShowPanel("probe rollout plan");
+            log.AppendLine($"panel|logged={await Until(() => shell.Store.CountTranslationLog() >= 1, 10000)}|{Newest()}");
+            log.Append(_modules!.Translation.ProbePanelGrips());
+
+            log.Append(await _modules!.ReverseInput.ProbeTranslationLog("probe reverse sentence"));
+            log.AppendLine($"reverse|logged={await Until(() => shell.Store.CountTranslationLog() >= 2, 3000)}|{Newest()}");
+
+            shell.ShowTranslationLog?.Invoke();
+            await Until(() => Windows.OfType<LibraryWindow>().Any(window => window.IsLoaded), 5000);
+            await Settle();
+            log.Append(Windows.OfType<LibraryWindow>().FirstOrDefault() is { } library
+                ? library.ProbeLogPage(Path.Combine(directory, "translation-log-library.png"))
+                : "library|missing" + Environment.NewLine);
+
+            _modules!.Settings.ShowAt("translate.log");
+            await Until(() => Windows.OfType<SettingsWindow>().Any(window => window.IsLoaded), 5000);
+            await Settle();
+            if (Windows.OfType<SettingsWindow>().FirstOrDefault() is { } settings)
+            {
+                var expected = $"共 {shell.Store.CountTranslationLog()} 条";
+                var shown = Descendants(settings).OfType<TextBlock>().Any(text => text.IsVisible && text.Text == expected);
+                log.AppendLine(FormattableString.Invariant($"settings|count={shown}|expected={expected}"));
+                if (settings.Content is FrameworkElement settingsRoot)
+                {
+                    RenderToPng(settingsRoot, Path.Combine(directory, "translation-log-settings.png"));
+                }
+            }
+            else
+            {
+                log.AppendLine("settings|missing");
+            }
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把异常写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "translation-log.log"), log.ToString());
+    }
+
+    /// <summary>
     /// 探针命令 content-size（ADR-0012 排版 2–3，用户需求 2026-10-09）：被阅读的文字跟着
     /// 内容字号变，控件文字不变。打开窄条与反向输入框，标准档量一次，切到「特大」再量一次：
     /// 窄条卡片正文与行高、反向输入框（紧凑档）随设置变，窄条搜索框（控件）始终是 14。
@@ -415,6 +500,11 @@ public partial class App
             // 翻译面板像反向输入框一样挑模板（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。
             case "panel-templates":
                 _modules!.Translation.ProbeTemplatePicker("hello panel templates");
+                break;
+
+            // 两个框都能拖、翻译记下来（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。
+            case "translation-log":
+                ProbeTranslationLog(shell);
                 break;
 
             // 票 43：反向输入框。探针没有全局热键，所以直接开；脚本在此之前把记事本置于前台——

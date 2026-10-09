@@ -44,6 +44,13 @@ public static class ReverseInputPlacement
     }
 
     /// <summary>
+    /// 用户把窗口拖到了 <paramref name="topLeft"/>（用户需求 2026-10-09，只管这一次）：从这里起顶边
+    /// 停在拖到的地方、向下长，碰到屏幕底再整体上推——拖到哪儿就在哪儿，长高不会把它拽回插入符旁。
+    /// 下次呼出由 <see cref="Place"/> 重新摆。
+    /// </summary>
+    public static ReversePlacement Dragged(ScreenPoint topLeft) => new(topLeft.X, topLeft.Y, Above: false);
+
+    /// <summary>
     /// 整窗高度钳在 80–800 DIP；工作区矮的屏幕上，上限随工作区走（留 16 的余量），但不会低过下限。
     /// </summary>
     public static double ClampHeightDip(double height, double workAreaHeightDip)

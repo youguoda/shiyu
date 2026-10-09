@@ -129,6 +129,9 @@ public partial class PanelWindow : Window
     /// <summary>不出声地存一条译文（「自动复制译文」用）：返回是否真的写了新条目。</summary>
     private readonly Func<string, string, bool>? _keepTranslation;
 
+    /// <summary>记一条翻译记录（原文、结果、模板名）；开关与排除名单由接收方把关。</summary>
+    private readonly Action<string, string, string>? _logTranslation;
+
     /// <summary>按选中文本现造词典端口；null 表示这段文本不吃词典卡。</summary>
     private readonly Func<string, IDictionaryApi?>? _dictionary;
 
@@ -208,7 +211,8 @@ public partial class PanelWindow : Window
         Func<bool>? backendReady = null,
         Action? openSettings = null,
         Func<bool>? enableFreeEngine = null,
-        Func<string, string, bool>? keepTranslation = null)
+        Func<string, string, bool>? keepTranslation = null,
+        Action<string, string, string>? logTranslation = null)
     {
         InitializeComponent();
 
@@ -217,6 +221,7 @@ public partial class PanelWindow : Window
         _backend = backend;
         _saveTranslation = saveTranslation;
         _keepTranslation = keepTranslation;
+        _logTranslation = logTranslation;
         _dictionary = dictionary;
         _speech = speech;
         _backendReady = backendReady;
@@ -236,6 +241,18 @@ public partial class PanelWindow : Window
                 CloseTemplateList();
             }
         };
+
+        // 拖动（用户需求 2026-10-09）：按在面板的文字、留白、头尾栏上就拖。只管这一次——换模板、
+        // 重试都在原地，下一段文字才回到光标旁（MoveBesideCursor）；长高时仍钳进它此刻所在的屏幕。
+        Shell.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (DragGrip.IsGrip(e.OriginalSource, Shell, TemplateList))
+            {
+                e.Handled = true;
+                DragGrip.Run(this, e);
+            }
+        };
+
         _target = settings.TargetLanguage;
         _source = settings.SourceLanguage;
         _settings = settings;
@@ -493,6 +510,13 @@ public partial class PanelWindow : Window
                 && _settings.AutoCopyTranslation)
             {
                 AutoKeep(session.Text);
+            }
+
+            // 翻译记录（用户需求 2026-10-09）：每一次真正译完都记一笔，改写类的结果也记——记录上
+            // 写着模板名，找回时分得清。失败、取消不记；同一结果再交一次由库挡掉。
+            if (session.State == TranslationState.Finished && session.Text.Trim().Length > 0)
+            {
+                _logTranslation?.Invoke(_original, session.Text, template.Name);
             }
         });
     }

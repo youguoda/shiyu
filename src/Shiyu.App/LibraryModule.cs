@@ -29,13 +29,17 @@ internal sealed class LibraryModule
             // 规则对它们一视同仁。没配密钥时按钮在管理窗侧禁用并说明。
             _library = new LibraryWindow(
                 shell.Store, shell.Writer!, shell.Images, shell.BuildStreamingModel!,
-                shell.Icons, () => shell.Settings, shell.Pipeline);
+                shell.Icons, () => shell.Settings, shell.Pipeline)
+            {
+                // 翻译记录页关着时的空态「去设置」（用户需求 2026-10-09）。
+                OpenSettingsAt = id => shell.OpenSettingsAt?.Invoke(id),
+            };
             _library.Closed += (_, _) => _library = null;
             _library.Show();
         }
         else
         {
-            _library.Reload();
+            _library.ReloadOnReturn();
             if (_library.WindowState == WindowState.Minimized)
             {
                 _library.WindowState = WindowState.Normal;
@@ -43,5 +47,12 @@ internal sealed class LibraryModule
 
             _library.Activate();
         }
+    }
+
+    /// <summary>管理窗打开在「翻译记录」页（设置里的「查看翻译记录」）。</summary>
+    public void ShowTranslationLog()
+    {
+        Show();
+        _library?.ShowTranslationLogPage();
     }
 }

@@ -224,6 +224,7 @@ public class KeyMapTests
             "全选：管理 Ctrl+A",
             "区域循环：管理 F6",
             "关闭窗口：管理 Ctrl+W",
+            "切换页签：管理 Ctrl+Tab（剪贴板历史 / 翻译记录）",
             "显示键帽：窄条 按住 Ctrl · 设置 按住 Ctrl",
             "键位速查：设置 ? 或 F1 · 管理 F1 / ?",
             "切换设置页：设置 Ctrl+1–6",

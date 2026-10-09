@@ -156,4 +156,25 @@ public class ReverseInputPlacementTests
     [Fact]
     public void A_tiny_work_area_never_pushes_the_cap_below_the_floor()
         => Assert.Equal(80, ReverseInputPlacement.ClampHeightDip(300, 60));
+
+    // --- 拖过之后（用户需求 2026-10-09） -------------------------------------------------
+
+    [Fact]
+    public void A_dragged_box_grows_down_from_where_it_was_dropped()
+    {
+        // 原本翻在插入符上方、向上长；拖走之后不再追着那个锚点。
+        var dragged = ReverseInputPlacement.Dragged(new ScreenPoint(900, 200));
+
+        Assert.Equal(new ScreenPoint(900, 200), dragged.PositionFor(120, Work));
+        Assert.Equal(new ScreenPoint(900, 200), dragged.PositionFor(400, Work));
+    }
+
+    [Fact]
+    public void A_box_dropped_low_is_pushed_up_as_it_grows_and_returns_when_it_shrinks()
+    {
+        var dragged = ReverseInputPlacement.Dragged(new ScreenPoint(900, 900));
+
+        Assert.Equal(1040 - 400, dragged.PositionFor(400, Work).Y);
+        Assert.Equal(900, dragged.PositionFor(120, Work).Y);
+    }
 }

@@ -201,6 +201,13 @@ public sealed class ReverseInputSession(TimeProvider clock)
     public bool OutputFaded
         => Output.Length > 0 && CurrentAttempt is not { State: not AttemptState.Failed, Text.Length: > 0 };
 
+    /// <summary>
+    /// 落定的输出：对着当前输入、已经译完（或整理完）的那一份；在跑、过期、失败、还没有时为 null。
+    /// 翻译记录（用户需求 2026-10-09）只记它——打字途中每停一下都会译一次，那些半句话不进记录。
+    /// </summary>
+    public string? SettledOutput
+        => CurrentAttempt is { State: AttemptState.Done, Text.Length: > 0 } done ? done.Text : null;
+
     /// <summary>请求在途：输出尾部挂静态光标块（与面板同一个，票 22），不另做闪烁动画。</summary>
     public bool Running => _attempt is { State: AttemptState.Running };
 
