@@ -432,9 +432,14 @@
                          The 译 mark says this entry is Shiyu's own kept
                          translation, not something the user copied. The lock
                          is the protected-corner slot (票 39): shown while
-                         delete protection covers this card. -->
-                    <StackPanel Grid.Row="1" Orientation="Horizontal"
-                                HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                         delete protection covers this card.
+                         垫一块卡面色（2026-10-09）：内容字号调大后，正文最后一行常常一直
+                         写到右缘、压在水印底下；垫块遮住字尾、左边留 8 DIP，水印始终读得清。
+                         悬停/按下的状态层是兄弟层，盖在整张卡上，垫块随卡面一起变色。
+                         没有水印时 StackPanel 宽高为零，垫块也就不在了。 -->
+                    <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Background="{DynamicResource Brush.Surface}" Padding="8,0,0,0">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72E;" FontFamily="{DynamicResource Font.Icon}"
                                    FontSize="{DynamicResource Size.IconXs}"
                                    Foreground="{DynamicResource Brush.TextTertiary}"
@@ -458,6 +463,7 @@
                                    Margin="6,0,0,0"
                                    Visibility="{Binding PinnedVisibility}"/>
                     </StackPanel>
+                    </Border>
                 </Grid>
             </local:CardSurface>
 

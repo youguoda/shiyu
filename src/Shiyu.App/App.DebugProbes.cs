@@ -239,6 +239,87 @@ public partial class App
         File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "tooltip.log"), log.ToString());
     }
 
+    /// <summary>
+    /// 探针命令 content-size（ADR-0012 排版 2–3，用户需求 2026-10-09）：被阅读的文字跟着
+    /// 内容字号变，控件文字不变。打开窄条与反向输入框，标准档量一次，切到「特大」再量一次：
+    /// 窄条卡片正文与行高、反向输入框（紧凑档）随设置变，窄条搜索框（控件）始终是 14。
+    /// 特大档各渲一张 PNG 进数据目录，供人眼看有没有挤坏。
+    /// </summary>
+    private async void ProbeContentSize(AppShell shell)
+    {
+        shell.ToggleBar?.Invoke();
+        shell.ShowReverseInput?.Invoke();
+
+        async Task Settle()
+        {
+            for (var round = 0; round < 6; round++)
+            {
+                await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            }
+        }
+
+        var log = new StringBuilder();
+        void Note(string phase)
+        {
+            var bar = Windows.OfType<BarWindow>().FirstOrDefault();
+            var card = bar is null ? null : Descendants(bar).OfType<EntryBodyText>().FirstOrDefault(text => text.IsVisible);
+            var search = bar?.FindName("SearchBox") as TextBox;
+            var reverse = Windows.OfType<ReverseInputWindow>().FirstOrDefault();
+            var input = reverse?.FindName("InputBox") as TextBox;
+            var output = reverse?.FindName("OutputText") as TextBlock;
+            log.AppendLine(FormattableString.Invariant(
+                $"size|{phase}|card={card?.FontSize}|cardLine={card?.LineHeight}|search={search?.FontSize}|reverseInput={input?.FontSize}|reverseOutput={output?.FontSize}"));
+        }
+
+        await Settle();
+        Note("standard");
+
+        shell.TryUpdateSettings(settings => settings with { ContentFontSize = Shiyu.Core.ContentFontSize.Larger });
+        await Settle();
+        Note("larger");
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        if (Windows.OfType<BarWindow>().FirstOrDefault()?.Content is FrameworkElement barRoot)
+        {
+            RenderToPng(barRoot, Path.Combine(directory, "content-larger-bar.png"));
+        }
+
+        if (Windows.OfType<ReverseInputWindow>().FirstOrDefault()?.Content is FrameworkElement reverseRoot)
+        {
+            RenderToPng(reverseRoot, Path.Combine(directory, "content-larger-reverse.png"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "content-size.log"), log.ToString());
+    }
+
+    /// <summary>A window's content over the theme background, at 1.5×, into a PNG.</summary>
+    private void RenderToPng(FrameworkElement root, string path)
+    {
+        if (root.ActualWidth <= 0 || root.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        const double scale = 1.5;
+        var area = new Rect(0, 0, root.ActualWidth, root.ActualHeight);
+        var sheet = new DrawingVisual();
+        using (var context = sheet.RenderOpen())
+        {
+            context.DrawRectangle((Brush)FindResource("Brush.Background"), null, area);
+            context.DrawRectangle(new VisualBrush(root), null, area);
+        }
+
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(area.Width * scale), (int)Math.Ceiling(area.Height * scale),
+            96 * scale, 96 * scale, PixelFormats.Pbgra32);
+        bitmap.Render(sheet);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
@@ -286,6 +367,11 @@ public partial class App
             // 悬停提示是拾语的样子、跟随主题（用户需求 2026-10-05）。
             case "tooltip":
                 ProbeTooltipLook(shell);
+                break;
+
+            // 内容字号：被阅读的文字跟着变，控件文字不变（用户需求 2026-10-09）。
+            case "content-size":
+                ProbeContentSize(shell);
                 break;
 
             // 反向输入框的译文能用鼠标选取复制（用户需求 2026-10-05）。配 SHIYU_FAKE_BACKEND=1。
