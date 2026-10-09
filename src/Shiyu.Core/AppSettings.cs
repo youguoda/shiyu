@@ -175,10 +175,12 @@ public sealed record AppSettings
     /// Whether resting the pointer on a card opens its full preview by itself
     /// （悬停自动预览，用户需求 2026-10-05）. Off, the preview opens only while
     /// Space is held — the switch the user asked for in place of "type a zero
-    /// into the delay". On by default: the hover beat is how most people
-    /// discover the panel exists.
+    /// into the delay". Off by default（用户需求 2026-10-09：预览弹窗默认关闭）:
+    /// a panel that pops up wherever the pointer happens to rest gets in the way
+    /// more than it teaches; Space and the preview teach row cover discovery.
+    /// A settings file that already says true keeps saying it.
     /// </summary>
-    public bool PreviewOnHover { get; init; } = true;
+    public bool PreviewOnHover { get; init; }
 
     /// <summary>
     /// How long the pointer must rest on a card before the full preview

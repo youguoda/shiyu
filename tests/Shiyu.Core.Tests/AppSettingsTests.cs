@@ -197,11 +197,15 @@ public class AppSettingsTests
     }
 
     [Fact]
-    public void The_hover_preview_switch_defaults_on_and_round_trips()
+    public void The_hover_preview_switch_defaults_off_and_round_trips()
     {
+        // 用户需求 2026-10-09：预览弹窗默认关闭——没写这一项的设置文件读成关。
         Assert.True(AppSettings.TryParse("{}", out var fresh));
-        Assert.True(fresh.PreviewOnHover);
+        Assert.False(fresh.PreviewOnHover);
         Assert.Equal(500, fresh.PreviewHoverDelayMs);
+
+        Assert.True(AppSettings.TryParse("""{ "PreviewOnHover": true }""", out var on));
+        Assert.True(on.PreviewOnHover);
 
         Assert.True(AppSettings.TryParse(
             System.Text.Json.JsonSerializer.Serialize(
