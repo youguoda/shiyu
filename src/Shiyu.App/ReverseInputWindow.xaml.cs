@@ -543,11 +543,12 @@ internal partial class ReverseInputWindow : Window
 
         if (_session.Running)
         {
-            // 与面板相同的静态 accent 光标块（2×18，不闪烁，票 22）。
+            // 与面板相同的静态 accent 光标块（不闪烁，票 22）：2 宽、与字同高——字号随
+            // 内容字号走（2026-10-09），块也跟着走。
             var caret = new Rectangle
             {
                 Width = 2,
-                Height = 18,
+                Height = OutputText.FontSize,
                 Margin = new Thickness(2, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Bottom,
             };

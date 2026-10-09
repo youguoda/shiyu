@@ -6,7 +6,7 @@
 #     only ever the pid we started ourselves)
 #   - finding a window of that instance by its DIP width (windows of this
 #     app are size-fixed: bar 384 / panel 420 / quickbar 460 / settings 880 /
-#     library 1100 (ticket 24, was 1150) / reverse input 520 (ticket 43; its
+#     library 1100 (ticket 24, was 1150) / reverse input 440 (ticket 43, 520 until 2026-10-09; its
 #     height grows with the content); the app's WPF class names are
 #     per-instance GUIDs, so a width match plus pid match is the structural
 #     way to tell them apart)

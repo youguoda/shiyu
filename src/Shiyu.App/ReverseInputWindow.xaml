@@ -3,7 +3,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Shiyu.App"
-        Title="拾语 · 反向输入" Width="520" SizeToContent="Height" MinHeight="80" MaxHeight="800"
+        Title="拾语 · 反向输入" Width="440" SizeToContent="Height" MinHeight="80" MaxHeight="800"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" WindowStartupLocation="Manual" Topmost="True"
         FontSize="{DynamicResource Type.Body}"
@@ -21,44 +21,48 @@
       外壳同浮层家族（§4.7，票 20）：只画材质底，圆角 8、轮廓与投影归 DWM；DWM 拒收时由
       Backdrop.AttachShell 落自绘描边+阴影与 12 DIP 透明边距。
 
-      高度：输入框随内容长高（52→180），整窗钳在 80–800；窗口位置与"翻到上方后向上长"
+      高度：输入框随内容长高（44→160），整窗钳在 80–800；窗口位置与"翻到上方后向上长"
       在代码里按 ReverseInputPlacement（Core）算。
+
+      尺寸（用户需求 2026-10-09：反向输入框有些大）：宽 440（原 520）、外边距 10；输入与
+      输出都用紧凑内容字号 Type.ContentCompact——内容字号低一档，标准档 16/28（原 18/31），
+      随设置「内容字号」一起变。
     -->
     <Border x:Name="Shell" CornerRadius="{DynamicResource Radius.Overlay}"
             Background="{DynamicResource Brush.SurfaceMaterial}" BorderThickness="0">
-        <StackPanel Margin="12">
+        <StackPanel Margin="10">
 
             <!-- 输入框：隐式 TextBox 样式（SurfaceInput 底、聚焦转 Accent 描边）。多行：
                  Enter 是"往前走一步"，Shift+Enter 换行（PreviewKeyDown 里拦 Enter）。
                  IME：组字中的按键以 Key.ImeProcessed 到达，Enter/Esc/Tab 一律交给输入法。 -->
             <TextBox x:Name="InputBox" AcceptsReturn="True" TextWrapping="Wrap"
-                     MinHeight="52" MaxHeight="180" Padding="10,10"
+                     MinHeight="44" MaxHeight="160" Padding="10,8"
                      VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
-                     FontSize="{DynamicResource Type.Content}"
+                     FontSize="{DynamicResource Type.ContentCompact}"
                      AutomationProperties.Name="反向输入：要贴回去的文字"
                      ToolTip="Enter 往前走一步 · Shift+Enter 换行 · Tab 切换方向 · Ctrl+E 切换模板 · Esc 关闭"
                      TextChanged="OnInputChanged"/>
 
-            <!-- 输出：译文 / 整理好的提示词（18/31，第一视觉位）。等新结果期间旧输出淡显，
-                 流式中尾部挂静态 accent 光标块（2×18，与面板同一个，票 22；不另做闪烁动画）。
+            <!-- 输出：译文 / 整理好的提示词（紧凑内容字号，第一视觉位）。等新结果期间旧输出淡显，
+                 流式中尾部挂静态 accent 光标块（2 宽、与字同高，同面板，票 22；不另做闪烁动画）。
                  失败态用 TranslationUserErrorMapper 的人话（与面板一致），并附"去设置"。
                  结算之后换成 OutputBox：同样的字、同样的位置，能用鼠标选取、Ctrl+C 复制
                  （用户需求 2026-10-05）；流式中仍是 TextBlock——光标块只能内联在它里面，
                  流着的字也没人去选。 -->
-            <ScrollViewer x:Name="OutputScroll" Margin="0,8,0,0" MaxHeight="520"
+            <ScrollViewer x:Name="OutputScroll" Margin="0,8,0,0" MaxHeight="420"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Visibility="Collapsed">
                 <StackPanel>
                     <TextBlock x:Name="OutputText" Margin="4,0"
-                               FontSize="{DynamicResource Type.Content}"
-                               LineHeight="{DynamicResource Line.Content}"
+                               FontSize="{DynamicResource Type.ContentCompact}"
+                               LineHeight="{DynamicResource Line.ContentCompact}"
                                LineStackingStrategy="BlockLineHeight"
                                TextWrapping="Wrap"/>
                     <!-- 左边距 2 = TextBlock 的 4 减去 WPF 给 TextBox 正文加的 2 DIP 内缩。 -->
                     <TextBox x:Name="OutputBox" Style="{DynamicResource SelectableText}"
                              Margin="2,0" Visibility="Collapsed"
-                             FontSize="{DynamicResource Type.Content}"
-                             TextBlock.LineHeight="{DynamicResource Line.Content}"
+                             FontSize="{DynamicResource Type.ContentCompact}"
+                             TextBlock.LineHeight="{DynamicResource Line.ContentCompact}"
                              TextBlock.LineStackingStrategy="BlockLineHeight"
                              AutomationProperties.Name="译文（可选取复制）"/>
                     <local:InfoBar x:Name="ErrorBar" Visibility="Collapsed"

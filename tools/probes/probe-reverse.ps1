@@ -19,7 +19,7 @@
 #   4. read Notepad back through UIA: it must contain the output.
 #
 # Checks:
-#   - window:reverse-found                  the 520-DIP box opened
+#   - window:reverse-found                  the 440-DIP box opened
 #   - flow:reverse-output                   the fake backend's answer reached the box
 #   - a11y:reverse-all-controls-named       zero unnamed interactive elements
 #   - flow:reverse-paste                    Notepad received the output on Enter
@@ -122,12 +122,12 @@ function Get-NotepadText([int[]]$Pids) {
     return $all
 }
 
-# The box is 520 DIP wide; match it at any common monitor scale.
+# The box is 440 DIP wide (520 before 2026-10-09); match it at any common monitor scale.
 function Get-ReverseTree([int]$ProcessId) {
     foreach ($window in (Get-UiaWindowsOfPid $ProcessId)) {
         $rect = $window.Current.BoundingRectangle
         foreach ($scale in @(1.0, 1.25, 1.5, 1.75, 2.0)) {
-            if ([Math]::Abs($rect.Width - 520 * $scale) -le 12) {
+            if ([Math]::Abs($rect.Width - 440 * $scale) -le 12) {
                 return [pscustomobject]@{ Window = $window; Tree = (Get-UiaTree $window) }
             }
         }
@@ -181,9 +181,9 @@ try {
         SHIYU_PROBE_CLIPBOARD = '1'
     }
 
-    $hwnd = Wait-ProbeWindow $p.Id 520
+    $hwnd = Wait-ProbeWindow $p.Id 440
     if ($hwnd -eq [IntPtr]::Zero) {
-        Add-Check 'window:reverse-found' 'FAIL' 'no 520-DIP window of the probe pid'
+        Add-Check 'window:reverse-found' 'FAIL' 'no 440-DIP window of the probe pid'
         foreach ($name in $CheckNames[1..5]) { Add-Check $name 'SKIP' 'the box did not open' }
         return $script:Checks
     }
