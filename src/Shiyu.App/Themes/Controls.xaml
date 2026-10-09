@@ -359,6 +359,42 @@
         </Setter>
     </Style>
 
+    <!--
+      MenuRowButton：菜单行（弹层里的行，§4.7 菜单）：内容拉伸到行宽——左端字形+文案、
+      右端键帽或类别（§5.2 L0 教学），hover 状态块；Danger 行由调用方换前景色。
+      2026-10-09 从管理窗的资源里搬到这里：翻译面板与反向输入框的提示词模板列表也用它。
+    -->
+    <Style x:Key="MenuRowButton" TargetType="Button">
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Hover" CornerRadius="{DynamicResource Radius.Control}"
+                                Margin="1" Background="{DynamicResource Brush.StateHover}" Opacity="0"/>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Hover" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Hover" Property="Background" Value="{DynamicResource Brush.StatePressed}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- =====================================================================
          输入族。
          ===================================================================== -->

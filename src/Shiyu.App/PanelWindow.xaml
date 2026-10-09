@@ -46,22 +46,27 @@
                 <TextBlock x:Name="TargetLabel" Grid.Column="2" VerticalAlignment="Center"
                            Foreground="{DynamicResource Brush.TextSecondary}"/>
 
-                <!-- 提示词模板按钮（票 42）：点击按 TemplateCycle 循环并立即重跑。
-                     样式中性——FlyoutButton 配次级文字色：ADR-0012 #13 规定浮层静止态
-                     只有一处 accent，这一处已经给了模式分段的选中项。名字按显示宽度
-                     截断加省略号，tooltip 与无障碍名用全名（代码里随状态更新）。
-                     不加面板快捷键、不做弹出菜单：面板不接受焦点。 -->
+                <!-- 提示词模板 chip（票 42；用户需求 2026-10-09 改成与反向输入框一样的挑选：
+                     名字 + ▾，点开下方的 TemplateList，挑一个就重跑）。样式中性——FlyoutButton
+                     配次级文字色：ADR-0012 #13 规定浮层静止态只有一处 accent，这一处已经给了
+                     模式分段的选中项。名字按显示宽度截断加省略号，tooltip 与无障碍名用全名
+                     （代码里随状态更新）。不加面板快捷键：面板不接受焦点，Ctrl+E 只能靠全局
+                     热键，会从正在打字的应用手里抢键。 -->
                 <Button x:Name="TemplateButton" Grid.Column="3" Style="{DynamicResource FlyoutButton}"
                         Height="{DynamicResource Control.Height}" Padding="8,0" Margin="2,0,0,0"
-                        Cursor="Hand" Click="OnCycleTemplate" Visibility="Collapsed"
+                        Cursor="Hand" Click="OnTemplateButtonClick" Visibility="Collapsed"
                         AutomationProperties.Name="提示词模板，点击切换"
-                        ToolTip="点击切换提示词模板">
+                        ToolTip="点击选择提示词模板">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock x:Name="TemplateSeparator" Text="·" Margin="0,0,6,0"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
                         <TextBlock x:Name="TemplateName" MaxWidth="96" TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <TextBlock Text="&#xE70D;" Margin="6,0,0,0" VerticalAlignment="Center"
+                                   FontFamily="{DynamicResource Font.Icon}"
+                                   FontSize="{DynamicResource Size.IconS}"
                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
                     </StackPanel>
                 </Button>
@@ -83,6 +88,13 @@
                                FontSize="{DynamicResource Size.IconS}"/>
                 </Button>
             </Grid>
+
+            <!-- 提示词模板列表（用户需求 2026-10-09）：与反向输入框同一份行（TemplateMenu），
+                 但不装进 Popup——面板不接受焦点，弹出层"点外面就关"靠的鼠标捕获在后台线程
+                 拿不全，会留着不走。所以它直接长在头部下方（面板随内容长高，越出屏幕时
+                 ClampIntoWorkArea 拉回）；挑一个、再点 chip、点面板别处、Esc 都收起。 -->
+            <ContentControl x:Name="TemplateList" Visibility="Collapsed" Focusable="False"
+                            HorizontalAlignment="Left" Margin="0,0,0,8"/>
 
             <!-- 原文是译文的"出处"而非第一视觉位：14/24 次级色，最多两行，
                  尾部省略、tooltip 全文（§6.2 句子态）。逐句与单词模式下整块

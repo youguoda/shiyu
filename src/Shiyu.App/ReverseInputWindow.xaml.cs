@@ -608,15 +608,10 @@ internal partial class ReverseInputWindow : Window
             return;
         }
 
-        var host = new StackPanel { MinWidth = 200 };
-        foreach (var template in PromptTemplates.All(_settings))
-        {
-            host.Children.Add(TemplateRow(template));
-        }
-
         var list = _templateList = new Popup
         {
-            Child = BarWindow.WithPopupFont(BarWindow.MenuSurface(host)),
+            Child = BarWindow.WithPopupFont(
+                TemplateMenu.Build(PromptTemplates.All(_settings), _session.RuntimeTemplate.Id, PickTemplate)),
             PlacementTarget = TemplateChip,
             Placement = PlacementMode.Top,
             StaysOpen = false,
@@ -626,43 +621,12 @@ internal partial class ReverseInputWindow : Window
         list.IsOpen = true;
     }
 
-    private UIElement TemplateRow(PromptTemplate template)
+    private void PickTemplate(PromptTemplate template)
     {
-        var current = template.Id == _session.RuntimeTemplate.Id;
-
-        // 左是对勾与名字，右是它的类别：翻译 / 改写（改写类不自动跑，按 Enter 才跑）。
-        var name = new TextBlock { Text = (current ? "✓  " : "     ") + template.Name };
-        var kind = new TextBlock
-        {
-            Text = template.Kind == PromptTemplateKind.Rewrite ? "改写" : "翻译",
-            MinWidth = 36,
-            Margin = new Thickness(16, 0, 0, 0),
-            TextAlignment = TextAlignment.Right,
-        };
-        kind.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        DockPanel.SetDock(kind, Dock.Right);
-
-        var content = new DockPanel();
-        content.Children.Add(kind);
-        content.Children.Add(name);
-
-        var row = new Button
-        {
-            Content = content,
-            Padding = new Thickness(10, 5, 10, 5),
-            Margin = new Thickness(0, 0, 0, 1),
-            Cursor = Cursors.Hand,
-        };
-        row.SetResourceReference(BackgroundProperty, "Brush.Surface");
-        AutomationProperties.SetName(row, $"{template.Name}（{(template.Kind == PromptTemplateKind.Rewrite ? "改写" : "翻译")}）");
-        row.Click += (_, _) =>
-        {
-            CloseTemplateList();
-            Apply(_session.SelectTemplate(template));
-            _template = _session.RuntimeTemplate;
-            InputBox.Focus();
-        };
-        return row;
+        CloseTemplateList();
+        Apply(_session.SelectTemplate(template));
+        _template = _session.RuntimeTemplate;
+        InputBox.Focus();
     }
 
     private void CloseTemplateList()

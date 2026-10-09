@@ -294,7 +294,7 @@ public partial class App
     }
 
     /// <summary>A window's content over the theme background, at 1.5×, into a PNG.</summary>
-    private void RenderToPng(FrameworkElement root, string path)
+    internal static void RenderToPng(FrameworkElement root, string path)
     {
         if (root.ActualWidth <= 0 || root.ActualHeight <= 0)
         {
@@ -306,7 +306,7 @@ public partial class App
         var sheet = new DrawingVisual();
         using (var context = sheet.RenderOpen())
         {
-            context.DrawRectangle((Brush)FindResource("Brush.Background"), null, area);
+            context.DrawRectangle((Brush)Current.FindResource("Brush.Background"), null, area);
             context.DrawRectangle(new VisualBrush(root), null, area);
         }
 
@@ -410,6 +410,11 @@ public partial class App
 
             case "panel":
                 _modules!.Translation.ShowPanel(text);
+                break;
+
+            // 翻译面板像反向输入框一样挑模板（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。
+            case "panel-templates":
+                _modules!.Translation.ProbeTemplatePicker("hello panel templates");
                 break;
 
             // 票 43：反向输入框。探针没有全局热键，所以直接开；脚本在此之前把记事本置于前台——

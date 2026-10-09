@@ -226,7 +226,16 @@ public partial class PanelWindow : Window
         // 取的是"当下"的注册表（_hotkeys 每次现取）：重挂时它已是重建之后的新注册表。
         _escape = new ScopedHold(() => _hotkeys().TryRegisterScoped(
             new Hotkey(HotkeyModifiers.None, 0x1B, "关闭面板"),
-            () => Dispatcher.Invoke(Dismiss)));
+            () => Dispatcher.Invoke(OnEscape)));
+
+        // 模板列表开着时，点面板别处就收起它（列表与 chip 上的按下各归它们自己）。
+        Shell.PreviewMouseDown += (_, _) =>
+        {
+            if (TemplateList.IsVisible && !TemplateList.IsMouseOver && !TemplateButton.IsMouseOver)
+            {
+                CloseTemplateList();
+            }
+        };
         _target = settings.TargetLanguage;
         _source = settings.SourceLanguage;
         _settings = settings;
@@ -275,6 +284,7 @@ public partial class PanelWindow : Window
     /// </summary>
     public async Task TranslateAsync(string text, Action? onDisplayed = null)
     {
+        CloseTemplateList();
         _original = text;
         _cardRun++;
         _lastError = null;
@@ -791,10 +801,15 @@ public partial class PanelWindow : Window
 
         TemplateButton.Visibility = state.ButtonVisible ? Visibility.Visible : Visibility.Collapsed;
         TemplateName.Text = _template.Name;
+        if (!state.ButtonVisible)
+        {
+            // 单词态、模板不生效时 chip 退场：它打开的列表不能比它活得久。
+            CloseTemplateList();
+        }
 
         // 按钮上的名字按显示宽度截断；tooltip 与无障碍名用全名，随状态更新
         // （探针的 a11y 全件具名扫描要求零无名件）。
-        TemplateButton.ToolTip = $"{_template.Name} · 点击切换提示词模板";
+        TemplateButton.ToolTip = $"{_template.Name} · 点击选择提示词模板";
         AutomationProperties.SetName(TemplateButton, state.AccessibleName);
 
         var direction = state.DirectionVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -807,19 +822,58 @@ public partial class PanelWindow : Window
     }
 
     /// <summary>
-    /// 点击：按 TemplateCycle 循环，并立即用新模板重跑当前原文（票 42）。走换方向那条
-    /// 重跑路径（<see cref="OnSwapDirection"/> → <see cref="RunTranslation"/>），在途请求
-    /// 照旧取消。只改运行时状态，不写设置——理由见 <see cref="_template"/>。
+    /// 点 chip：开合模板列表（用户需求 2026-10-09：与反向输入框一样挑，原来是点一下循环到
+    /// 下一个）。列表是全部模板，包括不在 Ctrl+E 循环里的那些，当前的打勾。
     /// </summary>
-    private async void OnCycleTemplate(object sender, RoutedEventArgs e)
+    private void OnTemplateButtonClick(object sender, RoutedEventArgs e)
     {
-        // async void 逃出去的异常是进程级崩溃（O-05）：与换向同一条纪律。
+        if (TemplateList.IsVisible)
+        {
+            CloseTemplateList();
+            return;
+        }
+
+        TemplateList.Content = TemplateMenu.Build(PromptTemplates.All(_settings), _template.Id, PickTemplate);
+        TemplateList.Visibility = Visibility.Visible;
+    }
+
+    private void CloseTemplateList()
+    {
+        TemplateList.Visibility = Visibility.Collapsed;
+        TemplateList.Content = null;
+    }
+
+    /// <summary>Esc：先收模板列表；没开着才关面板（列表是一层，同反向输入框）。</summary>
+    private void OnEscape()
+    {
+        if (TemplateList.IsVisible)
+        {
+            CloseTemplateList();
+            return;
+        }
+
+        Dismiss();
+    }
+
+    private async void PickTemplate(PromptTemplate template)
+    {
+        CloseTemplateList();
+        await SwitchTemplate(template);
+    }
+
+    /// <summary>
+    /// 换到选中的模板，并立即用它重跑当前原文（票 42）。走换方向那条重跑路径
+    /// （<see cref="OnSwapDirection"/> → <see cref="RunTranslation"/>），在途请求照旧取消。
+    /// 只改运行时状态，不写设置——理由见 <see cref="_template"/>。
+    /// </summary>
+    private async Task SwitchTemplate(PromptTemplate next)
+    {
+        // 从 async void 进来，逃出去的异常是进程级崩溃（O-05）：与换向同一条纪律。
         try
         {
-            var next = PromptTemplates.Next(_template, PromptTemplates.Cycle(_settings));
             if (next.Id == _template.Id)
             {
-                // 循环里没有别的可换：不白白重跑一遍。
+                // 挑的就是当前这个：不白白重跑一遍。
                 return;
             }
 
@@ -1176,6 +1230,7 @@ public partial class PanelWindow : Window
     {
         _inFlight?.Cancel();
         ReleaseEscape();
+        CloseTemplateList();
 
         // 面板没了，朗读也该停：读完一个没人看的译文是对接下来的打扰。
         _speech?.Stop();

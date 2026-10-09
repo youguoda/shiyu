@@ -67,7 +67,7 @@ internal sealed class TranslationModule
             _panel ??= new PanelWindow(
                 // O-43：面板持注册表取用口而非一次性捕获——注册表随设置
                 // 保存整体重建，退役实例现在会大声拒绝而不是悄悄失灵。
-                shell.Hotkeys, shell.Writer, () => shell.Settings.BuildTranslationBackend(), shell.Settings,
+                shell.Hotkeys, shell.Writer, BuildPanelBackend, shell.Settings,
                 SaveTranslationToHistory,
                 dictionary: BuildDictionary,
                 speech: _speech,
@@ -164,6 +164,35 @@ internal sealed class TranslationModule
         KeepTranslation(original, translated);
         _shell.TellUser("译文已存入历史。");
     }
+
+    private ITranslationBackend BuildPanelBackend()
+    {
+#if DEBUG
+        // 探针：确定性的假后端（"[EN] " + 原文），与反向输入框同一个开关 SHIYU_FAKE_BACKEND=1。
+        if (DebugOverrides.FakeBackend)
+        {
+            return new DebugFakeBackend();
+        }
+#endif
+
+        return _shell!.Settings.BuildTranslationBackend();
+    }
+
+#if DEBUG
+    /// <summary>探针命令 panel-templates 的入口（见 PanelWindow.ProbeTemplatePicker）。</summary>
+    internal async void ProbeTemplatePicker(string text)
+    {
+        ShowPanel(text);
+        for (var waited = 0; waited < 50 && _panel is not { IsVisible: true }; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        var log = _panel is null ? "no-panel" + Environment.NewLine : await _panel.ProbeTemplatePicker();
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-templates.log"), log + "done" + Environment.NewLine);
+    }
+#endif
 
     /// <summary>
     /// Files a kept translation, silently — 「自动复制译文」 keeps every result
