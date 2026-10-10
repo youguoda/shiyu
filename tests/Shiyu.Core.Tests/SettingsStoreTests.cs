@@ -29,21 +29,21 @@ public class SettingsStoreTests : IDisposable
     [Fact]
     public void Interleaved_field_updates_from_two_writers_both_survive()
     {
-        new AppSettings { TargetLanguage = "Chinese", BarAlwaysOnTop = true }
+        new AppSettings { TargetLanguage = "Chinese", BarPinned = false }
             .Save(SettingsPath);
         var store = SettingsStore.Load(SettingsPath).Store;
 
-        // S1 的形状：设置窗攥着开窗快照；窄条的图钉在此期间改了置顶
+        // S1 的形状：设置窗攥着开窗快照；窄条的图钉在此期间改了钉住
         // （只写它自己那个字段）；随后设置窗保存也只提交它改过的字段。
-        store.Update(s => s with { BarAlwaysOnTop = false }, SettingsPath);
+        store.Update(s => s with { BarPinned = true }, SettingsPath);
         store.Update(latest => latest with { TargetLanguage = "Japanese" }, SettingsPath);
 
         // 两边的修改都活着——不再有"最后保存的一方获胜"。
-        Assert.False(store.Current.BarAlwaysOnTop);
+        Assert.True(store.Current.BarPinned);
         Assert.Equal("Japanese", store.Current.TargetLanguage);
 
         var onDisk = AppSettings.Load(SettingsPath);
-        Assert.False(onDisk.BarAlwaysOnTop);
+        Assert.True(onDisk.BarPinned);
         Assert.Equal("Japanese", onDisk.TargetLanguage);
     }
 

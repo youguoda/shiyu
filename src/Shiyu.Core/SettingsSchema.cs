@@ -85,7 +85,9 @@ public static class SettingsSchema
     /// Every id that existed before the five-page redesign still exists with
     /// the same meaning — pages moved around their items, items never
     /// renamed underneath the settings file, the search keywords, or the
-    /// deep links.
+    /// deep links. 例外只有随常驻窄条一起退役的三项（用户需求 2026-10-10）：
+    /// hotkey.bar、bar.at-cursor、look.bar-topmost 并进了 bar.pinned——功能
+    /// 本身没了，不是改名，没有深链指着它们。
     /// </summary>
     public static readonly IReadOnlyList<SettingsPage> Tree =
     [
@@ -134,17 +136,12 @@ public static class SettingsSchema
                     Keywords: ["备份", "导出", "导入", "加密"],
                     Icon: "E74E"))),
 
-        new SettingsPage("bar", "窄条", "E77F", "光标旁的常驻工具条：位置、密度与悬停动作。",
-            new SettingsSection("bar.behaviour", "呼出与置顶",
+        new SettingsPage("bar", "窄条", "E77F", "快速粘贴呼出的取用面板：去留、密度与悬停动作。",
+            new SettingsSection("bar.behaviour", "呼出与钉住",
                 new SettingsItem(
-                    "bar.at-cursor", "光标旁呼出", SettingsControl.Toggle,
-                    Hint: "窄条以左上角对准鼠标指针出现，屏幕边上放不下时就近挪回屏幕内；关闭则固定在你上次拖放的位置。快速粘贴（Ctrl+Shift+V）总是出现在输入光标所在行的正下方。",
-                    Keywords: ["位置", "光标", "呼出", "弹出", "输入"],
-                    Icon: "E7B3"),
-                new SettingsItem(
-                    "look.bar-topmost", "保持在最前", SettingsControl.Toggle,
-                    Hint: "窄条保持在其他窗口之上；关闭后可被其他窗口遮挡，置顶状态由窄条头部的图钉按钮随时切换。",
-                    Keywords: ["置顶", "最前", "保持在最前", "图钉", "压住", "遮挡", "窗口", "浮在最上层"],
+                    "bar.pinned", "常驻钉住", SettingsControl.Toggle,
+                    Hint: "窄条由快速粘贴在输入光标旁呼出。关闭时选一条贴完就收起，点别处也收起；开启后贴完、点别处都不收，留在原地并保持在其他窗口之上，按 Esc 收起。窄条右上角的图钉随时切换。",
+                    Keywords: ["钉住", "常驻", "图钉", "置顶", "最前", "保持在最前", "不消失", "一直显示", "收起", "遮挡", "浮在最上层"],
                     Icon: "E718")),
             new SettingsSection("bar.density", "密度",
                 new SettingsItem(
@@ -352,19 +349,14 @@ public static class SettingsSchema
         new SettingsPage("hotkeys", "快捷键", "E765", "全局按键。点一下卡片，直接按下组合键。",
             new SettingsSection("hotkeys.all", "全局",
                 new SettingsItem(
-                    "hotkey.bar", "打开窄条", SettingsControl.Hotkey,
-                    Hint: "唤出/收起常驻窄条。",
-                    Keywords: ["窄条", "快捷键"],
-                    Icon: "E77F"),
-                new SettingsItem(
                     "hotkey.quickbar", "快速粘贴", SettingsControl.Hotkey,
-                    Hint: "以粘贴模式呼出窄条：在插入符旁出现（取不到退鼠标），打字过滤、Enter 或编号键粘贴后消失，失焦即隐；Ctrl+Shift+B 的窄条是常驻的，用来翻看与整理。",
-                    Keywords: ["快速粘贴", "粘贴", "快捷键"],
+                    Hint: "呼出窄条：在输入光标旁出现（取不到就在鼠标处），打字过滤，Enter 或编号键贴回原处。贴完、点别处即收起；想让它一直留着，点窄条右上角的图钉，或在「窄条」页打开「常驻钉住」。",
+                    Keywords: ["快速粘贴", "粘贴", "窄条", "呼出", "快捷键"],
                     Icon: "E8C8"),
                 new SettingsItem(
                     "winv.takeover", "也用 Win+V 呼出", SettingsControl.Toggle,
                     Parent: "hotkey.quickbar",
-                    Hint: "让 Win+V 以粘贴模式呼起窄条，代替系统剪贴板面板——选一条、粘贴、消失。默认关闭；关闭即刻还原，拾语退出或被强杀时 Win+V 自动回到系统行为。与「快速粘贴」热键并存：两者都开时，Win+V 与该热键都唤起粘贴模式。其它 Win 组合键不受影响。",
+                    Hint: "让 Win+V 也呼出窄条，代替系统剪贴板面板——选一条、粘贴。默认关闭；关闭即刻还原，拾语退出或被强杀时 Win+V 自动回到系统行为。与「快速粘贴」热键并存：两者都开时，Win+V 与该热键呼出的是同一扇窄条。其它 Win 组合键不受影响。",
                     Keywords: ["win", "winv", "接管", "系统", "剪贴板", "面板", "热键"],
                     Icon: "E765"),
                 new SettingsItem(

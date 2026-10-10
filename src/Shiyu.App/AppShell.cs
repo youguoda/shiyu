@@ -75,9 +75,10 @@ internal sealed class AppShell
 
     // --- 跨模块中转位：宿主装配完成时接线，模块经它们找彼此 ---
 
-    public Action? ToggleBar { get; set; }
-
-    /// <summary>快速粘贴（票 26）：以粘贴模式呼出窄条——贴完/失焦即隐的呼出意图。</summary>
+    /// <summary>
+    /// 快速粘贴：在插入符旁呼出窄条（用户需求 2026-10-10 起窄条唯一的入口）。贴完、
+    /// 失焦收不收看「常驻钉住」。
+    /// </summary>
     public Action? ShowQuickPaste { get; set; }
     public Action? TranslateSelection { get; set; }
     public Action? TranslateClipboard { get; set; }
@@ -109,7 +110,7 @@ internal sealed class AppShell
     public Action? ShowUpdateWindow { get; set; }
     public Func<IStreamingModel>? BuildStreamingModel { get; set; }
 
-    /// <summary>窄条被呼出/收起（热键或托盘菜单）。引导「试一试」靠它打勾（§5.3）。</summary>
+    /// <summary>窄条被呼出（快速粘贴的热键或托盘菜单）。引导「试一试」靠它打勾（§5.3）。</summary>
     public event Action? BarSummoned;
 
     /// <summary>从窄条粘贴了一条（Enter 或编号键）。引导「试一试」靠它打勾。</summary>

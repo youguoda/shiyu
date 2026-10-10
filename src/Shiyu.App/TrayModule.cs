@@ -17,7 +17,6 @@ namespace Shiyu.App;
 internal sealed class TrayModule
 {
     /// <summary>菜单行的稳定标识（回传事件的 Key）。</summary>
-    private const string BarKey = "bar";
     private const string QuickPasteKey = "quick-paste";
     private const string TranslateClipboardKey = "translate-clipboard";
     private const string ReverseInputKey = "reverse-input";
@@ -83,14 +82,14 @@ internal sealed class TrayModule
     }
 
     /// <summary>
-    /// §5.2 的菜单结构：四个有键的动作（票 43 起含反向输入）/ 分隔 / 管理历史（设了键才带列）、
+    /// §5.2 的菜单结构：三个有键的动作（票 43 起含反向输入；用户需求 2026-10-10 撤掉
+    /// 「打开窄条」，窄条只从快速粘贴进）/ 分隔 / 管理历史（设了键才带列）、
     /// 设置、键位速查 / 分隔 / 检查更新、退出。标签与加速键全部由
     /// <see cref="KeyMap"/> 从现设置渲染——改键即改菜单。
     /// </summary>
     internal static IReadOnlyList<TrayMenuRow> MenuRows(AppSettings settings)
     =>
     [
-        new(BarKey, KeyMap.TrayLabel(HotkeyAction.Bar), KeyMap.Combination(HotkeyAction.Bar, settings)),
         new(QuickPasteKey, KeyMap.TrayLabel(HotkeyAction.QuickBar), KeyMap.Combination(HotkeyAction.QuickBar, settings)),
         new(TranslateClipboardKey, KeyMap.TrayLabel(HotkeyAction.ClipboardTranslate), KeyMap.Combination(HotkeyAction.ClipboardTranslate, settings)),
         new(ReverseInputKey, KeyMap.TrayLabel(HotkeyAction.ReverseInput), KeyMap.Combination(HotkeyAction.ReverseInput, settings)),
@@ -107,11 +106,10 @@ internal sealed class TrayModule
     {
         switch (key)
         {
-            case BarKey:
-                shell.ToggleBar?.Invoke();
-                break;
             case QuickPasteKey:
-                shell.ShowQuickPaste?.Invoke();
+                // 同反向输入：窄条要记下"贴回哪扇窗"，菜单收起的那一拍里前台还是拾语的
+                // 消息窗口。托盘成了窄条唯一的手动入口（用户需求 2026-10-10），这一拍不能省。
+                RunAfterMenuSettles(() => shell.ShowQuickPaste?.Invoke());
                 break;
             case TranslateClipboardKey:
                 shell.TranslateClipboard?.Invoke();

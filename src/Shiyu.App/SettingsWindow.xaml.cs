@@ -1552,7 +1552,6 @@ public partial class SettingsWindow : Window
                         CaptureHotkey = "Ctrl+Shift+Z",
                         ClipboardTranslateHotkey = "Ctrl+Shift+X",
                         QuickBarHotkey = "Ctrl+Shift+V",
-                        BarHotkey = "Ctrl+Shift+B",
                         LibraryHotkey = string.Empty,
                         ReverseInputHotkey = new AppSettings().ReverseInputHotkey,
                     },

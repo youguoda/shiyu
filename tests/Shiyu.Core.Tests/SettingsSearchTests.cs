@@ -49,7 +49,7 @@ public class SettingsSearchTests
     [Fact]
     public void Results_carry_their_page_and_section()
     {
-        var hit = SettingsSearch.Find("快捷键").Single(item => item.Item.Id == "hotkey.bar");
+        var hit = SettingsSearch.Find("快捷键").Single(item => item.Item.Id == "hotkey.quickbar");
 
         Assert.Equal("快捷键", hit.PageTitle);
         Assert.Equal("全局", hit.SectionTitle);

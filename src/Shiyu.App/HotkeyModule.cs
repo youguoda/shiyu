@@ -74,12 +74,9 @@ internal sealed class HotkeyModule
             [HotkeyAction.CaptureSelection] = () => shell.TranslateSelection?.Invoke(),
 
             // Ctrl+Shift+V sits next to the paste the user already knows.
-            // 票 26 之后它呼出的是粘贴模式的窄条——选一条、贴、消失（ADR-
-            // 0012 #8 的两种呼出意图之一）。
+            // 用户需求 2026-10-10 起它是窄条唯一的入口：在插入符旁呼出，
+            // 贴完走还是留下看「常驻钉住」（ADR-0012 #8 修订）。
             [HotkeyAction.QuickBar] = () => shell.ShowQuickPaste?.Invoke(),
-
-            // The resident narrow bar: summoned and hidden by the same key.
-            [HotkeyAction.Bar] = () => shell.ToggleBar?.Invoke(),
 
             // The escape hatch. Without it the user cannot tell a filter that
             // judged wrongly from a tool that broke, and has no way to insist.
@@ -156,9 +153,9 @@ internal sealed class HotkeyModule
                 {
                     _winV = new WinVHook();
 
-                    // Win+V 的心智是"选一条、粘贴、消失"（ADR-0012 #8）——
-                    // 接管后唤起的是粘贴模式的窄条，不是常驻条。换轨常驻
-                    // 的钥匙是 Ctrl+Shift+B。
+                    // Win+V 的心智是"选一条、粘贴"（ADR-0012 #8）——接管后
+                    // 唤起的就是快速粘贴的同一扇窄条；贴完走不走，照样看
+                    // 「常驻钉住」（2026-10-10 修订）。
                     _winV.Triggered += () => shell.ShowQuickPaste?.Invoke();
                 }
                 catch (Win32Exception failure)

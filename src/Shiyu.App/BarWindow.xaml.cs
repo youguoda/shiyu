@@ -9,10 +9,12 @@ using Shiyu.Windows;
 namespace Shiyu.App;
 
 /// <summary>
-/// The resident narrow bar (ticket 12): about 360px wide, no system chrome,
-/// topmost, dragged by its background and resized by a grip, summoned and
-/// hidden by hotkey. It serves the dozens-of-times-a-day quick reads; the
-/// full library window stays for the weekly tidy and is untouched by this.
+/// The narrow bar (ticket 12): about 360px wide, no system chrome,
+/// topmost, dragged by its background and resized by a grip, summoned at the
+/// caret by the quick-paste hotkey — its only entrance since 用户需求
+/// 2026-10-10 — and gone after the paste unless pinned (常驻钉住). It serves
+/// the dozens-of-times-a-day quick reads; the full library window stays for
+/// the weekly tidy and is untouched by this.
 ///
 /// List structure follows the issue 02 spike: pinned cards stacked above the
 /// scrolling region (visually identical to overlaying, no scroll sync), main
@@ -64,14 +66,22 @@ internal partial class BarWindow : Window
 
     private BarCard? _selected;
     private AppSettings _settings;
+
+    /// <summary>
+    /// 贴回哪扇窗。呼出那一刻记一次；钉住的窄条一直开着，用户在别的窗口里
+    /// 打了一阵字再回来点卡片，要贴回的是他刚才所在的那扇——点下窄条的那一刻
+    /// 再记一次（<see cref="NoteClickActivation"/>）。
+    /// </summary>
     private ForegroundWindow _returnTo;
 
     /// <summary>
-    /// 当前呼出意图（票 26 合并后，ADR-0012 #8 的两种）：粘贴模式 = 锚插入符
-    /// 出现、贴完/失焦即隐；常驻模式 = 原行为，失焦不消失。Enter/编号粘贴、
-    /// Esc、筛选与键帽两种模式同一套——差别的只有"什么时候走"。
+    /// 一次呼出正开着（用户需求 2026-10-10 起只有快速粘贴一种呼出）。贴完、
+    /// 失焦收不收看 <see cref="AppSettings.BarPinned"/>：没钉住即贴即走、点别处
+    /// 即隐；钉住了都不收。Enter/编号粘贴、Esc、筛选与键帽钉不钉同一套——差别
+    /// 只有"什么时候走"。隐藏路径先清它：Hide() 会让窗口失去激活，失焦处理不能
+    /// 把正在结束的这一次当成再隐藏一次的理由。
     /// </summary>
-    private bool _pasteMode;
+    private bool _summoned;
 
     /// <summary>Raised when the window is moved or resized; the owner persists geometry, throttled its own way.</summary>
     public event Action? GeometryChanged;
@@ -80,12 +90,15 @@ internal partial class BarWindow : Window
     public event Action? Pasted;
 
     /// <summary>
-    /// 窄条头部的图钉想要的置顶状态（票 39 / O-20）：只上报一个布尔值，
-    /// 由拥有者经 SettingsStore 落一个字段。窗口自己不再写设置——它手里
-    /// 那份快照曾经能把别人的改动整份抹掉（S1/S2）。置顶的实际生效走
-    /// <see cref="ApplySettings"/> 回流。
+    /// 窄条头部的图钉想要的钉住状态（票 39 / O-20 的做法，用户需求 2026-10-10
+    /// 起是「常驻钉住」）：只上报一个布尔值，由拥有者经 SettingsStore 落一个
+    /// 字段。窗口自己不写设置——它手里那份快照曾经能把别人的改动整份抹掉
+    /// （S1/S2）。生效走 <see cref="ApplySettings"/> 回流。
     /// </summary>
-    public event Action<bool>? TopmostWanted;
+    public event Action<bool>? PinWanted;
+
+    /// <summary>头部的齿轮：打开设置。窗口只上报意愿，拥有者决定落到哪一页。</summary>
+    public event Action? SettingsRequested;
 
     public BarWindow(
         EntryStore store,
@@ -177,10 +190,17 @@ internal partial class BarWindow : Window
         PinnedList.ItemsSource = _pinned;
         Cards.ItemsSource = _cards;
 
-        // The pin state is a setting, not a mood (票 39): whatever the file
-        // says is how the window opens, and the header chrome agrees with it.
-        Topmost = _settings.BarAlwaysOnTop;
-        SyncTopmostChrome();
+        // Always in front while it is up（用户需求 2026-10-10：「保持在最前」
+        // 并进了钉住）——没钉住时它只在用户正用着它的时候开着，钉住了就该一直
+        // 看得见。钉住本身是设置，不是心情（票 39）：文件怎么说，头部就怎么画。
+        Topmost = true;
+        SyncPinChrome();
+
+        // 点下没激活的窄条那一刻，前台还是用户刚才所在的窗口：钉住的窄条贴回去
+        // 靠这一刻记下的那扇窗。
+        SourceInitialized += (_, _) =>
+            System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle)
+                ?.AddHook(NoteClickActivation);
 
         RestoreGeometry();
         RefreshTagChoices();
@@ -201,6 +221,7 @@ internal partial class BarWindow : Window
             || settings.BarFileCount != _settings.BarFileCount
             || settings.BarCardTooltips != _settings.BarCardTooltips
             || !settings.BarActions.SequenceEqual(_settings.BarActions);
+        var pinChanged = settings.BarPinned != _settings.BarPinned;
 
         _settings = settings;
 
@@ -209,69 +230,63 @@ internal partial class BarWindow : Window
         _previewPolicy = PreviewPolicy.For(settings, () => Environment.TickCount64);
         _refreshPolicy.ApplySettings(settings.LightweightWhenHidden);
         ArmPreviewTick();
-        ApplyTopmost(settings.BarAlwaysOnTop);
+        if (pinChanged)
+        {
+            SyncPinChrome();
+
+            // 在设置页把钉住关掉时窄条开着、却不是前台：没钉住的窄条只在用户
+            // 正用着它时开着，那就照失焦的规矩收起。用头部图钉关掉时它正是
+            // 前台，留到下一次点别处。
+            if (!settings.BarPinned && _summoned && IsVisible && !IsActive)
+            {
+                HideAfterFocusLost();
+            }
+        }
+
         if (affectsLayout)
         {
             Rebuild();
         }
     }
 
-    // --- the pin (票 39) ---------------------------------------------------------
+    // --- the pin (用户需求 2026-10-10，接替票 39 的置顶钮) ------------------------
 
     /// <summary>
-    /// The header pin. Topmost is the resident bar's working posture; turning
-    /// it off is a deliberate act, written to the settings the moment it
-    /// happens so the posture survives the restart. It is a mode, not a layer:
-    /// it never joins the Esc stack. Only the wish is reported — the change
-    /// lands through the store and returns via ApplySettings, so a failed
-    /// save never leaves the pin asserting something untrue.
+    /// The header pin = 常驻钉住: pinned, the bar stays after a paste and when
+    /// the user clicks elsewhere; unpinned, it is gone after either. It is a
+    /// mode, not a layer: it never joins the Esc stack, and Esc hides a pinned
+    /// bar like any other. Only the wish is reported — the change lands
+    /// through the store and returns via ApplySettings, so a failed save
+    /// never leaves the pin asserting something untrue.
     /// </summary>
-    private void OnTopmostToggle(object sender, RoutedEventArgs e)
+    private void OnPinToggle(object sender, RoutedEventArgs e)
     {
-        TopmostWanted?.Invoke(!Topmost);
-    }
-
-    private void ApplyTopmost(bool topmost)
-    {
-        if (Topmost == topmost)
-        {
-            return;
-        }
-
-        Topmost = topmost;
-        SyncTopmostChrome();
-
-        // Degradation policy (票 39 评审定案): the layer ANCHORED to this
-        // window — the preview panel — follows the bar's z-tier, so a
-        // covered bar is never shadowed by its own floating pane. The
-        // badge and the translation panel are independent
-        // surfaces summoned by copies anywhere, not bar layers; they keep
-        // their own Topmost.
-        SyncFloatingLayers();
+        PinWanted?.Invoke(!_settings.BarPinned);
     }
 
     /// <summary>
-    /// The topmost button's face: accented while kept in front, quiet otherwise.
-    /// 字形是 E74A（上箭头，"置顶"的中文惯用形，非图钉）——经票 39 的双字体
-    /// cmap 探测选定：Segoe Fluent Icons 与 Segoe MDL2 Assets 的 cmap 都含
-    /// U+E74A，Windows 10 回退不断字。"保持在最前"与卡片的"条目置顶"
-    /// （E718/E77A）从此不再共用一个图钉（U-19）。
+    /// The pin's face: a filled accent pin (E841) while pinned, the hollow pin
+    /// (E718) in the button's own quiet colour otherwise. 卡片的"条目置顶"在
+    /// 悬停托盘里只用 E718/E77A 两态，从不出现实心那一枚——U-19 要的"一个字形
+    /// 一个意思"靠这一枚实心图钉与它所在的位置（头部，不在卡片上）。
     /// </summary>
-    private void SyncTopmostChrome()
+    private void SyncPinChrome()
     {
-        if (Topmost)
+        if (_settings.BarPinned)
         {
-            TopmostGlyph.Text = "\uE74A";
-            TopmostGlyph.SetResourceReference(ForegroundProperty, "Brush.Accent");
-            TopmostToggle.ToolTip = "保持在最前：已开启（点击后窄条可被其他窗口遮挡）";
+            PinGlyph.Text = "\uE841";
+            PinGlyph.SetResourceReference(ForegroundProperty, "Brush.Accent");
+            PinToggle.ToolTip = "常驻钉住：已开启。贴完、点别处都不收起，Esc 收起；点击取消";
         }
         else
         {
-            TopmostGlyph.Text = "\uE74A";
-            TopmostGlyph.SetResourceReference(ForegroundProperty, "Brush.TextSecondary");
-            TopmostToggle.ToolTip = "保持在最前：已关闭（点击恢复位于其他窗口之上）";
+            PinGlyph.Text = "\uE718";
+            PinGlyph.ClearValue(ForegroundProperty);
+            PinToggle.ToolTip = "常驻钉住：点击后窄条贴完、点别处都不收起";
         }
     }
+
+    private void OnSettingsClicked(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
 
     /// <summary>
     /// 品牌钮（§6.1 第 1 行）：单击打开管理窗——窄条是"拿回"的入口，整理
@@ -302,14 +317,6 @@ internal partial class BarWindow : Window
         }
     }
 
-    private void SyncFloatingLayers()
-    {
-        if (_preview is not null)
-        {
-            _preview.Topmost = Topmost;
-        }
-    }
-
     private void Select(BarCard? card)
     {
         if (_selected == card)
@@ -333,40 +340,38 @@ internal partial class BarWindow : Window
     // --- showing and hiding ----------------------------------------------------
 
     /// <summary>
-    /// Summons the bar at full opacity — per the motion rule, fade-ins from
-    /// transparency never composite on WPF windows.
-    /// </summary>
-    public void Summon()
-    {
-        // Noted before this window takes the foreground, which it is about
-        // to: pasting from a card has to land where the user was.
-        _returnTo = ForegroundWindow.Current();
-
-        // Whatever changed while hidden was ignored for a reason: showing
-        // again reads the world as it is now, in one go, from the newest
-        // entry (the policy's Shown verdict, O-37).
-        RunRefresh(_refreshPolicy.Shown());
-        MoveBesideCursorIfWanted();
-        ShowFocused();
-    }
-
-    /// <summary>
-    /// 以粘贴模式呼出（票 26 合并后，快速粘贴的唯一入口）：意图是"出现在
-    /// 我要贴的地方，贴完就走"。锚点取文本插入符——键盘呼出时用户正打字的
-    /// 地方，窄条左上角落在这一行的正下方——取不到退回鼠标指针尖；无视
-    /// 「光标旁呼出」开关，这是两种意图里更急的一种。搜索词清零（会话永远
-    /// 从全部历史开始，系统 Win+V 的心智），搜索框预聚焦，↑↓/Enter/编号沿用
-    /// 常驻键位；失焦即隐是本模式专属。
+    /// 呼出窄条（快速粘贴；用户需求 2026-10-10 起唯一的呼出意图）：出现在我要
+    /// 贴的地方。锚点取文本插入符——键盘呼出时用户正打字的地方，窄条左上角
+    /// 落在这一行的正下方——取不到退回鼠标指针尖。搜索词清零（会话永远从全部
+    /// 历史开始，系统 Win+V 的心智），搜索框预聚焦，↑↓/Enter/编号粘贴；贴完、
+    /// 失焦收不收看「常驻钉住」。Shown at full opacity — per the motion rule,
+    /// fade-ins from transparency never composite on WPF windows.
+    ///
+    /// 已经开着（钉住了，或者这一次还没结束）就不挪：窗口留在用户放的地方。
+    /// 会话照样从头开始——呼出之后直接 Enter 贴的永远是最新的那条，钉不钉
+    /// 都是这一个手感。
     /// </summary>
     public void SummonForPaste()
     {
-        _pasteMode = true;
+        // The caret and the return target must be read before this window
+        // activates itself: after Activate the foreground is us and neither
+        // query would ever answer again. An open bar may itself be the
+        // foreground, which is never where a paste should go back to.
+        var stayPut = IsVisible;
+        var foreground = ForegroundWindow.Current();
+        if (stayPut)
+        {
+            NoteReturnTarget(foreground);
+        }
+        else
+        {
+            _returnTo = foreground;
+        }
 
-        // The caret must be read before this window activates itself: after
-        // Activate the foreground is us and the query would never answer
-        // again. The return-target is noted in the same breath, same reason.
-        _returnTo = ForegroundWindow.Current();
-        var anchor = ScreenGeometry.CaretBounds() ?? BarPlacement.Pointer(ScreenGeometry.CursorPosition());
+        var anchor = stayPut
+            ? (ScreenRect?)null
+            : ScreenGeometry.CaretBounds() ?? BarPlacement.Pointer(ScreenGeometry.CursorPosition());
+        _summoned = true;
 
         // A fresh session starts unfiltered. Clearing arms the debounce; the
         // summon reads now instead (the same disarm the old quick bar did),
@@ -377,21 +382,24 @@ internal partial class BarWindow : Window
         _browser.Query = string.Empty;
         UpdateFilterChrome();
 
-        // 会话从"全部历史"开始也意味着从最新的那条开始：Shown 的裁决自带
-        // 回到最新（验收 B2 实录 2026-10-05 曾在这里单独补过一刀，只管
-        // 粘贴模式；用户实录 2026-10-04 证明常驻模式同样需要，于是收进策略）。
+        // Whatever changed while hidden was ignored for a reason: showing
+        // again reads the world as it is now, in one go, from the newest
+        // entry (the policy's Shown verdict, O-37). 会话从"全部历史"开始也
+        // 意味着从最新的那条开始（验收 B2 实录 2026-10-05、用户实录 2026-10-04）。
         RunRefresh(_refreshPolicy.Shown());
-        PlaceBeside(anchor);
+        if (anchor is { } corner)
+        {
+            PlaceBeside(corner);
+        }
+
         ShowFocused();
     }
 
-    /// <summary>The tail both summons share: show at full opacity, take the keyboard, aim the search box.</summary>
+    /// <summary>The summon's tail: show at full opacity, take the keyboard, teach once.</summary>
     private void ShowFocused()
     {
         Show();
-        Activate();
-        SearchBox.Focus();
-        SearchBox.SelectAll();
+        TakeKeyboard();
 
         // First-use teaching: the interactions are good but invisible — the
         // footer mentions them for the first few summons, then never again.
@@ -402,26 +410,48 @@ internal partial class BarWindow : Window
         }
     }
 
-    /// <summary>
-    /// Like the system's Win+V panel: appear where the user is, not where the
-    /// window was last left — the bar's top-left corner on the pointer tip
-    /// (用户需求 2026-10-09). Off, the remembered geometry stands — a bar that
-    /// always comes back to the same place is also a place the user learns.
-    /// </summary>
-    private void MoveBesideCursorIfWanted()
+    /// <summary>Takes the foreground and aims the search box, its query selected so typing replaces it.</summary>
+    private void TakeKeyboard()
     {
-        if (!_settings.BarAtCursor)
-        {
-            return;
-        }
-
-        PlaceBeside(BarPlacement.Pointer(ScreenGeometry.CursorPosition()));
+        Activate();
+        SearchBox.Focus();
+        SearchBox.SelectAll();
     }
 
     /// <summary>
-    /// The shared placement body（票 26 从 MoveBesideCursorIfWanted 抽出）：
-    /// 锚点成了参数——常驻问设置后给鼠标指针尖，粘贴模式给插入符那一行。
-    /// 落点规则在 <see cref="BarPlacement"/>（Core）：左上角对准锚点，放不下
+    /// 记下贴回哪扇窗——窄条自己除外：钉住的窄条正是前台时再按一次快速粘贴，
+    /// 前台就是它；把它记成"用户原来所在的窗口"，贴就贴进了自己的搜索框。
+    /// </summary>
+    private void NoteReturnTarget(ForegroundWindow candidate)
+    {
+        if (candidate.IsSomething
+            && candidate.Handle != new System.Windows.Interop.WindowInteropHelper(this).Handle)
+        {
+            _returnTo = candidate;
+        }
+    }
+
+    private const int WmMouseActivate = 0x21;
+
+    /// <summary>
+    /// WM_MOUSEACTIVATE 先于激活到达：此刻前台还是用户刚才所在的窗口（用户需求
+    /// 2026-10-10，常驻钉住）。钉住的窄条一直开着，用户在别处打了一阵字再回来
+    /// 点卡片——贴回的应是这扇窗，不是很久以前呼出那一刻的那扇。只记不拦：
+    /// 激活照常发生。
+    /// </summary>
+    private IntPtr NoteClickActivation(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WmMouseActivate)
+        {
+            NoteReturnTarget(ForegroundWindow.Current());
+        }
+
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// The placement body（票 26 抽出）：落点规则在 <see cref="BarPlacement"/>
+    /// （Core）——左上角对准锚点（插入符那一行，取不到就是鼠标指针尖），放不下
     /// 才挪，挪也只挪到刚好放得下。
     /// </summary>
     private void PlaceBeside(ScreenRect anchor)
@@ -454,8 +484,8 @@ internal partial class BarWindow : Window
         // The band rides with every placement (验收缺陷 A): the raw move once
         // hard-inserted HWND_TOPMOST, so a bar whose setting said "not
         // topmost" was resurrected above everything on every summon. The
-        // window's own Topmost — kept in step with the setting — decides the
-        // band here, and the XAML no longer seeds the bit at parse time.
+        // window's own Topmost decides the band here — always on since 用户
+        // 需求 2026-10-10, and the window stays the one place that says so.
         TransientWindow.MoveTo(helper.Handle, placed, ZBandPolicy.FollowsHost(Topmost));
     }
 
@@ -468,9 +498,9 @@ internal partial class BarWindow : Window
     public void Dismiss(BarHideReason reason = BarHideReason.Toggled)
     {
         // Cleared first: Hide() deactivates the window, and the Deactivated
-        // handler must not read the paste mode that is already ending as a
+        // handler must not read the summon that is already ending as a
         // reason to hide (and NOT restore focus) a second time.
-        _pasteMode = false;
+        _summoned = false;
 
         RunPreviewCommand(_previewPolicy.BarHidden());
 
@@ -571,27 +601,6 @@ internal partial class BarWindow : Window
 
         GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: false);
         MemoryTrim.WorkingSet();
-    }
-
-    public void Toggle()
-    {
-        if (IsVisible)
-        {
-            if (_pasteMode)
-            {
-                // Ctrl+Shift+B while the paste-mode bar is up means "now I
-                // want to stay and browse": switch to resident in place, not
-                // dismiss under the very key that asked for the bar.
-                _pasteMode = false;
-                return;
-            }
-
-            Dismiss();
-        }
-        else
-        {
-            Summon();
-        }
     }
 
     // --- geometry ----------------------------------------------------------------

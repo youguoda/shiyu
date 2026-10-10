@@ -172,14 +172,15 @@ internal partial class BarWindow
     /// stealing the click — means the release event never arrives. The
     /// badges come in now, or they stay forever.
     ///
-    /// 粘贴模式另有含义（票 26）：失焦即隐——点别处就是"用完了"。只隐藏，
-    /// 不还原前台：焦点此刻正落在用户点下去的窗口上，Restore 只会把它
-    /// 抢回来（UI 报告 §3.7 问题 1）。收尾规格与其余隐藏原因相同（轻量
-    /// 开就进轻量），差异只在这一个"不拽回"。
+    /// 没钉住时另有含义（票 26；用户需求 2026-10-10 起看「常驻钉住」）：失焦
+    /// 即隐——点别处就是"用完了"。只隐藏，不还原前台：焦点此刻正落在用户点
+    /// 下去的窗口上，Restore 只会把它抢回来（UI 报告 §3.7 问题 1）。收尾规格
+    /// 与其余隐藏原因相同（轻量开就进轻量），差异只在这一个"不拽回"。钉住了
+    /// 就留在原地。
     /// </summary>
     private void OnLostFocus(object sender, EventArgs e)
     {
-        if (_pasteMode && IsVisible)
+        if (_summoned && !_settings.BarPinned && IsVisible)
         {
             HideAfterFocusLost();
             return;
@@ -189,7 +190,7 @@ internal partial class BarWindow
     }
 
     /// <summary>
-    /// The paste mode's focus-loss exit: the full hide teardown (preview down,
+    /// The unpinned bar's focus-loss exit: the full hide teardown (preview down,
     /// teaching row down, refresh policy's Hidden — reason FocusLost so the
     /// "every reason pays the same" invariant stays testable), minus the
     /// foreground restore the deliberate exits do.
@@ -198,7 +199,7 @@ internal partial class BarWindow
     {
         // Dismiss clears the flag itself; doing it here first keeps this path
         // terminal even if a re-entrant Deactivated arrives mid-hide.
-        _pasteMode = false;
+        _summoned = false;
 
         RunPreviewCommand(_previewPolicy.BarHidden());
         DismissFirstUseHint();

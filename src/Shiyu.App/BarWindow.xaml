@@ -16,8 +16,9 @@
         Deactivated="OnLostFocus"
         MouseLeftButtonDown="OnBackgroundPressed">
     <!--
-      The resident narrow bar (ticket 12): summoned by hotkey, pinned to the
-      top of the z-order, dragged by its background, resized by the grip.
+      The narrow bar (ticket 12): summoned by the quick-paste hotkey at the
+      caret, topmost, dragged by its background, resized by the grip; it
+      stays after a paste only while pinned (用户需求 2026-10-10).
 
       Structure follows the issue 02 spike: pinned cards live in their own
       non-virtualized list STACKED above the scrolling region - visually
@@ -536,14 +537,16 @@
                 <!--
                   第一行（§6.1 h32）：品牌 24（打开管理窗）· 搜索胶囊 32/16
                   （右端 28 DIP 让给 F 键帽，有查询时描边转 Accent）·
-                  保持在最前 32。The brand mark is a palette value (Brand.Mark):
-                  light theme carries 拾语, dark carries its dark variant 深语,
-                  swapped live with every DynamicResource when the theme changes.
+                  常驻钉住 32 · 设置 32（用户需求 2026-10-10）。The brand mark
+                  is a palette value (Brand.Mark): light theme carries 拾语,
+                  dark carries its dark variant 深语, swapped live with every
+                  DynamicResource when the theme changes.
                 -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <!-- 品牌钮两用（用户需求 2026-10-05）：按住即拖动整扇窄条
@@ -574,16 +577,27 @@
                                         IsHitTestVisible="False"/>
                     </Grid>
                     <!--
-                      保持在最前：Topmost 开关。字形换非图钉的 E74A（上箭头，
-                      "置顶"的中文惯用形，与线框 (^) 一致）——E718 图钉留给
-                      卡片的"条目置顶"，一个词不再有两个字形。E74A 经票 39
-                      双字体 cmap 探测：Segoe Fluent Icons 与 Segoe MDL2 Assets
-                      均含此码位。开=accent，关=次级。
+                      常驻钉住（用户需求 2026-10-10，取代票 39 的「保持在最前」）：
+                      钉住 = 贴完、点别处都不收，并始终在最前。没钉住是空心图钉
+                      E718、随按钮的次级色；钉住是实心图钉 E841、accent——卡片的
+                      "条目置顶"在悬停托盘里只用 E718/E77A，从不出现实心那一枚。
+                      两个码位 Segoe Fluent Icons 与 Segoe MDL2 Assets 都有（同票 39
+                      的双字体 cmap 探测）。字形、颜色与说明由 SyncPinChrome 按设置画。
                     -->
-                    <Button x:Name="TopmostToggle" Grid.Column="2"
-                            Cursor="Hand" Click="OnTopmostToggle"
+                    <Button x:Name="PinToggle" Grid.Column="2"
+                            Cursor="Hand" Click="OnPinToggle"
                             Style="{DynamicResource IconButton}">
-                        <TextBlock x:Name="TopmostGlyph" Text="&#xE74A;"
+                        <TextBlock x:Name="PinGlyph" Text="&#xE718;"
+                                   FontFamily="{DynamicResource Font.Icon}"
+                                   FontSize="{DynamicResource Size.IconS}"/>
+                    </Button>
+                    <!-- 设置：打开设置窗的「窄条」页（钉住开关在页首）。 -->
+                    <Button x:Name="SettingsButton" Grid.Column="3"
+                            Cursor="Hand" Click="OnSettingsClicked"
+                            Style="{DynamicResource IconButton}"
+                            AutomationProperties.Name="设置"
+                            ToolTip="设置：窄条的去留、密度与悬停动作">
+                        <TextBlock Text="&#xE713;"
                                    FontFamily="{DynamicResource Font.Icon}"
                                    FontSize="{DynamicResource Size.IconS}"/>
                     </Button>

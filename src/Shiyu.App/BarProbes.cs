@@ -16,10 +16,11 @@ internal partial class BarWindow
     /// <summary>
     /// 探针命令 bar-newest：走真实路径复现"打开窄条停在最底部、看到的是最旧的
     /// 记录"（用户实录 2026-10-04）。每条路先把三页长的列表翻到底，再做一个
-    /// 动作——收起重开（轻量开 / 关）、条开着人在别处时来一条外部写、以粘贴
-    /// 模式呼出、人在条里时来一条外部写——逐条把滚动状态记进数据目录的
-    /// bar-newest.log，探针脚本据此判定。外部写从线程池发出，与剪贴板流水线
-    /// 同一条跨线程的路。
+    /// 动作——收起重开（轻量开 / 关）、条开着人在别处时来一条外部写、条开着
+    /// 再按一次快速粘贴、人在条里时来一条外部写——逐条把滚动状态记进数据目录
+    /// 的 bar-newest.log，探针脚本据此判定。外部写从线程池发出，与剪贴板流水线
+    /// 同一条跨线程的路。窄条由拥有者先钉住（BarModule.ProbeStartsAtNewest）：
+    /// "人在别处、条还开着"只有钉住的窄条才有。
     /// </summary>
     internal async void ProbeStartsAtNewest()
     {
@@ -64,14 +65,14 @@ internal partial class BarWindow
         _store.AppendMany(Enumerable.Range(0, 250).Select(i =>
             new NewEntry($"probe filler {i:D3}", "probe-filler", now.AddDays(-3).AddMinutes(-i))));
 
-        Summon();
+        SummonForPaste();
         await Settle();
 
         // 1. Hide and summon again, lightweight teardown on (the default).
         var before = await ScrollToBottom();
         Dismiss();
         await Settle();
-        Summon();
+        SummonForPaste();
         await Settle();
         Note("reopen", before);
 
@@ -80,7 +81,7 @@ internal partial class BarWindow
         before = await ScrollToBottom();
         Dismiss();
         await Settle();
-        Summon();
+        SummonForPaste();
         await Settle();
         Note("reopen-kept-cards", before);
         _refreshPolicy.ApplySettings(_settings.LightweightWhenHidden);
@@ -105,7 +106,7 @@ internal partial class BarWindow
         Note("copy-while-away", before);
         elsewhere.Close();
 
-        // 4. The paste-mode summon over the open resident bar.
+        // 4. The quick-paste key again, over the open pinned bar.
         before = await ScrollToBottom();
         SummonForPaste();
         await Settle();
@@ -116,7 +117,7 @@ internal partial class BarWindow
         // 5. In use: the bar holds the focus — the place must stay put. The
         // log carries whether the focus was really ours; the script skips
         // the check when the foreground lock said no.
-        Summon();
+        SummonForPaste();
         Activate();
         await Settle();
         before = await ScrollToBottom();
@@ -138,7 +139,7 @@ internal partial class BarWindow
         var log = new StringBuilder();
         var directory = DebugOverrides.ProbeDirectory!;
 
-        Summon();
+        SummonForPaste();
         for (var round = 0; round < 3; round++)
         {
             await Dispatcher.Yield(DispatcherPriority.ContextIdle);
@@ -207,5 +208,52 @@ internal partial class BarWindow
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(directory, "preview-image.log"), log.ToString());
     }
+
+    // --- 探针 bar-pin 的抓手（用户需求 2026-10-10，常驻钉住；编排在 BarModule） ---
+
+    internal FrameworkElement ProbeHeader => Header;
+
+    /// <summary>图钉此刻的字形码位：E718 空心（没钉住）、E841 实心（钉住）。</summary>
+    internal int ProbePinGlyph => PinGlyph.Text.Length > 0 ? PinGlyph.Text[0] : 0;
+
+    internal bool ProbePinAccented => ReferenceEquals(PinGlyph.Foreground, TryFindResource("Brush.Accent"));
+
+    internal IntPtr ProbeHandle => new System.Windows.Interop.WindowInteropHelper(this).Handle;
+
+    internal IntPtr ProbeReturnTarget => _returnTo.Handle;
+
+    internal string ProbeQuery
+    {
+        get => SearchBox.Text;
+        set => SearchBox.Text = value;
+    }
+
+    internal void ProbeClickPin()
+        => PinToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    internal void ProbeClickSettings()
+        => SettingsButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    /// <summary>头部第一行从左到右：搜索框右缘、图钉、齿轮的左缘（DIP，相对窗口）。</summary>
+    internal string ProbeHeaderLayout()
+    {
+        double LeftOf(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), this).X;
+        return FormattableString.Invariant(
+            $"search-right={LeftOf(SearchBox) + SearchBox.ActualWidth:F0}|pin={LeftOf(PinToggle):F0}|settings={LeftOf(SettingsButton):F0}|settings-right={LeftOf(SettingsButton) + SettingsButton.ActualWidth:F0}|width={ActualWidth:F0}|pin-visible={PinToggle.IsVisible}|settings-visible={SettingsButton.IsVisible}");
+    }
+
+    /// <summary>
+    /// 像用户点下没激活的窄条那样，先送一条 WM_MOUSEACTIVATE——走的是窗口真装上的那个钩子。
+    /// </summary>
+    internal void ProbeMouseActivate()
+    {
+        const int HtClient = 1;
+        const int WmLButtonDown = 0x0201;
+        var handle = ProbeHandle;
+        _ = SendMessage(handle, WmMouseActivate, handle, (IntPtr)((WmLButtonDown << 16) | HtClient));
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendMessageW")]
+    private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 }
 #endif

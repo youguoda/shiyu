@@ -778,15 +778,38 @@ internal partial class BarWindow
     /// the lightweight drop — a pasted-from bar kept its decoded thumbnails
     /// and its timers alive for as long as it sat hidden. The reason rides
     /// through to the refresh policy, which keeps that invariant tested.
+    ///
+    /// 钉住的窄条不收（用户需求 2026-10-10）：只把前台还给用户刚才所在的
+    /// 窗口，窄条留在原地、仍在最前。还不回去（那扇窗已经关了）就不发
+    /// Ctrl+V——前台还是窄条自己，按下去只会贴进搜索框；那就照「复制」办，
+    /// 交给用户自己贴。
     /// </summary>
     private void PasteEntry(BarCard card)
     {
-        if (!_returnTo.IsSomething)
+        if (_settings.BarPinned)
         {
-            _returnTo = ForegroundWindow.Current();
+            RunPreviewCommand(_previewPolicy.BarHidden());
+            if (!_returnTo.Restore())
+            {
+                SelfWrite(() => _store.BumpUse(card.Id));
+                if (CopyCard(card))
+                {
+                    ShowFeedback("原来的窗口找不到了，已复制——到要贴的地方按 Ctrl+V");
+                }
+
+                return;
+            }
+        }
+        else
+        {
+            if (!_returnTo.IsSomething)
+            {
+                _returnTo = ForegroundWindow.Current();
+            }
+
+            Dismiss(BarHideReason.Pasted);
         }
 
-        Dismiss(BarHideReason.Pasted);
         Pasted?.Invoke();
 
         if (card.Files.Count > 0)

@@ -49,7 +49,6 @@ internal sealed class OnboardingWindow : Window
     private CheckBox? _recordImages;
     private CheckBox? _recordFiles;
     private readonly HashSet<string> _excludedApps = new(StringComparer.OrdinalIgnoreCase);
-    private KeyCapRecorder? _barRecorder;
     private KeyCapRecorder? _quickRecorder;
     private KeyCapRecorder? _captureRecorder;
     private CheckBox? _winVSwitch;
@@ -572,16 +571,13 @@ internal sealed class OnboardingWindow : Window
     private FrameworkElement SummonStep()
     {
         var panel = new StackPanel();
-        panel.Children.Add(StepIntro("三组组合键。窄条是常驻的取用面板，快速粘贴贴光标即贴即走，划词翻译抓当前选中。"));
+        panel.Children.Add(StepIntro("两组组合键。快速粘贴在输入光标旁呼出窄条，选一条即贴即走（点窄条上的图钉可让它一直留着）；划词翻译抓当前选中。"));
 
         // 窄条示意图：静态占位（§5.3）。
         panel.Children.Add(BarSketch());
 
-        // 主卡：呼出窄条。
-        _barRecorder = NewRecorder(HotkeyAction.Bar, _baseline.BarHotkey);
-        panel.Children.Add(Card("呼出窄条", "唤出/收起常驻的历史窄条", _barRecorder.Build()));
-
-        // 子卡：快速粘贴 + 也用 Win+V。
+        // 主卡：快速粘贴 + 也用 Win+V（用户需求 2026-10-10 起窄条唯一的入口，
+        // 常驻窄条的键撤掉了）。
         _quickRecorder = NewRecorder(HotkeyAction.QuickBar, _baseline.QuickBarHotkey);
         var quickBody = new StackPanel();
         quickBody.Children.Add(_quickRecorder.Build());
@@ -599,7 +595,7 @@ internal sealed class OnboardingWindow : Window
         winVStack.Children.Add(_winVSwitch);
         winVStack.Children.Add(winVHint);
         quickBody.Children.Add(winVStack);
-        panel.Children.Add(Card("快速粘贴", "选中即粘贴，粘贴后消失", quickBody));
+        panel.Children.Add(Card("快速粘贴", "在输入光标旁呼出窄条，选中即粘贴", quickBody));
 
         // 次卡：划词翻译。
         _captureRecorder = NewRecorder(HotkeyAction.CaptureSelection, _baseline.CaptureHotkey);
@@ -625,12 +621,11 @@ internal sealed class OnboardingWindow : Window
         return recorder;
     }
 
-    /// <summary>当前三个录制器的值 + 未编辑的键取现设置，组合出一份可判定的候选方案。</summary>
+    /// <summary>当前两个录制器的值 + 未编辑的键取现设置，组合出一份可判定的候选方案。</summary>
     private AppSettings HotkeyCandidate(HotkeyAction action, string combination)
         => ApplyKey(
             _store.Current with
             {
-                BarHotkey = _barRecorder?.Value ?? string.Empty,
                 QuickBarHotkey = _quickRecorder?.Value ?? string.Empty,
                 CaptureHotkey = _captureRecorder?.Value ?? string.Empty,
             },
@@ -640,7 +635,6 @@ internal sealed class OnboardingWindow : Window
     private static AppSettings ApplyKey(AppSettings settings, HotkeyAction action, string combination)
         => action switch
         {
-            HotkeyAction.Bar => settings with { BarHotkey = combination },
             HotkeyAction.QuickBar => settings with { QuickBarHotkey = combination },
             HotkeyAction.CaptureSelection => settings with { CaptureHotkey = combination },
             HotkeyAction.ClipboardTranslate => settings with { ClipboardTranslateHotkey = combination },
@@ -653,7 +647,6 @@ internal sealed class OnboardingWindow : Window
         // 录制时已即时校验过互撞；这里照单落盘，含 Win+V 接管开关。
         TryUpdate(latest => latest with
         {
-            BarHotkey = _barRecorder?.Value ?? string.Empty,
             QuickBarHotkey = _quickRecorder?.Value ?? string.Empty,
             CaptureHotkey = _captureRecorder?.Value ?? string.Empty,
             TakeOverWinV = _winVSwitch?.IsChecked == true,
@@ -856,7 +849,7 @@ internal sealed class OnboardingWindow : Window
         panel.Children.Add(StepIntro("三十秒，把窄条真的用一次——检测到就打勾；练习不是关卡，完成随时可点。"));
 
         _trial1 = TrialRow("复制任意一段文字");
-        _trial2 = TrialKeyRow("呼出窄条", HotkeyAction.Bar);
+        _trial2 = TrialKeyRow("呼出窄条", HotkeyAction.QuickBar);
         _trial3 = TrialRow("按 Enter 粘贴回来");
         panel.Children.Add(_trial1);
         panel.Children.Add(_trial2);
@@ -876,8 +869,8 @@ internal sealed class OnboardingWindow : Window
             return panel;
         }
 
-        // 三个信号（§5.3「检测到即勾」）：复制→库里有新内容；呼出→ToggleBar
-        // 被触发；粘贴→窄条 Enter/编号键落进原窗口。
+        // 三个信号（§5.3「检测到即勾」）：复制→库里有新内容；呼出→快速粘贴
+        // 呼出了窄条；粘贴→窄条 Enter/编号键落进原窗口。
         signals.Store.Changed += OnTrialSignal1;
         signals.BarSummoned += OnTrialSignal2;
         signals.BarPasted += OnTrialSignal3;

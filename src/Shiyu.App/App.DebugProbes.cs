@@ -87,7 +87,7 @@ public partial class App
     /// </summary>
     private async void ProbeCaretGeometry(AppShell shell)
     {
-        shell.ToggleBar?.Invoke();
+        _modules!.Bar.ProbeShowPinned();
         shell.ShowLibrary?.Invoke();
         _modules!.Settings.ShowAt("hotkey.capture");
 
@@ -363,7 +363,7 @@ public partial class App
 
     private async void ProbeContentSize(AppShell shell)
     {
-        shell.ToggleBar?.Invoke();
+        _modules!.Bar.ProbeShowPinned();
         shell.ShowReverseInput?.Invoke();
 
         async Task Settle()
@@ -486,8 +486,9 @@ public partial class App
 
         switch (DebugOverrides.ProbeCommand)
         {
+            // 用户需求 2026-10-10 撤掉常驻窄条后，bar 命令量的是一扇钉住的窄条。
             case "bar":
-                shell.ToggleBar?.Invoke();
+                _modules!.Bar.ProbeShowPinned();
                 break;
 
             // 光标与占位同一起点、光标用 Accent（用户实录 2026-10-05）。
@@ -523,14 +524,19 @@ public partial class App
                 _modules!.Bar.ProbeStartsAtNewest();
                 break;
 
+            // 常驻钉住：撤掉常驻窄条，头部加图钉与齿轮，设置里一个开关、默认关（用户需求 2026-10-10）。
+            case "bar-pin":
+                _modules!.Bar.ProbePinBehaviour();
+                break;
+
             // 按住空格预览图片：不抖、按屏幕像素清楚（用户实录 2026-10-09）。脚本负责按键。
             case "preview-image":
                 _modules!.Bar.ProbePreviewImage();
                 break;
 
             case "quickbar":
-                // 票 26 合并后 quickbar 命令映射到粘贴模式的窄条：探针仍能
-                // 检"快速粘贴"这条意图，定位参数（384 DIP）在探针脚本里同步。
+                // 票 26 合并后 quickbar 命令就是快速粘贴本身（默认没钉住的
+                // 窄条），定位参数（384 DIP）在探针脚本里同步。
                 shell.ShowQuickPaste?.Invoke();
                 break;
 

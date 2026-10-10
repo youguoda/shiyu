@@ -50,7 +50,6 @@ internal sealed class AppModules
         modules.Hotkeys.Attach(shell);
 
         // 跨模块中转位：模块间不互相引用，经 shell 找彼此。
-        shell.ToggleBar = modules.Bar.Toggle;
         shell.ShowQuickPaste = modules.Bar.ShowQuickPaste;
         shell.TranslateSelection = modules.Selection.TranslateSelection;
         shell.TranslateClipboard = modules.Selection.TranslateClipboard;

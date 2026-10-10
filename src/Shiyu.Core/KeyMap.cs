@@ -128,7 +128,6 @@ public static class KeyMap
     /// <summary>托盘菜单里全局动作的行文（§5.2 的菜单结构）。</summary>
     public static string TrayLabel(HotkeyAction action) => action switch
     {
-        HotkeyAction.Bar => "打开窄条",
         HotkeyAction.QuickBar => "快速粘贴",
         HotkeyAction.ClipboardTranslate => "翻译剪贴板",
         HotkeyAction.Library => "管理历史…",
@@ -140,7 +139,6 @@ public static class KeyMap
     {
         HotkeyAction.CaptureSelection => NonEmpty(settings.CaptureHotkey),
         HotkeyAction.QuickBar => NonEmpty(settings.QuickBarHotkey),
-        HotkeyAction.Bar => NonEmpty(settings.BarHotkey),
         HotkeyAction.ClipboardTranslate => NonEmpty(settings.ClipboardTranslateHotkey),
         HotkeyAction.Library => NonEmpty(settings.LibraryHotkey),
         HotkeyAction.ReverseInput => NonEmpty(settings.ReverseInputHotkey),

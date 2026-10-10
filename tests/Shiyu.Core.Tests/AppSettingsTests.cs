@@ -40,17 +40,44 @@ public class AppSettingsTests
         Assert.Equal(30, settings.ImageRetentionDays);
         Assert.False(settings.Backend.IsConfigured);
 
-        // The narrow bar: a hotkey of its own, density knobs in the middle of
-        // their range, and no remembered position yet.
-        Assert.Equal("Ctrl+Shift+B", settings.BarHotkey);
+        // The narrow bar: opened by quick paste, density knobs in the middle
+        // of their range, and no remembered position yet.
+        Assert.Equal("Ctrl+Shift+V", settings.QuickBarHotkey);
         Assert.Equal(4, settings.BarTextLines);
         Assert.Equal(120, settings.BarImageHeight);
         Assert.Equal(3, settings.BarFileCount);
         Assert.Null(settings.BarLeft);
 
-        // Pinning to the top of the z-order is the resident bar's working
-        // posture; turning it off is a deliberate act (ticket 39).
-        Assert.True(settings.BarAlwaysOnTop);
+        // 常驻钉住默认关（用户需求 2026-10-10）：贴完就走，点别处就收。
+        Assert.False(settings.BarPinned);
+    }
+
+    [Fact]
+    public void Fields_of_the_retired_resident_bar_load_as_nothing()
+    {
+        // 用户需求 2026-10-10 撤掉常驻窄条：老设置文件里的三个字段读进来什么也
+        // 不是——不报错、不把用户送回默认，钉住也不因"保持在最前"开着就被
+        // 打开（那是另一件事）。下一次保存时它们自然消失。
+        using var file = new TempFile();
+        File.WriteAllText(file.Path_, """
+            {
+              "TargetLanguage": "English",
+              "BarHotkey": "Ctrl+Shift+B",
+              "BarAtCursor": false,
+              "BarAlwaysOnTop": true
+            }
+            """);
+
+        var loaded = AppSettings.Load(file.Path_);
+        Assert.Equal("English", loaded.TargetLanguage);
+        Assert.False(loaded.BarPinned);
+
+        loaded.Save(file.Path_);
+        var saved = File.ReadAllText(file.Path_);
+        Assert.DoesNotContain("\"BarHotkey\"", saved);
+        Assert.DoesNotContain("\"BarAtCursor\"", saved);
+        Assert.DoesNotContain("\"BarAlwaysOnTop\"", saved);
+        Assert.Contains("\"BarPinned\": false", saved);
     }
 
     [Fact]
@@ -66,11 +93,11 @@ public class AppSettingsTests
             ImageRetentionDays = 7,
             StartWithWindows = false,
             Theme = AppTheme.Dark,
-            BarHotkey = "Ctrl+Alt+B",
+            QuickBarHotkey = "Ctrl+Alt+B",
             BarTextLines = 6,
             BarImageHeight = 200,
             BarFileCount = 5,
-            BarAlwaysOnTop = false,
+            BarPinned = true,
             BarLeft = 12.5,
             BarTop = 34.5,
             BarHeight = 800,
@@ -91,11 +118,11 @@ public class AppSettingsTests
         Assert.Equal(original.ImageRetentionDays, loaded.ImageRetentionDays);
         Assert.Equal(original.StartWithWindows, loaded.StartWithWindows);
         Assert.Equal(AppTheme.Dark, loaded.Theme);
-        Assert.Equal("Ctrl+Alt+B", loaded.BarHotkey);
+        Assert.Equal("Ctrl+Alt+B", loaded.QuickBarHotkey);
         Assert.Equal(6, loaded.BarTextLines);
         Assert.Equal(200, loaded.BarImageHeight);
         Assert.Equal(5, loaded.BarFileCount);
-        Assert.False(loaded.BarAlwaysOnTop);
+        Assert.True(loaded.BarPinned);
         Assert.Equal(12.5, loaded.BarLeft);
         Assert.Equal(34.5, loaded.BarTop);
         Assert.Equal(800, loaded.BarHeight);

@@ -31,9 +31,9 @@ public class SettingsSchemaTests
             ["store.usage"] = "general",
             ["store.backup"] = "general",
 
-            // 窄条：原“动作”页并入；密度随行。
-            ["bar.at-cursor"] = "bar",
-            ["look.bar-topmost"] = "bar",
+            // 窄条：原“动作”页并入；密度随行。常驻钉住（用户需求 2026-10-10）
+            // 接替了「光标旁呼出」与「保持在最前」。
+            ["bar.pinned"] = "bar",
             ["bar.text-lines"] = "bar",
             ["bar.image-height"] = "bar",
             ["bar.file-count"] = "bar",
@@ -71,8 +71,8 @@ public class SettingsSchemaTests
             ["translate.hotkey-ref"] = "translate",
 
             // 快捷键：只放按键；Win+V 是快速粘贴的子项；管理窗键新增；
-            // 窗口内按键速查（§5.2 键位即数据，票 25）。
-            ["hotkey.bar"] = "hotkeys",
+            // 窗口内按键速查（§5.2 键位即数据，票 25）。常驻窄条的键在用户
+            // 需求 2026-10-10 撤掉。
             ["hotkey.quickbar"] = "hotkeys",
             ["winv.takeover"] = "hotkeys",
             ["hotkey.capture"] = "hotkeys",
@@ -202,7 +202,6 @@ public class SettingsSchemaTests
         Assert.Contains("hotkey.capture", ids);
         Assert.Contains("hotkey.clipboard", ids);
         Assert.Contains("hotkey.quickbar", ids);
-        Assert.Contains("hotkey.bar", ids);
         Assert.Contains("bar.text-lines", ids);
         Assert.Contains("bar.image-height", ids);
         Assert.Contains("bar.file-count", ids);
@@ -318,24 +317,29 @@ public class SettingsSchemaTests
     }
 
     [Fact]
-    public void The_bar_comes_up_beside_the_cursor_by_default()
+    public void The_bar_is_unpinned_by_default_and_the_pin_leads_the_bar_page()
     {
-        Assert.True(new AppSettings().BarAtCursor);
-        Assert.Contains(
-            SettingsSchema.Tree.SelectMany(p => p.Sections).SelectMany(s => s.Items),
-            item => item.Id == "bar.at-cursor" && item.Control == SettingsControl.Toggle);
+        // 用户需求 2026-10-10：「常驻钉住」默认关闭，开关在设置的「窄条」页——
+        // 页首第一项，窄条头部的齿轮深链到这里。
+        Assert.False(new AppSettings().BarPinned);
+
+        var item = Items().Single(i => i.Id == "bar.pinned");
+        Assert.Equal("常驻钉住", item.Label);
+        Assert.Equal(SettingsControl.Toggle, item.Control);
+        var page = SettingsSchema.FindPageOf(item.Id)!;
+        Assert.Equal("bar", page.Id);
+        Assert.Same(item, page.Sections[0].Items[0]);
     }
 
     [Fact]
-    public void The_bar_is_pinned_to_the_top_by_default_and_the_setting_lives_with_the_bar()
+    public void The_resident_bar_settings_are_retired()
     {
-        // 置顶 is how the resident bar works by default; the switch that turns
-        // it off belongs with the bar's own page (ticket 39, then §5.1).
-        Assert.True(new AppSettings().BarAlwaysOnTop);
-
-        var item = Items().Single(i => i.Id == "look.bar-topmost");
-        Assert.Equal(SettingsControl.Toggle, item.Control);
-        Assert.Equal("bar", SettingsSchema.FindPageOf(item.Id)!.Id);
+        // 并进「常驻钉住」的三项不再出现在设置里：常驻窄条的键、光标旁呼出、
+        // 保持在最前（用户需求 2026-10-10）。
+        var ids = Items().Select(item => item.Id).ToHashSet();
+        Assert.DoesNotContain("hotkey.bar", ids);
+        Assert.DoesNotContain("bar.at-cursor", ids);
+        Assert.DoesNotContain("look.bar-topmost", ids);
     }
 
     [Fact]

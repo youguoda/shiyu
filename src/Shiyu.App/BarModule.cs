@@ -3,12 +3,13 @@ using Shiyu.Core;
 namespace Shiyu.App;
 
 /// <summary>
-/// 窄条模块（O-40 拆自 App.xaml.cs）：常驻窄条与快速粘贴两种呼出意图的
-/// 显隐、几何的防抖保存——几何保存进设置走 store，视觉状态从
-/// ApplySettings 广播回来。票 26 之后两种意图共用同一扇 BarWindow：
-/// 差别（锚插入符、贴完即隐、失焦即隐）住在窗口的粘贴模式里。
+/// 窄条模块（O-40 拆自 App.xaml.cs）：窄条的呼出、几何的防抖保存——几何
+/// 保存进设置走 store，视觉状态从 ApplySettings 广播回来。用户需求
+/// 2026-10-10 起窄条只有快速粘贴一个入口（常驻窄条的热键与托盘项撤掉）；
+/// 贴完、失焦收不收，看「常驻钉住」，那份差别住在窗口里。探针入口在
+/// BarModuleProbes.cs（只在 Debug 构建存在）。
 /// </summary>
-internal sealed class BarModule
+internal sealed partial class BarModule
 {
     private AppShell? _shell;
     private BarWindow? _bar;
@@ -24,36 +25,10 @@ internal sealed class BarModule
     }
 
     /// <summary>
-    /// Summons or hides the resident narrow bar. One instance, reused: a bar
-    /// that keeps its place on screen between summons is a place the user
-    /// learns to find things. The list inside does not keep its scroll —
-    /// every summon opens at the newest entry (用户实录 2026-10-04).
-    /// </summary>
-    public void Toggle()
-    {
-        if (EnsureBar() is null)
-        {
-            return;
-        }
-
-        _bar!.Toggle();
-
-        // 呼出与收起都算「用过这个键」：试一试的清单只问用户会不会唤起窄条。
-        _shell!.NoteBarSummoned();
-    }
-
-#if DEBUG
-    /// <summary>探针命令 bar-newest 的入口（见 BarWindow.ProbeStartsAtNewest）。</summary>
-    internal void ProbeStartsAtNewest() => EnsureBar()?.ProbeStartsAtNewest();
-
-    /// <summary>探针命令 preview-image 的入口（见 BarWindow.ProbePreviewImage）。</summary>
-    internal void ProbePreviewImage() => EnsureBar()?.ProbePreviewImage();
-#endif
-
-    /// <summary>
-    /// 快速粘贴（票 26 并入，原 QuickBarWindow 的位）：以粘贴模式呼出同一扇
-    /// 窄条——一个名词、两种呼出意图（ADR-0012 #8）。窗口在首次任一意图时
-    /// 建一次：一天几十次的呼出不该每次都付一扇窗的造价。
+    /// 快速粘贴（票 26 并入，原 QuickBarWindow 的位；用户需求 2026-10-10 起
+    /// 窄条唯一的入口）。One instance, reused: 一天几十次的呼出不该每次都付
+    /// 一扇窗的造价。The list inside does not keep its scroll — every summon
+    /// opens at the newest entry (用户实录 2026-10-04).
     /// </summary>
     public void ShowQuickPaste()
     {
@@ -63,12 +38,14 @@ internal sealed class BarModule
         }
 
         _bar!.SummonForPaste();
+
+        // 试一试的清单只问用户会不会唤起窄条（§5.3）。
+        _shell!.NoteBarSummoned();
     }
 
     /// <summary>
-    /// The one construction site（票 26 抽出：常驻与粘贴模式共用一扇窗，构造
-    /// 与接线只此一份）。装配守卫同原 Toggle：没有可写剪贴板与取词平台时，
-    /// 粘贴无从谈起，安静返回。
+    /// The one construction site（票 26 抽出，构造与接线只此一份）。装配
+    /// 守卫：没有可写剪贴板与取词平台时，粘贴无从谈起，安静返回。
     /// </summary>
     private BarWindow? EnsureBar()
     {
@@ -101,13 +78,17 @@ internal sealed class BarModule
         // 整理归管理窗。
         _bar.LibraryRequested += () => shell.ShowLibrary?.Invoke();
 
-        // The header's pin reports only what it wants (票 39/O-20): this
-        // side turns it into a one-field update through the store, and the
-        // pin's visual state comes back via ApplySettings when the
-        // store broadcasts — the bar never writes settings itself again,
-        // so its snapshot can no longer erase anyone else's changes (S1/S2).
-        _bar.TopmostWanted += wanted =>
-            shell.TryUpdateSettings(s => s with { BarAlwaysOnTop = wanted });
+        // The header's pin reports only what it wants (票 39/O-20，用户需求
+        // 2026-10-10 起是「常驻钉住」): this side turns it into a one-field
+        // update through the store, and the pin's visual state comes back via
+        // ApplySettings when the store broadcasts — the bar never writes
+        // settings itself, so its snapshot can no longer erase anyone else's
+        // changes (S1/S2).
+        _bar.PinWanted += wanted =>
+            shell.TryUpdateSettings(s => s with { BarPinned = wanted });
+
+        // 头部的齿轮：落到「窄条」页，钉住开关就在页首。
+        _bar.SettingsRequested += () => shell.OpenSettingsAt?.Invoke("bar.pinned");
 
         return _bar;
     }

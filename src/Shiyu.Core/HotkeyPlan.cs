@@ -6,11 +6,11 @@ public enum HotkeyAction
     /// <summary>划词翻译：抓前台选中文字并翻译。</summary>
     CaptureSelection,
 
-    /// <summary>快速粘贴：以粘贴模式呼出窄条（票 26 合并后唯一的轻量呼出意图）。</summary>
+    /// <summary>
+    /// 快速粘贴：在插入符旁呼出窄条。用户需求 2026-10-10 起这是窄条唯一的入口——
+    /// 常驻窄条的热键并进了「常驻钉住」（<see cref="AppSettings.BarPinned"/>）。
+    /// </summary>
     QuickBar,
-
-    /// <summary>唤出/收起常驻窄条。</summary>
-    Bar,
 
     /// <summary>翻译剪贴板内容。</summary>
     ClipboardTranslate,
@@ -26,8 +26,8 @@ public enum HotkeyAction
 public sealed record HotkeyBinding(HotkeyAction Action, HotkeySpec Spec);
 
 /// <summary>
-/// 把设置里的热键字符串（五个动作加管理窗，票 43 起再加反向输入，共六个槽位）变成一份
-/// 注册方案（O-27 下沉候选 3）。
+/// 把设置里的热键字符串（划词翻译、快速粘贴、翻译剪贴板、管理窗、反向输入共五个槽位；
+/// 常驻窄条的键在用户需求 2026-10-10 撤掉）变成一份注册方案（O-27 下沉候选 3）。
 ///
 /// 这曾是三份各自为政的实现：设置窗校验四键互异、引导只校验三个（漏了
 /// 快速粘贴——用户把窄条设成 Ctrl+Shift+V 时，保存照常通过，随后 App 注册
@@ -46,7 +46,6 @@ public static class HotkeyPlan
         {
             [HotkeyAction.CaptureSelection] = "划词翻译",
             [HotkeyAction.QuickBar] = "快速粘贴",
-            [HotkeyAction.Bar] = "窄条",
             [HotkeyAction.ClipboardTranslate] = "翻译剪贴板",
             [HotkeyAction.Library] = "打开管理窗",
             [HotkeyAction.ReverseInput] = "反向输入",
@@ -70,7 +69,6 @@ public static class HotkeyPlan
         {
             (HotkeyAction.CaptureSelection, settings.CaptureHotkey),
             (HotkeyAction.QuickBar, settings.QuickBarHotkey),
-            (HotkeyAction.Bar, settings.BarHotkey),
             (HotkeyAction.ClipboardTranslate, settings.ClipboardTranslateHotkey),
             (HotkeyAction.Library, settings.LibraryHotkey),
             (HotkeyAction.ReverseInput, settings.ReverseInputHotkey),

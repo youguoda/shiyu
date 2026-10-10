@@ -153,22 +153,13 @@ public sealed record AppSettings
     public bool RecordImages { get; init; } = true;
 
     /// <summary>
-    /// Summon the bar beside the cursor, like the system's Win+V panel, rather
-    /// than at a fixed remembered spot. On by default: near where you are
-    /// typing is where you are about to paste. Off restores the resident
-    /// window's remembered geometry.
+    /// 常驻钉住（用户需求 2026-10-10）：窄条只有快速粘贴一个入口，这一项决定
+    /// 它什么时候走。默认关——即贴即走，点别处就收起；钉住后贴完、点别处都
+    /// 不收，留在原地，始终在最前，Esc 才收起。窄条头部的图钉与设置页写的是
+    /// 这同一个值。旧版的「保持在最前」「光标旁呼出」与常驻窄条热键都并进
+    /// 了这里，设置文件里残留的旧字段读取时直接忽略。
     /// </summary>
-    public bool BarAtCursor { get; init; } = true;
-
-    /// <summary>
-    /// Whether the resident bar stays pinned above every other window. On by
-    /// default — that is the working posture of a tool consulted dozens of
-    /// times a day. Turning it off lets other windows cover the bar; the bar's
-    /// own floating layer (the preview) degrades with it so it never hovers
-    /// alone above windows the bar is under. The header pin button and
-    /// the settings page write this one value.
-    /// </summary>
-    public bool BarAlwaysOnTop { get; init; } = true;
+    public bool BarPinned { get; init; }
 
     /// <summary>Whether copied file lists are recorded.</summary>
     public bool RecordFiles { get; init; } = true;
@@ -274,9 +265,6 @@ public sealed record AppSettings
     public string ClipboardTranslateHotkey { get; init; } = "Ctrl+Shift+X";
 
     public string QuickBarHotkey { get; init; } = "Ctrl+Shift+V";
-
-    /// <summary>Summons and hides the resident narrow bar.</summary>
-    public string BarHotkey { get; init; } = "Ctrl+Shift+B";
 
     /// <summary>
     /// 打开历史管理窗（§5.1 快捷键页新增）。默认不设：与四个默认键不同，

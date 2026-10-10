@@ -92,7 +92,6 @@ public class KeyMapTests
         {
             CaptureHotkey = "Ctrl+Alt+Q",
             QuickBarHotkey = "Ctrl+Alt+P",
-            BarHotkey = "Ctrl+Alt+B",
             ClipboardTranslateHotkey = "Ctrl+Alt+X",
             LibraryHotkey = "Ctrl+Alt+L",
             ReverseInputHotkey = "Ctrl+Alt+R",
@@ -142,7 +141,6 @@ public class KeyMapTests
     public void Tray_menu_lines_carry_the_live_combination_in_the_accelerator_column()
     {
         // Win32 菜单惯例：\t 之后的文本右对齐成加速键列（§5.2）。
-        Assert.Equal("打开窄条\tCtrl+Shift+B", KeyMap.TrayMenuLine(HotkeyAction.Bar, new AppSettings()));
         Assert.Equal("快速粘贴\tCtrl+Shift+V", KeyMap.TrayMenuLine(HotkeyAction.QuickBar, new AppSettings()));
         Assert.Equal("翻译剪贴板\tCtrl+Shift+X",
             KeyMap.TrayMenuLine(HotkeyAction.ClipboardTranslate, new AppSettings()));

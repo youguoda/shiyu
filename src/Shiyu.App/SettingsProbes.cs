@@ -11,6 +11,9 @@ namespace Shiyu.App;
 /// <summary>设置窗的调试探针区（只在 Debug 构建存在，同 App.DebugProbes.cs）。</summary>
 public partial class SettingsWindow
 {
+    /// <summary>设置窗此刻停在哪一页（探针 bar-pin：窄条头部的齿轮该落到「窄条」页）。</summary>
+    internal static string ProbeCurrentPage => _lastPage;
+
     /// <summary>
     /// 探针命令 credentials（用户需求 2026-10-10：记得保存凭据、可以显示、配过哪些服务商、方便切换）。
     /// 设置里已经存着 DeepSeek 与智谱两家、当前在智谱上。依次看：凭据卡打码、点「显示」看全、再收起；
