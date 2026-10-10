@@ -14,13 +14,17 @@ public enum AppTheme
 }
 
 /// <summary>
-/// 内容字号（ADR-0012 排版 2；用户需求 2026-10-09 落地为设置，并加「特大」一档）：被阅读
-/// 的文字——窄条卡片正文、预览、翻译面板的译文与词头、反向输入框——跟着它变。控件文字
-/// （按钮、标签、输入值、导航）固定 14，不在此列：整体放大控件字号令牌造成过按钮相撞
-/// （ADR-0012 排版 3）。
+/// 内容字号（ADR-0012 排版 2；用户需求 2026-10-09 落地为设置，并加「特大」一档；2026-10-10
+/// 在「小」下面再加「较小」）：被阅读的文字——窄条卡片正文、预览、翻译面板的译文与词头、
+/// 反向输入框——跟着它变。控件文字（按钮、标签、输入值、导航）固定 14，不在此列：整体放大
+/// 控件字号令牌造成过按钮相撞（ADR-0012 排版 3）。声明顺序就是设置里分段按钮的顺序；设置
+/// 文件按名字存，插一档不影响谁已存的选择。
 /// </summary>
 public enum ContentFontSize
 {
+    /// <summary>14：与控件文字一样大，正文不会比按钮的字更小。</summary>
+    Smaller,
+
     /// <summary>16。</summary>
     Small,
 
@@ -49,6 +53,8 @@ public readonly record struct ContentRamp(
 {
     public static ContentRamp For(ContentFontSize size) => size switch
     {
+        // 等宽字照规律该是 11，但路径在 11 读不清：守在说明文字的 12（ContentRampTests）。
+        ContentFontSize.Smaller => new(14, 24, 12, 21, 16, 12, 21),
         ContentFontSize.Small => new(16, 28, 13, 23, 18, 14, 24),
         ContentFontSize.Large => new(20, 34, 17, 29, 22, 18, 31),
         ContentFontSize.Larger => new(22, 38, 19, 33, 24, 20, 34),

@@ -197,6 +197,17 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void A_saved_size_survives_the_new_level_in_front_of_it()
+    {
+        // 2026-10-10 在最前面插了「较小」：已存的档名照旧读回原来那一档，不会被挤到别处。
+        Assert.True(AppSettings.TryParse("""{ "ContentFontSize": "Small" }""", out var small));
+        Assert.Equal(ContentFontSize.Small, small.ContentFontSize);
+
+        Assert.True(AppSettings.TryParse("""{ "ContentFontSize": "Smaller" }""", out var smaller));
+        Assert.Equal(ContentFontSize.Smaller, smaller.ContentFontSize);
+    }
+
+    [Fact]
     public void The_auto_copy_switch_is_off_until_the_user_turns_it_on()
     {
         // 「自动复制译文」会改写用户的剪贴板：升级上来的设置文件没有这一项，必须读成关。

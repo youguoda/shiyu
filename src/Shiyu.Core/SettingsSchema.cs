@@ -105,7 +105,9 @@ public static class SettingsSchema
                     Icon: "E790"),
                 new SettingsItem(
                     "look.content-size", "内容字号", SettingsControl.Segmented,
-                    Choices: ["小", "标准", "大", "特大"],
+
+                    // 顺序钉在 ContentFontSize 的声明顺序上：分段存下标、设置存枚举（ContentRampTests）。
+                    Choices: ["较小", "小", "标准", "大", "特大"],
                     Hint: "被阅读的文字有多大：窄条卡片、预览、翻译面板的译文与反向输入框跟着变；按钮、菜单与设置项保持原样。",
                     Keywords: ["字号", "字体", "文字", "大小", "放大", "缩小", "看不清", "阅读"],
                     Icon: "E8D2")),

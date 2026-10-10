@@ -6,7 +6,10 @@ namespace Shiyu.Core.Tests;
 public class ContentRampTests
 {
     private static readonly ContentFontSize[] Levels =
-        [ContentFontSize.Small, ContentFontSize.Standard, ContentFontSize.Large, ContentFontSize.Larger];
+    [
+        ContentFontSize.Smaller, ContentFontSize.Small, ContentFontSize.Standard,
+        ContentFontSize.Large, ContentFontSize.Larger,
+    ];
 
     [Fact]
     public void Standard_is_exactly_the_fixed_tokens()
@@ -22,9 +25,24 @@ public class ContentRampTests
     }
 
     [Fact]
-    public void The_levels_are_16_18_20_22()
+    public void The_levels_are_14_16_18_20_22()
     {
-        Assert.Equal([16.0, 18, 20, 22], Levels.Select(level => ContentRamp.For(level).Content));
+        // 用户需求 2026-10-10：「小」下面再加「较小」一档（14），每档仍差 2。
+        Assert.Equal([14.0, 16, 18, 20, 22], Levels.Select(level => ContentRamp.For(level).Content));
+    }
+
+    [Fact]
+    public void The_enum_order_is_the_order_on_screen()
+    {
+        // 分段按钮存的是下标、设置里存的是名字：两边靠声明顺序对上——「较小」排在最前。
+        Assert.Equal(Levels, Enum.GetValues<ContentFontSize>());
+    }
+
+    [Fact]
+    public void Paths_never_shrink_below_the_caption_size()
+    {
+        // 等宽字给路径与文件行用：再小于说明文字（12）就读不清了，「较小」档也守住这条线。
+        Assert.All(Levels.Select(ContentRamp.For), ramp => Assert.True(ramp.Mono >= DesignTokens.TypeCaption));
     }
 
     [Fact]

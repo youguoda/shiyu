@@ -374,6 +374,21 @@ public partial class App
             RenderToPng(reverseRoot, Path.Combine(directory, "content-larger-reverse.png"));
         }
 
+        // 「较小」一档（用户需求 2026-10-10）：最小的一头同样量一次、各渲一张。
+        shell.TryUpdateSettings(settings => settings with { ContentFontSize = Shiyu.Core.ContentFontSize.Smaller });
+        await Settle();
+        Note("smaller");
+
+        if (Windows.OfType<BarWindow>().FirstOrDefault()?.Content is FrameworkElement smallBar)
+        {
+            RenderToPng(smallBar, Path.Combine(directory, "content-smaller-bar.png"));
+        }
+
+        if (Windows.OfType<ReverseInputWindow>().FirstOrDefault()?.Content is FrameworkElement smallReverse)
+        {
+            RenderToPng(smallReverse, Path.Combine(directory, "content-smaller-reverse.png"));
+        }
+
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(directory, "content-size.log"), log.ToString());
     }
