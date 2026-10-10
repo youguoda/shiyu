@@ -19,6 +19,17 @@ public sealed class WindowsClipboardWriter(MessageWindow window)
     private static readonly uint RtfFormat =
         NativeMethods.RegisterClipboardFormatW("Rich Text Format");
 
+    // 写秘密时附上的三个标记（Windows 的约定，密码管理器复制口令时同样这么做）：剪贴板工具一律
+    // 跳过；Win+V 剪贴板历史不收；不上传云剪贴板。
+    private static readonly uint ExcludeFromMonitorsFormat =
+        NativeMethods.RegisterClipboardFormatW(ClipboardFormats.ExcludeFromMonitorsFormat);
+
+    private static readonly uint HistoryFormat =
+        NativeMethods.RegisterClipboardFormatW(ClipboardFormats.CanIncludeInHistoryFormat);
+
+    private static readonly uint CloudFormat =
+        NativeMethods.RegisterClipboardFormatW("CanUploadToCloudClipboard");
+
     /// <summary>
     /// Returns whether the text made it onto the clipboard. Failure here is
     /// ordinary contention — another process holding the clipboard — and the
@@ -68,6 +79,68 @@ public sealed class WindowsClipboardWriter(MessageWindow window)
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Puts a secret on the clipboard — the 「复制」 beside a saved API key
+    /// (用户需求 2026-10-10). Written as Shiyu's own (so its own history skips
+    /// it) and carrying the exclusion markers, so neither Windows' clipboard
+    /// history, the cloud clipboard, nor any other clipboard manager keeps a
+    /// copy of the key.
+    /// </summary>
+    public bool SetSecret(string text)
+    {
+        for (var attempt = 0; attempt < OpenAttempts; attempt++)
+        {
+            if (!NativeMethods.OpenClipboard(window.Handle))
+            {
+                Thread.Sleep(RetryDelay);
+                continue;
+            }
+
+            try
+            {
+                if (!NativeMethods.EmptyClipboard())
+                {
+                    return false;
+                }
+
+                var handle = AllocateUnicode(text);
+                if (handle == IntPtr.Zero
+                    || NativeMethods.SetClipboardData(NativeMethods.CfUnicodeText, handle) == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                // The markers are best effort: the key is already on the
+                // clipboard, and a marker that fails to land must not turn
+                // the copy into a failure the user cannot act on.
+                SetMarker(ExcludeFromMonitorsFormat, []);
+                SetMarker(HistoryFormat, BitConverter.GetBytes(0));
+                SetMarker(CloudFormat, BitConverter.GetBytes(0));
+                return true;
+            }
+            finally
+            {
+                NativeMethods.CloseClipboard();
+            }
+        }
+
+        return false;
+    }
+
+    private static void SetMarker(uint format, byte[] data)
+    {
+        if (format == 0)
+        {
+            return;
+        }
+
+        var handle = AllocateBytes(data.Length == 0 ? [0] : data);
+        if (handle != IntPtr.Zero)
+        {
+            NativeMethods.SetClipboardData(format, handle);
+        }
     }
 
     /// <summary>

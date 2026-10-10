@@ -185,8 +185,8 @@ public class KeyBoundToOriginTests : IDisposable
         Assert.Equal(string.Empty, switched.Backend.ApiKey);
         Assert.False(switched.IsTranslationConfigured);
 
-        // 密钥本身还在，只是不会被发往别家。
-        Assert.Equal("sk-deepseek", switched.BackendApiKey);
+        // 密钥本身还在（记在 DeepSeek 名下），只是不会被发往别家。
+        Assert.Equal("sk-deepseek", switched.KeyFor(DeepSeek));
     }
 
     [Fact]
@@ -271,41 +271,65 @@ public class KeyBoundToOriginTests : IDisposable
     [Fact]
     public void Saving_a_key_writes_the_origin_of_the_current_service_address()
     {
-        var settings = new AppSettings { BackendBaseUrl = Bailian }.WithApiKey("sk-bailian");
+        var settings = new AppSettings { BackendBaseUrl = Bailian, BackendModel = "qwen-plus" }.WithApiKey("sk-bailian");
 
-        Assert.Equal("sk-bailian", settings.BackendApiKey);
-        Assert.Equal("https://dashscope.aliyuncs.com", settings.BackendApiKeyOrigin);
+        var saved = Assert.Single(settings.SavedProviders);
+        Assert.Equal("https://dashscope.aliyuncs.com", saved.Origin);
+        Assert.Equal(Bailian, saved.BaseUrl);
+        Assert.Equal("qwen-plus", saved.Model);
+        Assert.Equal("sk-bailian", saved.ApiKey);
     }
 
     [Fact]
-    public void Saving_a_key_after_switching_provider_rebinds_it_to_the_new_one()
+    public void Saving_a_key_for_another_provider_keeps_the_first_ones_too()
     {
+        // 用户需求 2026-10-10：每家各存一份——存智谱的密钥不再把 DeepSeek 的顶掉。
         var onDeepSeek = SavedFor(DeepSeek, "sk-deepseek");
 
-        var rebound = (onDeepSeek with { BackendBaseUrl = Zhipu }).WithApiKey("sk-zhipu");
+        var both = (onDeepSeek with { BackendBaseUrl = Zhipu }).WithApiKey("sk-zhipu");
 
-        Assert.Equal("sk-zhipu", rebound.KeyFor(Zhipu));
-        Assert.Equal(string.Empty, rebound.KeyFor(DeepSeek));
+        Assert.Equal("sk-zhipu", both.KeyFor(Zhipu));
+        Assert.Equal("sk-deepseek", both.KeyFor(DeepSeek));
+        Assert.Equal(2, both.SavedProviders.Count);
     }
 
     [Fact]
-    public void Changing_the_address_alone_never_touches_the_saved_pair()
+    public void Saving_again_for_the_same_provider_replaces_its_key_in_place()
+    {
+        var both = (SavedFor(DeepSeek, "sk-old") with { BackendBaseUrl = Zhipu }).WithApiKey("sk-zhipu");
+
+        var replaced = (both with { BackendBaseUrl = DeepSeek + "/v1" }).WithApiKey("sk-new");
+
+        Assert.Equal(2, replaced.SavedProviders.Count);
+        Assert.Equal("sk-new", replaced.SavedProviders[0].ApiKey);
+        Assert.Equal("sk-new", replaced.KeyFor(DeepSeek));
+        Assert.Equal("sk-zhipu", replaced.KeyFor(Zhipu));
+    }
+
+    [Fact]
+    public void Without_an_address_there_is_nowhere_to_save_a_key()
+        => Assert.Empty(new AppSettings { BackendBaseUrl = "  " }.WithApiKey("sk-nowhere").SavedProviders);
+
+    [Fact]
+    public void Changing_the_address_alone_never_touches_the_saved_providers()
     {
         var onDeepSeek = SavedFor(DeepSeek);
 
         var switched = onDeepSeek with { BackendBaseUrl = Zhipu };
 
-        Assert.Equal(onDeepSeek.BackendApiKey, switched.BackendApiKey);
-        Assert.Equal(onDeepSeek.BackendApiKeyOrigin, switched.BackendApiKeyOrigin);
+        Assert.Equal(onDeepSeek.SavedProviders, switched.SavedProviders);
     }
 
     [Fact]
-    public void Clearing_the_key_leaves_no_origin_behind()
+    public void Clearing_the_key_removes_only_that_provider()
     {
-        var cleared = SavedFor(DeepSeek).WithApiKey(string.Empty);
+        var both = (SavedFor(DeepSeek) with { BackendBaseUrl = Zhipu }).WithApiKey("sk-zhipu");
 
-        Assert.Equal(string.Empty, cleared.BackendApiKey);
-        Assert.Equal(string.Empty, cleared.BackendApiKeyOrigin);
+        var cleared = both.WithApiKey(string.Empty);
+
+        Assert.Equal(string.Empty, cleared.KeyFor(Zhipu));
+        Assert.Equal("sk-deepseek", cleared.KeyFor(DeepSeek));
+        Assert.Empty(SavedFor(DeepSeek).WithApiKey(string.Empty).SavedProviders);
     }
 
     [Fact]
@@ -320,7 +344,7 @@ public class KeyBoundToOriginTests : IDisposable
         var stored = File.ReadAllText(_path);
         Assert.DoesNotContain("sk-live-123", stored);
         Assert.Contains(AppSettings.SecretMarker, stored);
-        Assert.Contains("\"BackendApiKeyOrigin\": \"https://api.deepseek.com\"", stored);
+        Assert.Contains("\"Origin\": \"https://api.deepseek.com\"", stored);
 
         var loaded = AppSettings.Load(_path);
         Assert.Equal("sk-live-123", loaded.KeyFor(DeepSeek));
@@ -338,8 +362,12 @@ public class KeyBoundToOriginTests : IDisposable
     {
         Assert.True(AppSettings.TryParse(LegacyJson, out var loaded));
 
-        Assert.Equal("https://api.deepseek.com", loaded.BackendApiKeyOrigin);
+        // 并入各家各存的一份：来源取此刻的地址，地址与模型一并记下。
+        var saved = Assert.Single(loaded.SavedProviders);
+        Assert.Equal("https://api.deepseek.com", saved.Origin);
+        Assert.Equal("deepseek-flash", saved.Model);
         Assert.Equal("sk-legacy", loaded.KeyFor(DeepSeek));
+        Assert.Equal(string.Empty, loaded.BackendApiKey);
 
         // 维持现有的配对：升级后原有翻译照常可用。
         Assert.True(loaded.Backend.IsConfigured);
@@ -355,8 +383,11 @@ public class KeyBoundToOriginTests : IDisposable
         loaded.Save(_path);
 
         var stored = File.ReadAllText(_path);
-        Assert.Contains("\"BackendApiKeyOrigin\": \"https://api.deepseek.com\"", stored);
+        Assert.Contains("\"Origin\": \"https://api.deepseek.com\"", stored);
         Assert.DoesNotContain("sk-legacy", stored);
+
+        // 旧的单把字段不再写回文件。
+        Assert.DoesNotContain("BackendApiKey", stored);
         Assert.Equal("sk-legacy", AppSettings.Load(_path).Backend.ApiKey);
     }
 
@@ -372,7 +403,11 @@ public class KeyBoundToOriginTests : IDisposable
 
         Assert.True(AppSettings.TryParse(json, out var loaded));
 
-        Assert.Equal("https://api.deepseek.com", loaded.BackendApiKeyOrigin);
+        // 记在 DeepSeek 名下（地址与模型取预设），当前的智谱照旧没配置。
+        var saved = Assert.Single(loaded.SavedProviders);
+        Assert.Equal("https://api.deepseek.com", saved.Origin);
+        Assert.Equal("deepseek", saved.PresetId);
+        Assert.Equal("sk-deepseek", loaded.KeyFor(DeepSeek));
         Assert.False(loaded.Backend.IsConfigured);
     }
 
@@ -381,10 +416,11 @@ public class KeyBoundToOriginTests : IDisposable
     {
         Assert.True(AppSettings.TryParse(
             """{"BackendBaseUrl":"https://api.deepseek.com"}""", out var noKey));
-        Assert.Equal(string.Empty, noKey.BackendApiKeyOrigin);
+        Assert.Empty(noKey.SavedProviders);
 
         Assert.True(AppSettings.TryParse("""{"BackendApiKey":"sk-orphan"}""", out var noAddress));
-        Assert.Equal(string.Empty, noAddress.BackendApiKeyOrigin);
+        Assert.Empty(noAddress.SavedProviders);
+        Assert.Equal(string.Empty, noAddress.BackendApiKey);
     }
 
     [Fact]
@@ -408,22 +444,21 @@ public class KeyBoundToOriginTests : IDisposable
 
         Assert.True(AppSettings.TryParse(settings.ToBackupJson(includeKey: true), out var restored));
 
-        Assert.Equal(settings.BackendApiKeyOrigin, restored.BackendApiKeyOrigin);
+        Assert.Equal(settings.SavedProviders, restored.SavedProviders);
         Assert.Equal("sk-deepseek", restored.Backend.ApiKey);
         Assert.True(restored.Backend.IsConfigured);
     }
 
     [Fact]
-    public void A_backup_without_the_key_still_empties_the_key_and_may_keep_the_origin()
+    public void A_backup_without_the_keys_carries_no_saved_provider()
     {
         var json = SavedFor(DeepSeek).ToBackupJson(includeKey: false);
 
         Assert.DoesNotContain("sk-deepseek", json);
         Assert.True(AppSettings.TryParse(json, out var parsed));
-        Assert.Equal(string.Empty, parsed.BackendApiKey);
 
-        // 来源不是秘密，留着无害（地址本来就在备份里）。
-        Assert.Equal("https://api.deepseek.com", parsed.BackendApiKeyOrigin);
+        // 没有凭据的"一家"什么也恢复不了——整份不带。
+        Assert.Empty(parsed.SavedProviders);
     }
 
     [Fact]
@@ -442,11 +477,10 @@ public class KeyBoundToOriginTests : IDisposable
 
         var restored = parsed.KeepingKeyOf(local);
 
-        // 设置照常恢复；本机的密钥与它的来源是一对，一起留下。
+        // 设置照常恢复；本机已存的各家服务商一并留下。
         Assert.Equal("English", restored.TargetLanguage);
         Assert.Equal(Zhipu, restored.BackendBaseUrl);
-        Assert.Equal("sk-deepseek", restored.BackendApiKey);
-        Assert.Equal(local.BackendApiKeyOrigin, restored.BackendApiKeyOrigin);
+        Assert.Equal(local.SavedProviders, restored.SavedProviders);
 
         // 备份把地址换成了智谱：本机的 DeepSeek 密钥不会被发去智谱……
         Assert.False(restored.Backend.IsConfigured);
@@ -476,8 +510,9 @@ public class KeyBoundToOriginTests : IDisposable
 
         var restored = parsed.KeepingKeyOf(local);
 
-        Assert.Equal("sk-zhipu", restored.BackendApiKey);
-        Assert.Equal(theirs.BackendApiKeyOrigin, restored.BackendApiKeyOrigin);
+        // 备份带着它自己的各家服务商：恢复的就是备份里的那一套。
+        Assert.Equal(theirs.SavedProviders, restored.SavedProviders);
+        Assert.Equal("sk-zhipu", restored.Backend.ApiKey);
         Assert.True(restored.Backend.IsConfigured);
     }
 
@@ -505,7 +540,7 @@ public class KeyBoundToOriginTests : IDisposable
 
             Assert.True(AppSettings.TryParse(restoredWithKey!, out var carried));
             Assert.Equal("sk-in-the-vault", carried.Backend.ApiKey);
-            Assert.Equal(settings.BackendApiKeyOrigin, carried.BackendApiKeyOrigin);
+            Assert.Equal(settings.SavedProviders, carried.SavedProviders);
 
             // 默认的备份：没有密钥；恢复时本机的密钥与来源留下。
             var plain = Path.Combine(images, "plain.shiyubk");
@@ -517,7 +552,7 @@ public class KeyBoundToOriginTests : IDisposable
             Assert.True(AppSettings.TryParse(restoredPlain!, out var keyless));
             var local = keyless.KeepingKeyOf(settings);
             Assert.Equal("sk-in-the-vault", local.Backend.ApiKey);
-            Assert.Equal(settings.BackendApiKeyOrigin, local.BackendApiKeyOrigin);
+            Assert.Equal(settings.SavedProviders, local.SavedProviders);
         }
         finally
         {
@@ -612,12 +647,13 @@ public class ServiceFormTests
     }
 
     [Fact]
-    public void The_hint_names_the_old_host_and_the_provider_being_filled_in()
+    public void The_hint_names_the_provider_being_filled_in()
     {
+        // 别家的凭据都还在（用户需求 2026-10-10：每家各存一份）——提示只说这一家还没有。
         var form = new ServiceForm(SavedFor(DeepSeek), Zhipu, "glm", TypedKey: "");
 
         Assert.Equal(
-            "已保存的密钥属于 api.deepseek.com，请填写 智谱 GLM（免费模型） 的密钥。",
+            "还没有保存 智谱 GLM（免费模型） 的凭据。各家的凭据分开保存，填好后点「保存凭据」。",
             form.KeyHint("智谱 GLM（免费模型）"));
     }
 
@@ -627,29 +663,31 @@ public class ServiceFormTests
         var form = new ServiceForm(SavedFor(DeepSeek), "https://llm.example.com:8443/v1", "m", TypedKey: "");
 
         Assert.Equal(
-            "已保存的密钥属于 api.deepseek.com，请填写 llm.example.com:8443 的密钥。",
+            "还没有保存 llm.example.com:8443 的凭据。各家的凭据分开保存，填好后点「保存凭据」。",
             form.KeyHint(null));
     }
 
     [Fact]
     public void When_only_the_scheme_differs_the_hint_spells_out_both_origins()
     {
-        // http → https（或反过来）：主机名一样，只写主机会说成"属于 x，请填写 x"。
+        // http → https（或反过来）：主机名一样，只写主机会说成"已存了 x，却说 x 没有"。
         var saved = new AppSettings { BackendBaseUrl = "http://llm.example.com/v1" }.WithApiKey("sk-local");
         var form = new ServiceForm(saved, "https://llm.example.com/v1", "m", TypedKey: "");
 
         Assert.Equal(
-            "已保存的密钥属于 http://llm.example.com，请填写 https://llm.example.com 的密钥。",
+            "还没有保存 https://llm.example.com 的凭据（已保存的是 http://llm.example.com）。",
             form.KeyHint(null));
     }
 
     [Fact]
-    public void A_key_saved_with_no_origin_says_it_has_no_provider_yet()
+    public void A_key_written_around_the_one_door_counts_as_nothing_saved()
     {
+        // 绕过 WithApiKey 直接填旧字段：既拿不到密钥，也不会被当成"别家存过"。
         var unbound = new AppSettings { BackendApiKey = "sk-unbound", BackendBaseUrl = DeepSeek };
         var form = new ServiceForm(unbound, DeepSeek, "m", TypedKey: "");
 
-        Assert.Equal("已保存的密钥没有对应的服务商，请填写 DeepSeek 的密钥。", form.KeyHint("DeepSeek"));
+        Assert.Equal(string.Empty, form.Key);
+        Assert.Null(form.KeyHint("DeepSeek"));
     }
 
     [Fact]

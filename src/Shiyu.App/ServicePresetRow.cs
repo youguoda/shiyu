@@ -178,13 +178,9 @@ internal sealed class ServicePresetRow
         _picker.SelectionChanged += OnPicked;
 
         // 初选按地址与模型的现状反查，而不是文件里的 Id：手改过的配置
-        // 打开窗就该看见「自定义」，别拿一个失效的预设名糊弄人。
-        _syncing = true;
-        var current = Match(baseline.BackendBaseUrl, baseline.BackendModel);
-        _state.Text = current?.Id ?? CustomTag;
-        SelectByTag(current?.Id ?? CustomTag);
-        _keyLink.Visibility = current is null ? Visibility.Collapsed : Visibility.Visible;
-        _syncing = false;
+        // 打开窗就该看见「自定义」，别拿一个失效的预设名糊弄人。提示此刻还没
+        // 建出来（构造的后一步），只同步下拉。
+        SyncPicker(baseline);
 
         static ComboBoxItem Option(ProviderPreset preset) => new()
         {
@@ -199,6 +195,39 @@ internal sealed class ServicePresetRow
             IsEnabled = false,
             FontWeight = FontWeights.SemiBold,
         };
+    }
+
+    /// <summary>
+    /// 跟着已存的设置走（用户需求 2026-10-10）：存过凭据的预设名后标「✓ 已保存」；别处切换了
+    /// 服务商（「已保存的服务商」里的「切换」、导入备份），选中项随之换过来。不触发选中预设的代填。
+    /// </summary>
+    public void Follow(AppSettings settings)
+    {
+        SyncPicker(settings);
+        RefreshKeyHint();
+    }
+
+    private void SyncPicker(AppSettings settings)
+    {
+        _syncing = true;
+        foreach (var item in _picker.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag is string id && ProviderPresets.Find(id) is { } preset)
+            {
+                item.Content = settings.ProviderFor(preset.BaseUrl) is null
+                    ? preset.DisplayName
+                    : $"{preset.DisplayName}  ✓ 已保存";
+            }
+        }
+
+        var current = Match(settings.BackendBaseUrl, settings.BackendModel);
+        _state.Text = current?.Id ?? CustomTag;
+
+        // 改过内容的选中项不会自己重画选择框：先放开再选回来。
+        _picker.SelectedItem = null;
+        SelectByTag(_state.Text);
+        _keyLink.Visibility = current is null ? Visibility.Collapsed : Visibility.Visible;
+        _syncing = false;
     }
 
     /// <summary>地址或模型被改动后由宿主窗口调来：与所选预设不符就降级为「自定义」。</summary>

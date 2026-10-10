@@ -140,9 +140,11 @@ internal static class SettingsBindings
         // 只写 Id 本身：地址与模型由各自的行写。数据层还有一道裁决
         // （ProviderPresets.ResolveFor）——手改过的地址/模型不会带着预设
         // 的附加字段发给别家，界面清空 Id 只是让用户看得见"已是自定义"。
-        "service.preset" => current with { BackendPresetId = text.Trim() },
-        "service.base-url" => current with { BackendBaseUrl = text },
-        "service.model" => current with { BackendModel = text },
+        // 当前这家已存过凭据：改了地址、模型或预设就跟着记下（用户需求 2026-10-10），下次切回
+        // 来是上次的样子。
+        "service.preset" => (current with { BackendPresetId = text.Trim() }).RememberingActiveProvider(),
+        "service.base-url" => (current with { BackendBaseUrl = text }).RememberingActiveProvider(),
+        "service.model" => (current with { BackendModel = text }).RememberingActiveProvider(),
 
         // Blank means keep: the user should not have to retype a secret to
         // change an unrelated setting. A typed key is written together with

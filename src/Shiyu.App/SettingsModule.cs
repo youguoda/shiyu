@@ -97,6 +97,49 @@ internal sealed class SettingsModule
         _window?.JumpToItem(itemId);
     }
 
+#if DEBUG
+    /// <summary>
+    /// 探针命令 credentials 的入口（见 SettingsWindow.ProbeCredentials）：设置里放好两家——DeepSeek
+    /// （用的是备选模型）与智谱，当前在智谱上——再开设置窗落到凭据。最后核对落盘的文件里没有明文。
+    /// </summary>
+    internal async void ProbeCredentials()
+    {
+        var shell = _shell!;
+        shell.TryUpdateSettings(settings =>
+            ((settings with
+                {
+                    SavedProviders = [],
+                    TranslationBackend = TranslationBackendKind.OwnKey,
+                    BackendPresetId = "deepseek",
+                    BackendBaseUrl = "https://api.deepseek.com",
+                    BackendModel = "deepseek-v4-pro",
+                }).WithApiKey("sk-deepseek-probe-1234567890")
+                with
+                {
+                    BackendPresetId = "zhipu",
+                    BackendBaseUrl = "https://open.bigmodel.cn/api/paas/v4",
+                    BackendModel = "glm-4-flash-250414",
+                })
+            .WithApiKey("sk-zhipu-probe-0987654321"));
+
+        ShowAt("service.api-key");
+        for (var waited = 0; waited < 50 && _window is not { IsLoaded: true }; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = _window is null
+            ? "window|missing" + Environment.NewLine
+            : await _window.ProbeCredentials(System.IO.Path.Combine(directory, "credentials.png"));
+
+        var stored = System.IO.File.ReadAllText(AppPaths.SettingsFile);
+        log += FormattableString.Invariant(
+            $"disk|plain={stored.Contains("-probe-", StringComparison.Ordinal)}|protected={stored.Contains(AppSettings.SecretMarker, StringComparison.Ordinal)}{Environment.NewLine}");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "credentials.log"), log + "done" + Environment.NewLine);
+    }
+#endif
+
     /// <summary>原 OnExit：设置窗先于几何保存关掉。</summary>
     public void Shutdown() => _window?.Close();
 }

@@ -61,6 +61,7 @@ public class SettingsSchemaTests
             ["service.base-url"] = "translate",
             ["service.model"] = "translate",
             ["service.api-key"] = "translate",
+            ["service.saved-providers"] = "translate",
             ["translate.templates"] = "translate",
             ["translate.auto-copy"] = "translate",
             ["translate.log"] = "translate",

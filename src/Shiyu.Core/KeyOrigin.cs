@@ -56,6 +56,10 @@ public static class KeyOrigin
     public static string HostOf(string? origin)
         => Uri.TryCreate(origin, UriKind.Absolute, out var uri) ? uri.Authority : string.Empty;
 
+    /// <summary>两个地址（或来源）属于同一家：来源都认得出、且一致（大小写不计）。</summary>
+    public static bool Same(string? a, string? b)
+        => Of(a) is { Length: > 0 } left && string.Equals(left, Of(b), StringComparison.OrdinalIgnoreCase);
+
     private static bool TryHttp(string text, out Uri uri)
     {
         if (Uri.TryCreate(text, UriKind.Absolute, out var parsed)

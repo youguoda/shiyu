@@ -64,6 +64,8 @@ public partial class SettingsWindow : Window
     private TextBox? _directoryBox;
     private TextBlock? _directoryWarning;
     private PasswordBox? _secretBox;
+    private CredentialEditor? _credential;
+    private StackPanel? _savedProviders;
     private ServicePresetRow? _presetRow;
     private ExclusionRulesCard? _exclusions;
     private PromptTemplatesCard? _templates;
@@ -734,51 +736,220 @@ public partial class SettingsWindow : Window
 
     private FrameworkElement SecretFor(SettingsItem item, ItemState state)
     {
-        var (editor, box) = ItemEditors.Password(item, _baseline, state, withHint: false);
+        var (_, box) = ItemEditors.Password(item, _baseline, state, withHint: false);
         _secretBox = box;
 
-        var save = new Button
-        {
-            Content = "保存凭据",
-            Padding = new Thickness(12, 3, 12, 3),
-            Margin = new Thickness(6, 0, 0, 0),
-            Cursor = Cursors.Hand,
-        };
+        // 用户需求 2026-10-10：每家各存一份，打码显示、点开才看全。凭据卡自己按表单上的地址
+        // 决定是打码的那一行，还是输入框。
+        _credential = new CredentialEditor(
+            box,
+            formBaseUrl: FormBaseUrl,
+            settings: () => _store.Current,
+            save: () => SaveCredential(item, state, box),
+            remove: AskRemoveProvider,
+            copy: key => Shell?.Writer?.SetSecret(key) == true);
 
-        // 自备密钥保留显式操作（ADR-0012 §15）：凭据不是改了就发的开关，
-        // 点了「保存凭据」才离手；留空就是"不动它"。
-        save.Click += (_, _) =>
-        {
-            if (state.Text.Length == 0)
-            {
-                CardOf(item)?.ShowError("还没有输入任何凭据。");
-                return;
-            }
-
-            CardOf(item)?.ClearError();
-            Commit(item, state);
-            box.Clear();
-            state.Text = string.Empty;
-        };
-
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        box.Width = 220;
-        row.Children.Add(box);
-        row.Children.Add(save);
-
-        // 已存的密钥属于别家时，凭据框下方说清楚（票 29）。话与「申请密钥」链接
-        // 由预设行产出——它知道表单上是哪一家；这里只给它一个落脚处，并在框里
-        // 的内容变化时叫它重判（正在填就不再提示）。
+        // 这家还没有凭据、别家有时，凭据框下方说清楚（票 29）。话与「申请密钥」链接由预设行产出
+        // ——它知道表单上是哪一家；这里只给它一个落脚处，并在框里的内容变化时叫它重判（正在填就
+        // 不再提示）。
         if (_presetRow is null)
         {
-            return row;
+            return _credential.Element;
         }
 
         box.PasswordChanged += (_, _) => _presetRow?.RefreshKeyHint();
         var stack = new StackPanel();
-        stack.Children.Add(row);
+        stack.Children.Add(_credential.Element);
         stack.Children.Add(_presetRow.KeyHint);
         return stack;
+    }
+
+    /// <summary>表单上此刻的服务地址（可能还没落盘）；没有地址框时取已存的。</summary>
+    private string FormBaseUrl()
+        => _textBoxes.TryGetValue("service.base-url", out var box) ? box.Text : _store.Current.BackendBaseUrl;
+
+    /// <summary>
+    /// 「保存凭据」：自备密钥保留显式操作（ADR-0012 §15），凭据不是改了就发的开关，点了才离手。
+    /// 记在表单上这家的名下，别家的一份不碰。存成了返回 true。
+    /// </summary>
+    private bool SaveCredential(SettingsItem item, ItemState state, PasswordBox box)
+    {
+        if (state.Text.Length == 0)
+        {
+            CardOf(item)?.ShowError("还没有输入任何凭据。");
+            return false;
+        }
+
+        if (KeyOrigin.Of(FormBaseUrl()).Length == 0)
+        {
+            CardOf(item)?.ShowError("先填好服务地址，再保存凭据——凭据要记在这家服务商名下。");
+            return false;
+        }
+
+        CardOf(item)?.ClearError();
+        var typed = state.Text;
+        Commit(item, state);
+        if (_store.Current.KeyFor(FormBaseUrl()) != typed)
+        {
+            // Commit 已把失败的原因写在卡上。
+            return false;
+        }
+
+        box.Clear();
+        state.Text = string.Empty;
+        return true;
+    }
+
+    /// <summary>删除一家已存的服务商：凭据删了就得重新填，先问一句（§6.5，取消拿默认焦点）。</summary>
+    private void AskRemoveProvider(SavedProvider provider)
+    {
+        var answer = ContentDialog.Show(
+            this,
+            "删除凭据",
+            $"删除「{provider.DisplayName}」保存的凭据？以后要用这家，得重新填写。",
+            new ContentDialogButton("取消", ContentDialogButtonStyle.Standard, IsCancelFocus: true),
+            new ContentDialogButton("删除", ContentDialogButtonStyle.Danger));
+        if (answer != 1)
+        {
+            return;
+        }
+
+        try
+        {
+            _store.Update(latest => latest.WithoutProvider(provider.Origin), AppPaths.SettingsFile);
+        }
+        catch (SettingsSaveException failure)
+        {
+            CardOf(SettingsSchema.Find("service.saved-providers")!)?.ShowError(failure.Message + " 可以重试。");
+        }
+    }
+
+    // --- 已保存的服务商（用户需求 2026-10-10：配过的一目了然，点一下就切过去） ----------------
+
+    private FrameworkElement SavedProvidersRow()
+    {
+        _savedProviders = new StackPanel();
+        RefreshSavedProviders(_baseline);
+        return _savedProviders;
+    }
+
+    /// <summary>
+    /// 每家一行：名字、模型与打码的凭据；正在用的那家标「当前使用」，别家给「切换」；都能删。
+    /// 跟着设置走——存了、删了、切了，这里随之重画。
+    /// </summary>
+    private void RefreshSavedProviders(AppSettings settings)
+    {
+        if (_savedProviders is null)
+        {
+            return;
+        }
+
+        _savedProviders.Children.Clear();
+        if (settings.SavedProviders.Count == 0)
+        {
+            var empty = new TextBlock
+            {
+                Text = "还没有保存过凭据。在上面选好服务商、填好凭据并保存后，会出现在这里。",
+                TextWrapping = TextWrapping.Wrap,
+            };
+            empty.SetResourceReference(TextBlock.FontSizeProperty, "Type.Caption");
+            empty.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+            _savedProviders.Children.Add(empty);
+            return;
+        }
+
+        foreach (var provider in settings.SavedProviders)
+        {
+            _savedProviders.Children.Add(SavedProviderLine(
+                provider, current: KeyOrigin.Same(settings.BackendBaseUrl, provider.Origin)));
+        }
+    }
+
+    private FrameworkElement SavedProviderLine(SavedProvider provider, bool current)
+    {
+        var line = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var marker = new TextBlock
+        {
+            Text = current ? "●" : "○",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+        };
+        marker.SetResourceReference(TextBlock.ForegroundProperty, current ? "Brush.Accent" : "Brush.TextTertiary");
+        line.Children.Add(marker);
+
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(new TextBlock { Text = provider.DisplayName, TextTrimming = TextTrimming.CharacterEllipsis });
+        var detail = new TextBlock
+        {
+            Text = provider.Model.Length > 0
+                ? $"{provider.Model}  ·  {CredentialMask.Of(provider.ApiKey)}"
+                : CredentialMask.Of(provider.ApiKey),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        detail.SetResourceReference(TextBlock.FontSizeProperty, "Type.Caption");
+        detail.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+        words.Children.Add(detail);
+        Grid.SetColumn(words, 1);
+        line.Children.Add(words);
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (current)
+        {
+            var using_ = new TextBlock
+            {
+                Text = "当前使用",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            using_.SetResourceReference(TextBlock.FontSizeProperty, "Type.Caption");
+            using_.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
+            actions.Children.Add(using_);
+        }
+        else
+        {
+            var switchTo = new Button
+            {
+                Content = "切换",
+                Padding = new Thickness(10, 3, 10, 3),
+                Cursor = Cursors.Hand,
+                ToolTip = $"改用 {provider.DisplayName}：地址、模型和凭据一起切过去",
+            };
+            switchTo.Click += (_, _) => SwitchToProvider(provider);
+            actions.Children.Add(switchTo);
+        }
+
+        var remove = new Button
+        {
+            Content = "删除",
+            Padding = new Thickness(10, 3, 10, 3),
+            Margin = new Thickness(4, 0, 0, 0),
+            Cursor = Cursors.Hand,
+        };
+        remove.Click += (_, _) => AskRemoveProvider(provider);
+        actions.Children.Add(remove);
+        Grid.SetColumn(actions, 2);
+        line.Children.Add(actions);
+
+        System.Windows.Automation.AutomationProperties.SetName(
+            line, current ? $"{provider.DisplayName}，当前使用" : provider.DisplayName);
+        return line;
+    }
+
+    /// <summary>切到一家已存的服务商：地址、模型、预设一次落盘，表单与预设下拉随设置变化跟上。</summary>
+    private void SwitchToProvider(SavedProvider provider)
+    {
+        try
+        {
+            _store.Update(latest => latest.SwitchedTo(provider), AppPaths.SettingsFile);
+        }
+        catch (SettingsSaveException failure)
+        {
+            CardOf(SettingsSchema.Find("service.saved-providers")!)?.ShowError(failure.Message + " 可以重试。");
+        }
     }
 
     private FrameworkElement DirectoryFor(SettingsItem item, ItemState state)
@@ -928,6 +1099,7 @@ public partial class SettingsWindow : Window
         "hotkeys.reset" => ResetHotkeysRow(),
         "hotkeys.cheatsheet" => KeyMapCard(),
         "service.preset" => PresetRow(state),
+        "service.saved-providers" => SavedProvidersRow(),
         "exclusions" => ExclusionsRow(item, state),
         "translate.templates" => TemplatesRow(item),
         "translate.log-clear" => TranslationLogRow(),
@@ -1207,31 +1379,26 @@ public partial class SettingsWindow : Window
             applyPreset: preset =>
             {
                 // 选中预设 = 预设、地址、模型三字段一次落盘（即改即生效的
-                // 一次提交），编辑框同步显示。
+                // 一次提交），编辑框同步显示。存过这家（用户需求 2026-10-10）
+                // 就回到上次用的地址与模型，凭据随来源自然找到。
+                var switched = _store.Current.SwitchedToPreset(preset);
                 if (_textBoxes.TryGetValue("service.base-url", out var urlBox))
                 {
-                    urlBox.Text = preset.BaseUrl;
+                    urlBox.Text = switched.BackendBaseUrl;
                 }
 
                 if (_textBoxes.TryGetValue("service.model", out var modelBox))
                 {
-                    modelBox.Text = preset.DefaultModel;
+                    modelBox.Text = switched.BackendModel;
                 }
 
                 presetState.Text = preset.Id;
-                _edited["service.base-url"].Text = preset.BaseUrl;
-                _edited["service.model"].Text = preset.DefaultModel;
+                _edited["service.base-url"].Text = switched.BackendBaseUrl;
+                _edited["service.model"].Text = switched.BackendModel;
 
                 try
                 {
-                    _store.Update(
-                        latest => latest with
-                        {
-                            BackendPresetId = preset.Id,
-                            BackendBaseUrl = preset.BaseUrl,
-                            BackendModel = preset.DefaultModel,
-                        },
-                        AppPaths.SettingsFile);
+                    _store.Update(latest => latest.SwitchedToPreset(preset), AppPaths.SettingsFile);
                 }
                 catch (SettingsSaveException failure)
                 {
@@ -1257,6 +1424,12 @@ public partial class SettingsWindow : Window
             {
                 box.TextChanged += (_, _) => _presetRow?.NoteAddressEdited();
             }
+        }
+
+        // 地址一变，凭据卡要看的是另一家：存过就打码显示，没存过就是输入框。
+        if (_textBoxes.TryGetValue("service.base-url", out var urlBox))
+        {
+            urlBox.TextChanged += (_, _) => _credential?.Refresh();
         }
     }
 
@@ -2037,8 +2210,11 @@ public partial class SettingsWindow : Window
 
         _baseline = updated;
 
-        // 密钥与来源可能刚被存下或被导入换掉：提示按新的基线重判（票 29）。
-        _presetRow?.RefreshKeyHint();
+        // 凭据可能刚被存下、删掉、导入换掉，服务商也可能刚在「已保存的服务商」里切过（用户需求
+        // 2026-10-10）：预设下拉的选中与「✓ 已保存」标记、凭据卡、已保存列表与提示都按新的基线重判。
+        _presetRow?.Follow(updated);
+        _credential?.Refresh();
+        RefreshSavedProviders(updated);
     }
 
     /// <summary>把一项的最新值推进编辑器状态与控件。凭据除外：它永不回显。</summary>

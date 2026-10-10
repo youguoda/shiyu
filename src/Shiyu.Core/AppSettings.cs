@@ -107,18 +107,20 @@ public sealed record AppSettings
     public bool RelayUnavailableNoticed { get; init; }
 
     /// <summary>
-    /// Stored as written. The history beside it is not encrypted either, so
-    /// pretending this one field is protected would be theatre — what it does
-    /// get is never being shown in the interface or written to a log.
+    /// 自备密钥的各家服务商（用户需求 2026-10-10：每家各存一份地址、模型与凭据，选中即切换）。
+    /// 凭据的唯一归宿：只经 <see cref="WithApiKey"/> 写入，只经 <see cref="KeyFor"/> 按来源取出
+    /// （票 29：密钥只发给它所属的服务商）。凭据在文件里受保护，备份默认不带（ADR-0011）。
+    /// </summary>
+    public IReadOnlyList<SavedProvider> SavedProviders { get; init; } = [];
+
+    /// <summary>
+    /// 旧版的单把密钥（2026-10-10 之前）。只为读旧文件而留：读进来即并入
+    /// <see cref="SavedProviders"/> 并清空，之后谁也不读它——<see cref="KeyFor"/> 不看这里，
+    /// 绕过写入口直接填它的，得到的是"没配置"，不是泄露。
     /// </summary>
     public string BackendApiKey { get; init; } = string.Empty;
 
-    /// <summary>
-    /// 上面这把密钥是为哪家服务商保存的：保存时服务地址的 scheme + host +
-    /// port（票 29，见 <see cref="KeyOrigin"/>）。不是秘密，明文存。它与密钥
-    /// 是一对——只经 <see cref="WithApiKey"/> 写入，只经 <see cref="KeyFor"/>
-    /// 取出：来源与服务地址不一致时密钥不会被带上。
-    /// </summary>
+    /// <summary>旧版单把密钥的来源（票 29），与 <see cref="BackendApiKey"/> 一起只在读旧文件时用到。</summary>
     public string BackendApiKeyOrigin { get; init; } = string.Empty;
 
     /// <summary>How long image originals are kept before being cleaned up.</summary>
@@ -507,6 +509,20 @@ public sealed record AppSettings
                 parsed = parsed with { BackendApiKeyOrigin = KeyOrigin.Of(parsed.BackendBaseUrl) };
             }
 
+            // 各家各存的凭据同样是标记 + 不透明字节：逐份还原成明文。本机打不开的那份（换了机器、
+            // 换了用户）与上面同理当作没有——整份不留，等用户重新填，绝不把一串乱码当凭据发出去。
+            parsed = parsed with
+            {
+                SavedProviders = [.. (parsed.SavedProviders ?? []).Select(Readable).OfType<SavedProvider>()],
+            };
+
+            // 用户需求 2026-10-10：一把密钥 → 每家一份。旧文件里的那一对（密钥 + 来源）并入
+            // SavedProviders，旧字段随即清空，之后再没有人读它们。
+            if (parsed.BackendApiKey.Length > 0 || parsed.BackendApiKeyOrigin.Length > 0)
+            {
+                parsed = parsed.MigratingLegacyKey();
+            }
+
             settings = parsed;
             return true;
         }
@@ -537,96 +553,229 @@ public sealed record AppSettings
 
     /// <summary>
     /// This instance as it appears in settings.json: every field plain except
-    /// the API key, which is protected when a protector is installed. The key
-    /// in memory is always plain — protection is a property of the file, not
-    /// of the running app. Protection failing refuses the save rather than
-    /// quietly writing the plaintext key the user believed was protected.
+    /// the saved providers' keys, each protected when a protector is installed.
+    /// Keys in memory are always plain — protection is a property of the file,
+    /// not of the running app. Protection failing refuses the save rather than
+    /// quietly writing a plaintext key the user believed was protected. The
+    /// legacy single-key fields are read-only history and never written again.
     /// </summary>
     private System.Text.Json.Nodes.JsonObject ToStorableNode()
     {
         var node = System.Text.Json.Nodes.JsonObject.Create(
             JsonSerializer.SerializeToElement(this, Format))!;
-        if (BackendApiKey.Length == 0)
+        node.Remove(nameof(BackendApiKey));
+        node.Remove(nameof(BackendApiKeyOrigin));
+
+        if (SecretProtector is not { } protector
+            || node[nameof(SavedProviders)] is not System.Text.Json.Nodes.JsonArray providers)
         {
             return node;
         }
 
-        if (SecretProtector is { } protector
-            && protector.Protect(BackendApiKey) is { } stored)
+        foreach (var provider in providers.OfType<System.Text.Json.Nodes.JsonObject>())
         {
-            node["BackendApiKey"] = stored;
-        }
-        else if (SecretProtector is not null)
-        {
-            throw new InvalidOperationException("API 密钥保护失败，已放弃写入设置文件。");
+            if (provider[nameof(SavedProvider.ApiKey)]?.GetValue<string>() is { Length: > 0 } key)
+            {
+                provider[nameof(SavedProvider.ApiKey)] = protector.Protect(key)
+                    ?? throw new InvalidOperationException("API 密钥保护失败，已放弃写入设置文件。");
+            }
         }
 
         return node;
     }
 
     /// <summary>
-    /// The settings copy a backup carries (ADR-0011). Without the key: the
-    /// key field is empty — a backup leaving this machine must not carry a
-    /// working credential. With it: the plain key, because the protected form
-    /// is bound to this machine's user; the caller only ever embeds it inside
-    /// an encrypted archive, and the import re-protects on first save.
-    /// The key's origin (票 29) is not a secret and travels either way; a
-    /// restore that finds no key keeps this machine's key and origin
-    /// (<see cref="KeepingKeyOf"/>), so the origin in a keyless backup is moot.
+    /// The settings copy a backup carries (ADR-0011). Without the keys: no
+    /// saved provider at all — a backup leaving this machine must not carry a
+    /// working credential, and a provider without its key is nothing to
+    /// restore. With them: the plain keys, because the protected form is bound
+    /// to this machine's user; the caller only ever embeds them inside an
+    /// encrypted archive, and the import re-protects on first save.
     /// </summary>
     public string ToBackupJson(bool includeKey)
         => includeKey
             ? JsonSerializer.Serialize(this, Format)
-            : JsonSerializer.Serialize(this with { BackendApiKey = string.Empty }, Format);
+            : JsonSerializer.Serialize(this with { SavedProviders = [], BackendApiKey = string.Empty }, Format);
 
-    // --- 密钥只发给它所属的服务商（票 29） -----------------------------------------
+    // --- 每家各存一份，凭据只发给它所属的服务商（票 29，用户需求 2026-10-10） ---------------
 
     /// <summary>
-    /// 发给 <paramref name="baseUrl"/> 的密钥：来源与它一致才返回已存的那把，
-    /// 否则是空串。没有记下来源的密钥也是空串——失败即关闭：谁绕开
-    /// <see cref="WithApiKey"/> 只写了密钥，得到的是"没配置"，不是泄露。
+    /// 发给 <paramref name="baseUrl"/> 的密钥：已存的各家里来源与它一致的那一把，否则是空串。
+    /// 失败即关闭：认不出来源的地址拿不到任何一把。
     /// </summary>
-    public string KeyFor(string baseUrl)
-        => BackendApiKey is { Length: > 0 }
-            && BackendApiKeyOrigin is { Length: > 0 } stored
-            && KeyOrigin.Of(baseUrl) is { Length: > 0 } wanted
-            && string.Equals(KeyOrigin.Of(stored), wanted, StringComparison.OrdinalIgnoreCase)
-                ? BackendApiKey
-                : string.Empty;
+    public string KeyFor(string baseUrl) => ProviderFor(baseUrl)?.ApiKey ?? string.Empty;
+
+    /// <summary>来源与 <paramref name="baseUrl"/> 一致的那家已存服务商；没有就是 null。</summary>
+    public SavedProvider? ProviderFor(string baseUrl)
+        => SavedProviders.FirstOrDefault(provider =>
+            provider.ApiKey.Length > 0 && KeyOrigin.Same(baseUrl, provider.Origin));
 
     /// <summary>
-    /// 已存了密钥，但它不属于 <paramref name="baseUrl"/> 这个来源——界面据此
-    /// 说"请填写这家的密钥"，而不是"还没填"。没有地址就谈不上"这家"。
+    /// 存了别家的凭据，却没有 <paramref name="baseUrl"/> 这一家的——界面据此说"这家还没有
+    /// 凭据"，而不是"还没填过任何凭据"。没有地址就谈不上"这家"。
     /// </summary>
     public bool HasKeyForOtherOrigin(string baseUrl)
-        => BackendApiKey is { Length: > 0 }
+        => SavedProviders.Count > 0
             && KeyOrigin.Of(baseUrl).Length > 0
-            && KeyFor(baseUrl).Length == 0;
+            && ProviderFor(baseUrl) is null;
 
     /// <summary>
-    /// 保存一把密钥——唯一的写入口：密钥与它的来源（此刻的服务地址）成对
-    /// 写下。设置窗的「保存凭据」、引导里填的密钥都走这里。空密钥连来源一并
-    /// 清掉。
+    /// 保存一把密钥——唯一的写入口：记在此刻服务地址的来源名下，连同地址、模型与预设；同一家
+    /// 再存就是更换（位置不变），别家的一份也不碰。设置窗的「保存凭据」、引导里填的密钥都走这里。
+    /// 空密钥是删掉这一家。没有服务地址就无处可记，什么也不变。
     /// </summary>
     public AppSettings WithApiKey(string key)
-        => key.Length == 0
-            ? this with { BackendApiKey = string.Empty, BackendApiKeyOrigin = string.Empty }
-            : this with { BackendApiKey = key, BackendApiKeyOrigin = KeyOrigin.Of(BackendBaseUrl) };
+    {
+        var origin = KeyOrigin.Of(BackendBaseUrl);
+        if (origin.Length == 0)
+        {
+            return this;
+        }
+
+        if (key.Length == 0)
+        {
+            return WithoutProvider(origin);
+        }
+
+        var entry = new SavedProvider(origin, BackendBaseUrl.Trim(), BackendModel.Trim(), BackendPresetId, key);
+        var providers = SavedProviders.ToList();
+        var index = providers.FindIndex(provider => KeyOrigin.Same(provider.Origin, origin));
+        if (index >= 0)
+        {
+            providers[index] = entry;
+        }
+        else
+        {
+            providers.Add(entry);
+        }
+
+        return this with { SavedProviders = providers };
+    }
+
+    /// <summary>删掉一家已存的服务商（连同它的凭据）。</summary>
+    public AppSettings WithoutProvider(string origin)
+        => this with
+        {
+            SavedProviders = [.. SavedProviders.Where(provider => !KeyOrigin.Same(provider.Origin, origin))],
+        };
+
+    /// <summary>切到一家已存的服务商：地址、模型、预设回到它上次的样子，凭据随来源自然找到。</summary>
+    public AppSettings SwitchedTo(SavedProvider provider)
+        => this with
+        {
+            BackendBaseUrl = provider.BaseUrl,
+            BackendModel = provider.Model,
+            BackendPresetId = provider.PresetId,
+        };
 
     /// <summary>
-    /// 备份恢复落地时的密钥取舍（票 11 的语义不变，加上来源）：备份没带密钥
-    /// （默认，ADR-0011）就保留<paramref name="local"/>——本机现有的——密钥，
-    /// 连同它的来源：两者是一对，拆开就是把 A 家的密钥配上备份里 B 家的地址。
-    /// 备份自己带了密钥就照单全收，它的来源随设置一起来。
+    /// 在下拉里挑了一家预设：存过这家，就回到上次用的地址与模型；没存过就用预设的默认。
     /// </summary>
-    public AppSettings KeepingKeyOf(AppSettings local)
-        => BackendApiKey.Length > 0
-            ? this
+    public AppSettings SwitchedToPreset(ProviderPreset preset)
+        => ProviderFor(preset.BaseUrl) is { } saved
+            ? this with
+            {
+                BackendPresetId = preset.Id,
+                BackendBaseUrl = saved.BaseUrl.Length > 0 ? saved.BaseUrl : preset.BaseUrl,
+                BackendModel = saved.Model.Length > 0 ? saved.Model : preset.DefaultModel,
+            }
             : this with
             {
-                BackendApiKey = local.BackendApiKey,
-                BackendApiKeyOrigin = local.BackendApiKeyOrigin,
+                BackendPresetId = preset.Id,
+                BackendBaseUrl = preset.BaseUrl,
+                BackendModel = preset.DefaultModel,
             };
+
+    /// <summary>
+    /// 当前这家的地址、模型或预设改了：它在已存的里面，就跟着记下（凭据不动），下次切回来是
+    /// 上次的样子。不在已存里的地址什么也不记——没有凭据就谈不上"这家的一份"。
+    /// </summary>
+    public AppSettings RememberingActiveProvider()
+    {
+        var providers = SavedProviders.ToList();
+        var index = providers.FindIndex(provider => KeyOrigin.Same(BackendBaseUrl, provider.Origin));
+        if (index < 0)
+        {
+            return this;
+        }
+
+        var remembered = providers[index] with
+        {
+            BaseUrl = BackendBaseUrl.Trim(),
+            Model = BackendModel.Trim(),
+            PresetId = BackendPresetId,
+        };
+        if (remembered == providers[index])
+        {
+            return this;
+        }
+
+        providers[index] = remembered;
+        return this with { SavedProviders = providers };
+    }
+
+    /// <summary>
+    /// 备份恢复落地时的凭据取舍（票 11 的语义不变）：备份没带凭据（默认，ADR-0011）就保留
+    /// <paramref name="local"/>——本机现有的——各家服务商；备份自己带了就照单全收。
+    /// </summary>
+    public AppSettings KeepingKeyOf(AppSettings local)
+        => SavedProviders.Count > 0 ? this : this with { SavedProviders = local.SavedProviders };
+
+    /// <summary>
+    /// 读进来的一份：受保护的凭据还原成明文，来源规整；凭据打不开、或认不出来源的，整份不留。
+    /// 缺字段的旧写法（null）一律当空串。
+    /// </summary>
+    private static SavedProvider? Readable(SavedProvider? provider)
+    {
+        if (provider is null)
+        {
+            return null;
+        }
+
+        var key = provider.ApiKey ?? string.Empty;
+        if (key.StartsWith(SecretMarker, StringComparison.Ordinal))
+        {
+            key = SecretProtector?.Unprotect(key) ?? string.Empty;
+        }
+
+        var origin = KeyOrigin.Of(provider.Origin is { Length: > 0 } recorded ? recorded : provider.BaseUrl);
+        return key.Length > 0 && origin.Length > 0
+            ? new SavedProvider(origin, provider.BaseUrl ?? string.Empty, provider.Model ?? string.Empty,
+                provider.PresetId ?? string.Empty, key)
+            : null;
+    }
+
+    /// <summary>
+    /// 旧版的单把密钥并入各家各存的一份（用户需求 2026-10-10）。来源与此刻的服务地址一致，就连
+    /// 地址、模型、预设一起记下；不一致（换过服务商、还没填新密钥）就按来源认出预设，认不出用
+    /// 来源本身当地址。没有来源的旧密钥从来发不出去（票 29），也不会因迁移而复活。已经存了这一家
+    /// 的，以已存的为准。
+    /// </summary>
+    private AppSettings MigratingLegacyKey()
+    {
+        var origin = KeyOrigin.Of(BackendApiKeyOrigin);
+        var key = BackendApiKey;
+        var migrated = this with { BackendApiKey = string.Empty, BackendApiKeyOrigin = string.Empty };
+        if (key.Length == 0 || origin.Length == 0
+            || SavedProviders.Any(provider => KeyOrigin.Same(provider.Origin, origin)))
+        {
+            return migrated;
+        }
+
+        SavedProvider entry;
+        if (KeyOrigin.Same(BackendBaseUrl, origin))
+        {
+            entry = new SavedProvider(origin, BackendBaseUrl.Trim(), BackendModel.Trim(), BackendPresetId, key);
+        }
+        else
+        {
+            var preset = ProviderPresets.All.FirstOrDefault(candidate => KeyOrigin.Same(candidate.BaseUrl, origin));
+            entry = new SavedProvider(
+                origin, preset?.BaseUrl ?? origin, preset?.DefaultModel ?? string.Empty, preset?.Id ?? string.Empty, key);
+        }
+
+        return migrated with { SavedProviders = [.. SavedProviders, entry] };
+    }
 
     public ExclusionPolicy BuildExclusionPolicy()
         => new(ExclusionPolicy.Presets.Concat(

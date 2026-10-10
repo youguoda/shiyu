@@ -290,9 +290,18 @@ public static class SettingsSchema
                 new SettingsItem(
                     "service.api-key", "凭据", SettingsControl.Password,
                     Parent: "service.backend-kind",
-                    Hint: "自备密钥时使用。已保存的凭据不回显。填入后点「保存凭据」。",
-                    Keywords: ["凭据", "密钥", "api", "key"],
-                    Icon: "E72E")),
+                    Hint: "自备密钥时使用。每家服务商各存一份，打码显示，点「显示」才看得到完整的密钥。填入后点「保存凭据」。",
+                    Keywords: ["凭据", "密钥", "api", "key", "显示", "复制", "更换"],
+                    Icon: "E72E"),
+
+                // 用户需求 2026-10-10：配过的服务商一目了然，点一下就切过去，不用重填。
+                new SettingsItem(
+                    "service.saved-providers", "已保存的服务商", SettingsControl.Custom,
+                    Parent: "service.backend-kind",
+                    Hint: "保存过凭据的服务商都在这里。点「切换」就用它的地址、模型和凭据；不再需要的可以删除。",
+                    Keywords: ["服务商", "切换", "已保存", "凭据", "密钥", "多个", "删除"],
+                    Icon: "E8FD",
+                    FullBleed: true)),
             new SettingsSection("translate.templates", "提示词模板",
                 new SettingsItem(
                     "translate.templates", "提示词模板", SettingsControl.Custom,

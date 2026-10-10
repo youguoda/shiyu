@@ -487,6 +487,11 @@ public partial class App
                 shell.ShowLibrary?.Invoke();
                 break;
 
+            // 自备密钥每家各存一份、打码显示、选中即切换（用户需求 2026-10-10）。
+            case "credentials":
+                _modules!.Settings.ProbeCredentials();
+                break;
+
             case "settings":
                 if (DebugOverrides.ProbeItem is { } item)
                 {

@@ -31,7 +31,7 @@ public sealed record ServiceForm(AppSettings Saved, string BaseUrl, string Model
     /// <summary>可直接交给探针的一份选项（地址与模型去首尾空白，一如既往）。</summary>
     public TranslationBackendOptions Options => new(BaseUrl.Trim(), Model.Trim(), Key);
 
-    /// <summary>凭据框空着，已存的密钥却属于另一家。</summary>
+    /// <summary>凭据框空着，存了别家的凭据、却没有这一家的。</summary>
     public bool SavedKeyBelongsElsewhere
         => TypedKey.Length == 0 && Saved.HasKeyForOtherOrigin(BaseUrl);
 
@@ -56,21 +56,18 @@ public sealed record ServiceForm(AppSettings Saved, string BaseUrl, string Model
             return null;
         }
 
-        var current = providerName is { Length: > 0 }
-            ? providerName
-            : KeyOrigin.HostOf(KeyOrigin.Of(BaseUrl));
-        var owner = KeyOrigin.HostOf(Saved.BackendApiKeyOrigin);
+        var origin = KeyOrigin.Of(BaseUrl);
+        var host = KeyOrigin.HostOf(origin);
 
-        // 只有协议（http ↔ https）不同时主机名一样，说成"属于 x，请填写 x"
-        // 谁也看不懂——这时把来源写全。
-        if (owner.Length > 0 && string.Equals(owner, current, StringComparison.OrdinalIgnoreCase))
+        // 只差协议（http ↔ https）的那家已经存过：说成"还没有保存 x"谁也看不懂——这时把来源写全。
+        var sameHost = Saved.SavedProviders.FirstOrDefault(provider =>
+            string.Equals(KeyOrigin.HostOf(provider.Origin), host, StringComparison.OrdinalIgnoreCase));
+        if (sameHost is not null)
         {
-            owner = KeyOrigin.Of(Saved.BackendApiKeyOrigin);
-            current = KeyOrigin.Of(BaseUrl);
+            return $"还没有保存 {origin} 的凭据（已保存的是 {sameHost.Origin}）。";
         }
 
-        return owner.Length == 0
-            ? $"已保存的密钥没有对应的服务商，请填写 {current} 的密钥。"
-            : $"已保存的密钥属于 {owner}，请填写 {current} 的密钥。";
+        var current = providerName is { Length: > 0 } ? providerName : host;
+        return $"还没有保存 {current} 的凭据。各家的凭据分开保存，填好后点「保存凭据」。";
     }
 }

@@ -63,7 +63,6 @@ public class AppSettingsTests
             SourceLanguage = "Chinese",
             BackendBaseUrl = "https://example.com/v1",
             BackendModel = "some-model",
-            BackendApiKey = "a-secret",
             ImageRetentionDays = 7,
             StartWithWindows = false,
             Theme = AppTheme.Dark,
@@ -76,7 +75,7 @@ public class AppSettingsTests
             BarTop = 34.5,
             BarHeight = 800,
             ExclusionRules = [new StoredExclusionRule(ExclusionRuleKind.SourceApp, "MyVault")],
-        };
+        }.WithApiKey("a-secret");
 
         original.Save(file.Path_);
         var loaded = AppSettings.Load(file.Path_);
@@ -87,7 +86,8 @@ public class AppSettingsTests
         Assert.Equal(original.SourceLanguage, loaded.SourceLanguage);
         Assert.Equal(original.BackendBaseUrl, loaded.BackendBaseUrl);
         Assert.Equal(original.BackendModel, loaded.BackendModel);
-        Assert.Equal(original.BackendApiKey, loaded.BackendApiKey);
+        Assert.Equal("a-secret", loaded.KeyFor(loaded.BackendBaseUrl));
+        Assert.Equal(original.SavedProviders, loaded.SavedProviders);
         Assert.Equal(original.ImageRetentionDays, loaded.ImageRetentionDays);
         Assert.Equal(original.StartWithWindows, loaded.StartWithWindows);
         Assert.Equal(AppTheme.Dark, loaded.Theme);
