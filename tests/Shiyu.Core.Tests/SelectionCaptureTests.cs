@@ -339,3 +339,144 @@ public class SelectionCaptureTests
         Assert.Equal(["the selected text"], platform.Writes);
     }
 }
+
+/// <summary>
+/// 手指离开修饰键再发键（用户实录 2026-10-10：用过划词翻译以后，Ctrl 快捷键有时不灵）。热键在按下
+/// 的那一刻触发，手指还在 Ctrl+Shift 上——这时模拟的 Ctrl+C 要么和它们缠在一起，要么得替用户
+/// 松开，而替他松开的 Ctrl 在 Windows 眼里就"没了"。等他松开再发，是一次干净的 Ctrl+C。
+/// </summary>
+public class CaptureWaitsForModifierReleaseTests
+{
+    private static readonly CaptureTiming Timing =
+        new(TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(100))
+        {
+            ModifierRelease = TimeSpan.FromMilliseconds(50),
+        };
+
+    private static (FakeCapturePlatform Platform, SelectionCapture Capture) Build(int heldForChecks)
+    {
+        var platform = new FakeCapturePlatform { ModifiersHeldForChecks = heldForChecks };
+        platform.PutOnClipboard("the user's own clipboard");
+        return (platform, new SelectionCapture(platform, Timing));
+    }
+
+    [Fact]
+    public void The_copy_waits_until_the_hotkeys_modifiers_are_let_go()
+    {
+        var (platform, capture) = Build(heldForChecks: 3);
+        platform.AnswersAfterPolls = 4;
+
+        var result = capture.Capture();
+
+        // 三回还按着、第四回松开了：等三回，再借剪贴板、再发键。
+        Assert.Equal(["wait", "wait", "wait", "read", "copy"], platform.Events.Take(5));
+        Assert.True(result.Succeeded);
+        Assert.Equal("the user's own clipboard", platform.CurrentClipboard);
+    }
+
+    [Fact]
+    public void Nothing_held_means_no_wait_at_all()
+    {
+        var (platform, capture) = Build(heldForChecks: 0);
+        platform.AnswersAfterPolls = 1;
+
+        capture.Capture();
+
+        Assert.Equal(0, platform.WaitsBeforeFirstKeystroke);
+    }
+
+    [Fact]
+    public void Fingers_that_stay_down_hold_the_copy_back_only_until_the_deadline()
+    {
+        var (platform, capture) = Build(heldForChecks: int.MaxValue);
+
+        capture.Capture();
+
+        // 50 毫秒的上限、10 毫秒一问：等五回，照发。
+        Assert.Equal(5, platform.WaitsBeforeFirstKeystroke);
+        Assert.Equal(1, platform.CopyKeystrokes);
+    }
+
+    [Fact]
+    public void The_drag_badge_path_waits_the_same_way()
+    {
+        var (platform, capture) = Build(heldForChecks: 2);
+        platform.AnswersAfterPolls = 3;
+
+        var deferred = capture.CaptureDeferRestore();
+
+        Assert.Equal(2, platform.WaitsBeforeFirstKeystroke);
+        Assert.True(deferred!.Succeeded);
+    }
+
+    [Fact]
+    public void A_paste_writes_and_sends_only_after_the_modifiers_are_let_go()
+    {
+        // 窄条里 Ctrl+Enter 粘贴为纯文本：手指还在 Ctrl 上。
+        var (platform, capture) = Build(heldForChecks: 2);
+
+        Assert.True(capture.Paste("译文"));
+
+        Assert.Equal(["wait", "wait", "write", "paste"], platform.Events);
+    }
+
+    [Fact]
+    public void Pasting_what_is_already_on_the_clipboard_waits_too()
+    {
+        var (platform, capture) = Build(heldForChecks: 2);
+
+        Assert.True(capture.PasteCurrentClipboard());
+
+        Assert.Equal(["wait", "wait", "paste"], platform.Events);
+    }
+}
+
+/// <summary>模拟一次 Ctrl+键该发哪些按键：只看此刻哪些修饰键被按着（平台照着发）。</summary>
+public class ControlKeystrokeTests
+{
+    private const ushort C = 0x43;
+
+    private static string Played(params ushort[] held)
+        => string.Join(" ", ControlKeystroke.For(C, key => held.Contains(key))
+            .Select(stroke => Name(stroke.Key) + (stroke.Up ? "↑" : "↓")));
+
+    private static string Name(ushort key) => key switch
+    {
+        ControlKeystroke.Control => "Ctrl",
+        ControlKeystroke.Shift => "Shift",
+        ControlKeystroke.Alt => "Alt",
+        ControlKeystroke.LeftWin => "LWin",
+        ControlKeystroke.RightWin => "RWin",
+        C => "C",
+        _ => key.ToString(),
+    };
+
+    [Fact]
+    public void With_nothing_held_it_is_a_clean_ctrl_press_and_release()
+        => Assert.Equal("Ctrl↓ C↓ C↑ Ctrl↑", Played());
+
+    [Fact]
+    public void A_ctrl_the_user_still_holds_is_borrowed_and_never_released()
+    {
+        // 替他松开，他还按着的 Ctrl 在 Windows 眼里就没了——之后的 Ctrl+S 只打出一个 s。
+        Assert.Equal("C↓ C↑", Played(ControlKeystroke.Control));
+    }
+
+    [Fact]
+    public void A_held_shift_is_let_go_so_the_app_sees_ctrl_c_not_ctrl_shift_c()
+        => Assert.Equal("Shift↑ C↓ C↑", Played(ControlKeystroke.Control, ControlKeystroke.Shift));
+
+    [Fact]
+    public void Alt_and_win_are_let_go_too_and_ctrl_is_pressed_for_them()
+        => Assert.Equal(
+            "Alt↑ LWin↑ Ctrl↓ C↓ C↑ Ctrl↑",
+            Played(ControlKeystroke.Alt, ControlKeystroke.LeftWin));
+
+    [Fact]
+    public void Any_modifier_down_counts_as_held()
+    {
+        Assert.False(ControlKeystroke.AnyModifierDown(_ => false));
+        Assert.True(ControlKeystroke.AnyModifierDown(key => key == ControlKeystroke.RightWin));
+        Assert.True(ControlKeystroke.AnyModifierDown(key => key == ControlKeystroke.Control));
+    }
+}

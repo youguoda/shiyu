@@ -98,6 +98,8 @@ public class ReversePasteTests
 
         public bool WriteClipboardText(string? text) => true;
 
+        public bool ModifiersHeld() => false;
+
         public void SendCopyKeystroke() { }
 
         public void SendPasteKeystroke()

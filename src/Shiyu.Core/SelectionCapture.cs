@@ -22,6 +22,12 @@ public interface ICapturePlatform
 
     void SendPasteKeystroke();
 
+    /// <summary>
+    /// 用户此刻还按着 Ctrl / Shift / Alt / Win 吗。热键在按下的那一刻就触发，手指还在热键的修饰键上；
+    /// 发键之前要等它们离开（<see cref="CaptureTiming.ModifierRelease"/>）。
+    /// </summary>
+    bool ModifiersHeld();
+
     /// <summary>Explicit so tests can drive the polling loop deterministically.</summary>
     void Wait(TimeSpan duration);
 }
@@ -62,6 +68,12 @@ public sealed record CaptureTiming(TimeSpan PollInterval, TimeSpan Timeout)
     /// </summary>
     public static CaptureTiming Default { get; } =
         new(TimeSpan.FromMilliseconds(15), TimeSpan.FromMilliseconds(600));
+
+    /// <summary>
+    /// 发键之前最多等手指离开修饰键多久。按完热键通常一两百毫秒就松开；有人就是按着不放，
+    /// 也不能让取词一直悬着——过了这个上限照发（平台借用他按着的 Ctrl，不替他松开）。
+    /// </summary>
+    public TimeSpan ModifierRelease { get; init; } = TimeSpan.FromSeconds(1);
 }
 
 /// <summary>
@@ -90,6 +102,8 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
 
     public CaptureResult Capture()
     {
+        AwaitModifiersReleased();
+
         if (!TryBorrow(out var borrowed, out var before))
         {
             // Nothing was borrowed, so there is nothing to put back.
@@ -124,6 +138,8 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     /// </returns>
     public DeferredCapture? CaptureDeferRestore()
     {
+        AwaitModifiersReleased();
+
         if (!TryBorrow(out var borrowed, out var before))
         {
             return null;
@@ -243,6 +259,8 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     /// </summary>
     public bool Paste(string text)
     {
+        AwaitModifiersReleased();
+
         try
         {
             if (!platform.WriteClipboardText(text))
@@ -265,6 +283,8 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     /// </summary>
     public bool PasteCurrentClipboard()
     {
+        AwaitModifiersReleased();
+
         try
         {
             platform.SendPasteKeystroke();
@@ -273,6 +293,23 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
         catch (ClipboardUnavailableException)
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 等手指离开修饰键再动（用户实录 2026-10-10：用过划词翻译以后，Ctrl 快捷键有时不灵）。热键在
+    /// 按下的那一刻就触发，手指还在 Ctrl+Shift 上：这时发 Ctrl+C，得先替用户松开 Shift、最后还要
+    /// 松开 Ctrl——他还按着的 Ctrl 在 Windows 眼里就没了，紧接着的 Ctrl+S 只打出一个 s。等他松开
+    /// （通常一两百毫秒）再借剪贴板、再发键，就是一次干净的 Ctrl+C。一直不松也有上限
+    /// （<see cref="CaptureTiming.ModifierRelease"/>），过了照发。
+    /// </summary>
+    private void AwaitModifiersReleased()
+    {
+        for (var waited = TimeSpan.Zero;
+             waited < _timing.ModifierRelease && platform.ModifiersHeld();
+             waited += _timing.PollInterval)
+        {
+            platform.Wait(_timing.PollInterval);
         }
     }
 

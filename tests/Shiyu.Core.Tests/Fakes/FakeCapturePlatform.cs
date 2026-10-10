@@ -27,6 +27,9 @@ public sealed class FakeCapturePlatform : ICapturePlatform
     public int PasteKeystrokes { get; private set; }
     public int Polls { get; private set; }
 
+    /// <summary>先后发生的事：wait、read、write、copy、paste——给需要断言次序的测试看。</summary>
+    public List<string> Events { get; } = [];
+
     public void PutOnClipboard(string? text)
     {
         _clipboard = text;
@@ -42,7 +45,10 @@ public sealed class FakeCapturePlatform : ICapturePlatform
     }
 
     public string? ReadClipboardText()
-        => ReadFails ? throw new ClipboardUnavailableException("read failed") : _clipboard;
+    {
+        Events.Add("read");
+        return ReadFails ? throw new ClipboardUnavailableException("read failed") : _clipboard;
+    }
 
     public bool WriteClipboardText(string? text)
     {
@@ -51,6 +57,7 @@ public sealed class FakeCapturePlatform : ICapturePlatform
             throw new ClipboardUnavailableException("write failed");
         }
 
+        Events.Add("write");
         Writes.Add(text);
         if (WriteFails)
         {
@@ -62,12 +69,45 @@ public sealed class FakeCapturePlatform : ICapturePlatform
         return true;
     }
 
-    public void SendCopyKeystroke() => CopyKeystrokes++;
+    /// <summary>用户的手指在修饰键上停留多少次查询（热键的 Ctrl、Shift……）；0 = 一开始就没按着。</summary>
+    public int ModifiersHeldForChecks { get; set; }
 
-    public void SendPasteKeystroke() => PasteKeystrokes++;
+    public int ModifierChecks { get; private set; }
+
+    /// <summary>第一次发键之前等过几回（-1 = 还没发过键）。</summary>
+    public int WaitsBeforeFirstKeystroke { get; private set; } = -1;
+
+    /// <summary>第一次发键之前写过几回剪贴板（-1 = 还没发过键）。</summary>
+    public int WritesBeforeFirstKeystroke { get; private set; } = -1;
+
+    public bool ModifiersHeld() => ModifierChecks++ < ModifiersHeldForChecks;
+
+    public void SendCopyKeystroke()
+    {
+        NoteKeystroke();
+        Events.Add("copy");
+        CopyKeystrokes++;
+    }
+
+    public void SendPasteKeystroke()
+    {
+        NoteKeystroke();
+        Events.Add("paste");
+        PasteKeystrokes++;
+    }
+
+    private void NoteKeystroke()
+    {
+        if (WaitsBeforeFirstKeystroke < 0)
+        {
+            WaitsBeforeFirstKeystroke = _waits;
+            WritesBeforeFirstKeystroke = Writes.Count;
+        }
+    }
 
     public void Wait(TimeSpan duration)
     {
+        Events.Add("wait");
         _waits++;
 
         // The target application "responds" once the agreed number of polls has

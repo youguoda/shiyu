@@ -13,10 +13,13 @@ public sealed class WindowsCapturePlatform(MessageWindow window, WindowsClipboar
     private const int OpenAttempts = 8;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(10);
 
-    private static readonly ushort[] ModifiersThatMustNotLeak =
-        [NativeMethods.VkShift, NativeMethods.VkMenu, NativeMethods.VkLWin, NativeMethods.VkRWin];
-
     public uint ClipboardSequenceNumber() => NativeMethods.GetClipboardSequenceNumber();
+
+    /// <summary>
+    /// 物理键盘上此刻有没有修饰键按着。只在还没发过任何模拟按键时问才准——模拟的按下与抬起也会
+    /// 改动这份状态；取词与回贴都在发键之前问（<see cref="SelectionCapture"/>）。
+    /// </summary>
+    public bool ModifiersHeld() => ControlKeystroke.AnyModifierDown(IsDown);
 
     public string? ReadClipboardText()
     {
@@ -79,32 +82,19 @@ public sealed class WindowsCapturePlatform(MessageWindow window, WindowsClipboar
     public void Wait(TimeSpan duration) => Thread.Sleep(duration);
 
     /// <summary>
-    /// Sends Ctrl plus one key, having first let go of any modifier the user is
-    /// still holding.
-    ///
-    /// This matters more than it looks. Capture runs from a hotkey, and the
-    /// user's fingers are still on that hotkey's modifiers when it fires —
-    /// press Ctrl+Shift+Z and the synthesised Ctrl+C arrives as Ctrl+Shift+C,
-    /// which is a different command entirely in most applications.
+    /// Sends Ctrl plus one key, the strokes decided by <see cref="ControlKeystroke"/>
+    /// from what is held right now. Capture runs from a hotkey and normally
+    /// waits for the fingers to leave its modifiers first; when they never do,
+    /// Shift/Alt/Win are let go (Ctrl+Shift+C is a different command) and a
+    /// held Ctrl is borrowed rather than released — releasing it made Windows
+    /// forget the Ctrl still under the user's finger, and every Ctrl shortcut
+    /// after it went dead until they pressed it again (user report 2026-10-10).
     /// </summary>
     private static void SendWithControl(ushort key)
     {
-        var sequence = new List<NativeMethods.Input>();
-
-        foreach (var modifier in ModifiersThatMustNotLeak)
-        {
-            if (IsDown(modifier))
-            {
-                sequence.Add(Key(modifier, up: true));
-            }
-        }
-
-        sequence.Add(Key(NativeMethods.VkControl, up: false));
-        sequence.Add(Key(key, up: false));
-        sequence.Add(Key(key, up: true));
-        sequence.Add(Key(NativeMethods.VkControl, up: true));
-
-        var inputs = sequence.ToArray();
+        var inputs = ControlKeystroke.For(key, IsDown)
+            .Select(stroke => Key(stroke.Key, stroke.Up))
+            .ToArray();
         NativeMethods.SendInput(
             (uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.Input>());
     }
