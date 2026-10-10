@@ -252,7 +252,7 @@ static byte[] Png(int w, int h, int variant)
     var signature = System.Text.Encoding.ASCII.GetBytes("PNG\r\n\x1a\n");
     png.Write(signature, 0, signature.Length);
     WriteChunk(png, "IHDR", Ihdr(w, h));
-    WriteChunk(png, "IDAT", ZlibWrap(compressed.ToArray()));
+    WriteChunk(png, "IDAT", ZlibWrap(compressed.ToArray(), raw));
     WriteChunk(png, "IEND", []);
     return png.ToArray();
 
@@ -293,13 +293,17 @@ static byte[] Png(int w, int h, int variant)
         b[offset + 3] = (byte)value;
     }
 
-    static byte[] ZlibWrap(byte[] deflate)
+    // The Adler-32 trailer covers the UNCOMPRESSED bytes. Summing the deflate
+    // output instead left every seeded PNG failing its checksum at the very
+    // end, and the decoder dropped the last scanline - a black row under every
+    // seeded image (found 2026-10-10 by probe-preview-image's seam check).
+    static byte[] ZlibWrap(byte[] deflate, byte[] raw)
     {
         var zlib = new byte[deflate.Length + 6];
         zlib[0] = 0x78;
         zlib[1] = 0x9c;
         deflate.CopyTo(zlib, 2);
-        WriteBe(zlib, zlib.Length - 4, unchecked((int)Adler32(deflate)));
+        WriteBe(zlib, zlib.Length - 4, unchecked((int)Adler32(raw)));
         return zlib;
     }
 
