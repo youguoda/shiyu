@@ -424,6 +424,115 @@ public partial class App
         File.WriteAllText(Path.Combine(directory, "content-size.log"), log.ToString());
     }
 
+    /// <summary>
+    /// 探针命令 scroll-lane（用户实录 2026-10-10：指到滚动条滑块时它变宽，旁边的控件跟着变窄、
+    /// 来回伸缩）。先查样式本身：任何 IsMouseOver 触发器都不许碰滚动条的 Width/Height。再量钉住
+    /// 的窄条与设置窗（翻译页，够长）的滚动条：道宽、滑块宽与它离道边的距离、内容区宽。然后把
+    /// 设置窗滑块的屏幕中心写进 scroll-lane.ready，等脚本把真鼠标移上去（用户在场时脚本不动
+    /// 鼠标，这一步如实记"没悬停"），悬停时再量一次：内容区一分不能变。
+    /// </summary>
+    private async void ProbeScrollLane()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+
+        async Task Settle()
+        {
+            for (var round = 0; round < 6; round++)
+            {
+                await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            }
+        }
+
+        static IEnumerable<SetterBase> SettersOf(TriggerBase trigger) => trigger switch
+        {
+            Trigger single => single.Setters,
+            MultiTrigger multi => multi.Setters,
+            _ => [],
+        };
+
+        static bool OnHover(TriggerBase trigger) => trigger switch
+        {
+            Trigger single => single.Property == UIElement.IsMouseOverProperty,
+            MultiTrigger multi => multi.Conditions.Any(condition => condition.Property == UIElement.IsMouseOverProperty),
+            _ => false,
+        };
+
+        var style = (Style)FindResource(typeof(System.Windows.Controls.Primitives.ScrollBar));
+        var resizes = style.Triggers.Where(OnHover).SelectMany(SettersOf).OfType<Setter>()
+            .Any(setter => setter.Property == FrameworkElement.WidthProperty || setter.Property == FrameworkElement.HeightProperty);
+        log.AppendLine(FormattableString.Invariant($"style|size-on-hover={resizes}"));
+
+        static (System.Windows.Controls.Primitives.ScrollBar? Bar, FrameworkElement? Content) PartsOf(ScrollViewer viewer)
+            => (viewer.Template?.FindName("PART_VerticalScrollBar", viewer) as System.Windows.Controls.Primitives.ScrollBar,
+                viewer.Template?.FindName("PART_ScrollContentPresenter", viewer) as FrameworkElement);
+
+        string Measure(string phase, ScrollViewer viewer)
+        {
+            var (lane, content) = PartsOf(viewer);
+            var thumb = lane?.Track?.Thumb;
+            var pill = thumb?.Template?.FindName("Pill", thumb) as FrameworkElement;
+            var inset = pill is not null && lane is not null ? pill.TranslatePoint(new Point(0, 0), lane).X : -1;
+            return FormattableString.Invariant(
+                $"{phase}|visible={lane?.IsVisible}|lane={lane?.ActualWidth:F2}|pill={pill?.ActualWidth:F2}|inset={inset:F2}|content={content?.ActualWidth:F2}|hovered={lane?.IsMouseOver}");
+        }
+
+        // 1. The narrow bar's list, pinned so it stays up beside the settings window.
+        _modules!.Bar.ProbeShowPinned();
+        await Settle();
+        var bar = Windows.OfType<BarWindow>().FirstOrDefault();
+        if (bar is not null && Descendants(bar.Cards).OfType<ScrollViewer>().FirstOrDefault() is { } list)
+        {
+            log.AppendLine(Measure("bar", list));
+        }
+
+        // Out of the way: the pointer is about to go to the settings window,
+        // and a topmost bar over its scrollbar would take the hover.
+        bar?.Dismiss();
+
+        // 2. The settings window on a page long enough to scroll.
+        _modules.Settings.ShowAt("service.preset");
+        await Settle();
+        var settings = Windows.OfType<SettingsWindow>().FirstOrDefault(window => window.IsVisible);
+        if (settings is null || PartsOf(settings.PageScroller).Bar is not { IsVisible: true } pageBar)
+        {
+            log.AppendLine("settings|missing");
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "scroll-lane.log"), log.ToString());
+            return;
+        }
+
+        settings.Activate();
+        await Settle();
+        log.AppendLine(Measure("settings-rest", settings.PageScroller));
+
+        // 3. The script moves the real pointer onto the thumb (only when the
+        // user is not using the mouse); the hover is measured once it lands.
+        // Across the lane's own middle, not the thumb's: a thumb laid out
+        // wider than its lane (the old style's 24 DIP) has its middle outside.
+        var thumbY = pageBar.Track?.Thumb is { } pageThumb
+            ? pageThumb.TranslatePoint(new Point(0, pageThumb.ActualHeight / 2), pageBar).Y
+            : pageBar.ActualHeight / 2;
+        var target = pageBar.PointToScreen(new Point(pageBar.ActualWidth / 2, thumbY));
+        File.WriteAllText(Path.Combine(directory, "scroll-lane.ready"),
+            FormattableString.Invariant($"{(int)Math.Round(target.X)},{(int)Math.Round(target.Y)}"));
+
+        for (var waited = 0; waited < 120 && !pageBar.IsMouseOver; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        await Settle();
+        log.AppendLine(Measure("settings-hover", settings.PageScroller));
+        if (pageBar.IsMouseOver && settings.Content is FrameworkElement settingsRoot)
+        {
+            RenderToPng(settingsRoot, Path.Combine(directory, "scroll-lane-hover.png"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "scroll-lane.log"), log.ToString());
+    }
+
     /// <summary>A window's content over the theme background, at 1.5×, into a PNG.</summary>
     internal static void RenderToPng(FrameworkElement root, string path)
     {
@@ -504,6 +613,11 @@ public partial class App
             // 翻译徽标只留一个「译」（用户需求 2026-10-10）。
             case "badge":
                 ProbeBadge(shell);
+                break;
+
+            // 指到滚动条时它不再挤别的控件（用户实录 2026-10-10）。脚本负责移鼠标。
+            case "scroll-lane":
+                ProbeScrollLane();
                 break;
 
             // 内容字号：被阅读的文字跟着变，控件文字不变（用户需求 2026-10-09）。

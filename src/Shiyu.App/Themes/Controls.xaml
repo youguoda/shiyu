@@ -1251,19 +1251,32 @@
     </Style>
 
     <!--
-      The modern scrollbar (ticket 39): 6px wide (8 on hover), a pill thumb
-      in TextTertiary at 40% (60% hovered), a transparent track with no end
-      buttons. One implicit style app-wide, so the bar's list, the library's
-      EntryList and the translation panel's output all scroll the same way.
+      The modern scrollbar (ticket 39): an 8 DIP lane holding a pill thumb
+      6 DIP wide at rest and the full 8 while the pointer is on the lane, in
+      TextTertiary at 40% (60% on the pill itself); a transparent track with
+      no end buttons. One implicit style app-wide, so the bar's list, the
+      library's EntryList, the settings pages and the translation panel's
+      output all scroll the same way.
+
+      The lane itself never changes size (用户实录 2026-10-10：指到滑块时它
+      变宽，旁边的控件跟着变窄、来回伸缩). Hover used to widen the BAR 6 → 8,
+      and every ScrollViewer paid for those 2 DIP by narrowing its content —
+      text rewrapped and rows shifted under the pointer. Now the bar always
+      takes 8 and the pill grows inside it: pointing at a scrollbar moves
+      nothing else, anywhere.
 
       Known difference, recorded rather than fought (评审降级定案): WPF
       scrollbars occupy layout width natively — an overlay needs negative-
-      margin tricks that cost more than the 6px they save, so the bar keeps
-      a 6px gutter and that stands as the accepted state.
+      margin tricks that cost more than the gutter they save, so scrolling
+      content keeps an 8 DIP gutter and that stands as the accepted state.
     -->
 
-    <!-- The thumb: a pill that darkens on hover. Min sizes keep it grabbable
-         on very long lists. -->
+    <!-- The thumb: a pill that darkens on hover. Its Padding is the inset it
+         keeps from the lane's sides at rest (each orientation's template sets
+         it across its own axis only); the lane's hover trigger and a drag
+         take the inset away. CornerRadius 4 is a full pill at both widths —
+         Border scales radii that overrun the side. Min sizes keep it
+         grabbable on very long lists. -->
     <Style x:Key="ModernScrollThumb" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop" Value="False"/>
@@ -1273,14 +1286,17 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="Pill" CornerRadius="3"
-                            Background="{DynamicResource Brush.TextTertiary}" Opacity="0.4"/>
+                    <Grid Background="Transparent">
+                        <Border x:Name="Pill" CornerRadius="4" Margin="{TemplateBinding Padding}"
+                                Background="{DynamicResource Brush.TextTertiary}" Opacity="0.4"/>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Pill" Property="Opacity" Value="0.6"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Setter TargetName="Pill" Property="Opacity" Value="0.6"/>
+                            <Setter TargetName="Pill" Property="Margin" Value="0"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1303,6 +1319,9 @@
         </Setter>
     </Style>
 
+    <!-- The pointer anywhere on the lane widens the PILL, never the lane: the
+         thumb's inset across the bar's axis goes to zero, inside the 8 DIP
+         the bar always occupies. -->
     <ControlTemplate x:Key="ModernVerticalScrollBar" TargetType="ScrollBar">
         <Track x:Name="PART_Track" IsDirectionReversed="True">
             <Track.DecreaseRepeatButton>
@@ -1314,9 +1333,17 @@
                               Command="ScrollBar.PageDownCommand"/>
             </Track.IncreaseRepeatButton>
             <Track.Thumb>
-                <Thumb Style="{StaticResource ModernScrollThumb}"/>
+                <!-- MinWidth 0: the style's 24 is for horizontal bars. Left at 24
+                     here, the thumb laid out 24 wide and the lane clipped it — a
+                     pill rounded on one side only, its inset off-centre. -->
+                <Thumb x:Name="Thumb" Style="{StaticResource ModernScrollThumb}" Padding="1,0" MinWidth="0"/>
             </Track.Thumb>
         </Track>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Thumb" Property="Padding" Value="0"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <ControlTemplate x:Key="ModernHorizontalScrollBar" TargetType="ScrollBar">
@@ -1330,38 +1357,30 @@
                               Command="ScrollBar.PageRightCommand"/>
             </Track.IncreaseRepeatButton>
             <Track.Thumb>
-                <Thumb Style="{StaticResource ModernScrollThumb}"/>
+                <Thumb x:Name="Thumb" Style="{StaticResource ModernScrollThumb}" Padding="0,1" MinHeight="0"/>
             </Track.Thumb>
         </Track>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Thumb" Property="Padding" Value="0"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
     </ControlTemplate>
 
+    <!-- One size, hovered or not, along the bar's own axis only: a horizontal
+         bar must never be handed a width. No trigger here may touch Width or
+         Height on IsMouseOver — that is what made the content twitch. -->
     <Style TargetType="ScrollBar">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Width" Value="6"/>
+        <Setter Property="Width" Value="8"/>
         <Setter Property="Template" Value="{StaticResource ModernVerticalScrollBar}"/>
         <Style.Triggers>
             <Trigger Property="Orientation" Value="Horizontal">
                 <Setter Property="Width" Value="Auto"/>
-                <Setter Property="Height" Value="6"/>
+                <Setter Property="Height" Value="8"/>
                 <Setter Property="Template" Value="{StaticResource ModernHorizontalScrollBar}"/>
             </Trigger>
-            <!-- Hover widens the BAR ITSELF, along its own axis only: a
-                 horizontal bar must never be handed a width. -->
-            <MultiTrigger>
-                <MultiTrigger.Conditions>
-                    <Condition Property="Orientation" Value="Vertical"/>
-                    <Condition Property="IsMouseOver" Value="True"/>
-                </MultiTrigger.Conditions>
-                <Setter Property="Width" Value="8"/>
-            </MultiTrigger>
-            <MultiTrigger>
-                <MultiTrigger.Conditions>
-                    <Condition Property="Orientation" Value="Horizontal"/>
-                    <Condition Property="IsMouseOver" Value="True"/>
-                </MultiTrigger.Conditions>
-                <Setter Property="Height" Value="8"/>
-            </MultiTrigger>
         </Style.Triggers>
     </Style>
 
