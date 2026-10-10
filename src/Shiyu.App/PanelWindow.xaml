@@ -125,8 +125,10 @@
                 </Button>
             </StackPanel>
 
+            <!-- 滚动条常驻占道（Visible，见 Controls.xaml 滚动条注释）：译文越流越长、
+                 长到要滚的那一刻，字不重新折行。 -->
             <ScrollViewer x:Name="ContentScroll" MaxHeight="420"
-                          VerticalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Visible"
                           HorizontalScrollBarVisibility="Disabled" Margin="0,8,0,0">
                 <StackPanel>
                     <!-- ============ 译文槽：三态同位（§6.2 核心行）============

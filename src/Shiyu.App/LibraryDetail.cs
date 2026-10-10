@@ -115,7 +115,7 @@ public partial class LibraryWindow
             IsReadOnly = true,
             IsReadOnlyCaretVisible = true,
             TextWrapping = TextWrapping.Wrap,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
             MinHeight = 96,
             Margin = new Thickness(0, 12, 0, 0),
             Background = System.Windows.Media.Brushes.Transparent,

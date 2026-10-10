@@ -383,7 +383,7 @@ internal sealed class PromptTemplatesCard
         _prompt.Height = 140;
         _prompt.VerticalAlignment = VerticalAlignment.Top;
         _prompt.VerticalContentAlignment = VerticalAlignment.Top;
-        _prompt.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _prompt.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
         _prompt.Padding = new Thickness(8, 4, 8, 4);
         _prompt.SetResourceReference(TextBox.BackgroundProperty, "Brush.SurfaceInput");
         AutomationProperties.SetName(_prompt, "提示词");

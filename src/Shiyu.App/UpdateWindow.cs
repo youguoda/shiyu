@@ -24,7 +24,7 @@ internal sealed class UpdateWindow : Window
         IsReadOnly = true,
         TextWrapping = TextWrapping.Wrap,
         AcceptsReturn = true,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
         Height = 180,
         Margin = new Thickness(0, 8, 0, 0),
     };

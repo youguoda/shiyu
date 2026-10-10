@@ -154,7 +154,7 @@ internal sealed class ExclusionRulesCard
         {
             Content = rows,
             MaxHeight = 220,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
             Margin = new Thickness(0, 8, 0, 0),
         };
 

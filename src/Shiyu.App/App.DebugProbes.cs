@@ -474,7 +474,7 @@ public partial class App
             var pill = thumb?.Template?.FindName("Pill", thumb) as FrameworkElement;
             var inset = pill is not null && lane is not null ? pill.TranslatePoint(new Point(0, 0), lane).X : -1;
             return FormattableString.Invariant(
-                $"{phase}|visible={lane?.IsVisible}|lane={lane?.ActualWidth:F2}|pill={pill?.ActualWidth:F2}|inset={inset:F2}|content={content?.ActualWidth:F2}|hovered={lane?.IsMouseOver}");
+                $"{phase}|visible={lane?.IsVisible}|lane={lane?.ActualWidth:F2}|pill={pill?.ActualWidth:F2}|inset={inset:F2}|content={content?.ActualWidth:F2}|hovered={lane?.IsMouseOver}|thumb={thumb?.IsVisible}|scrollable={viewer.ScrollableHeight:F0}");
         }
 
         // 1. The narrow bar's list, pinned so it stays up beside the settings window.
@@ -528,6 +528,15 @@ public partial class App
         {
             RenderToPng(settingsRoot, Path.Combine(directory, "scroll-lane-hover.png"));
         }
+
+        // 4. A page too short to scroll keeps the lane (用户需求 2026-10-10：滚动条出现
+        // 时内容也不能动): same content width as the long page, and no thumb. The
+        // window grows until the About page fits — at its usual height every page
+        // still scrolls a little.
+        settings.Height = Math.Max(settings.Height, SystemParameters.WorkArea.Height - 40);
+        _modules.Settings.ShowAt("about.version");
+        await Settle();
+        log.AppendLine(Measure("settings-short", settings.PageScroller));
 
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(directory, "scroll-lane.log"), log.ToString());

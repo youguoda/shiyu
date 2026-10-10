@@ -33,9 +33,10 @@
 
         </Border>
 
-        <!-- 内容列：页面滚动区 + 搜索结果弹层。code-behind 构建。 -->
+        <!-- 内容列：页面滚动区 + 搜索结果弹层。code-behind 构建。滚动条常驻占道（Visible，
+             见 Controls.xaml 滚动条注释）：长短页来回切，页面宽度不跳。 -->
         <Grid x:Name="ContentHost" Grid.Column="1" MinWidth="0">
-            <ScrollViewer x:Name="PageScroller" VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="PageScroller" VerticalScrollBarVisibility="Visible"
                           HorizontalScrollBarVisibility="Disabled"/>
 
             <!-- 搜索结果弹层（§6.3）：最多 8 行，带面包屑；Enter 跳转并脉冲。 -->

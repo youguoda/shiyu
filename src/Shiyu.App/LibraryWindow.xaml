@@ -339,6 +339,7 @@
             <ListBox x:Name="LogList" SelectionMode="Extended"
                      HorizontalContentAlignment="Stretch"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Visible"
                      VirtualizingPanel.IsVirtualizing="True"
                      VirtualizingPanel.VirtualizationMode="Recycling"
                      VirtualizingPanel.ScrollUnit="Pixel"
@@ -368,11 +369,14 @@
 
                 <!-- 列表侧：滚动列表 + 吸顶分组头（浮层）+ 撤销条（浮层） -->
                 <Grid x:Name="ListSide" Grid.Column="0">
+                    <!-- 列表、详情、翻译记录的滚动条都常驻占道（Visible，见 Controls.xaml
+                         滚动条注释）：筛选让列表变长变短，行宽不跳。 -->
                     <local:LibraryList x:Name="EntryList"
                                        Style="{DynamicResource BareList}"
                                        SelectionMode="Extended"
                                        HorizontalContentAlignment="Stretch"
                                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                       ScrollViewer.VerticalScrollBarVisibility="Visible"
                                        VirtualizingPanel.IsVirtualizing="True"
                                        VirtualizingPanel.VirtualizationMode="Recycling"
                                        ItemTemplate="{StaticResource EntryRowTemplate}"
@@ -426,7 +430,7 @@
 
                 <!-- 详情侧：三态（空态 / 单选 / 多选批量）+ Agent 结果区。 -->
                 <Grid x:Name="DetailPane" Grid.Column="1" Margin="16,0,0,0">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Visible">
                         <StackPanel x:Name="DetailBody" Margin="4,0,4,0"/>
                     </ScrollViewer>
                 </Grid>

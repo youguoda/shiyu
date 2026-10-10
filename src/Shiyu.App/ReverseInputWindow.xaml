@@ -37,7 +37,7 @@
                  IME：组字中的按键以 Key.ImeProcessed 到达，Enter/Esc/Tab 一律交给输入法。 -->
             <TextBox x:Name="InputBox" AcceptsReturn="True" TextWrapping="Wrap"
                      MinHeight="44" MaxHeight="160" Padding="10,8"
-                     VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" VerticalScrollBarVisibility="Visible"
                      FontSize="{DynamicResource Type.ContentCompact}"
                      AutomationProperties.Name="反向输入：要贴回去的文字"
                      ToolTip="Enter 往前走一步 · Shift+Enter 换行 · Tab 切换方向 · Ctrl+E 切换模板 · Esc 关闭"
@@ -49,8 +49,10 @@
                  结算之后换成 OutputBox：同样的字、同样的位置，能用鼠标选取、Ctrl+C 复制
                  （用户需求 2026-10-05）；流式中仍是 TextBlock——光标块只能内联在它里面，
                  流着的字也没人去选。 -->
+            <!-- 输入框与输出区的滚动条都常驻占道（Visible，见 Controls.xaml 滚动条注释）：
+                 打字、出字长到要滚的那一刻，字不重新折行。 -->
             <ScrollViewer x:Name="OutputScroll" Margin="0,8,0,0" MaxHeight="420"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
                           Visibility="Collapsed">
                 <StackPanel>
                     <TextBlock x:Name="OutputText" Margin="4,0"

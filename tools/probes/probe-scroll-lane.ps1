@@ -15,6 +15,9 @@
 #   - flow:scrollbar-hover-keeps-content    hovered: the pill fills the lane, the
 #                                           lane and the content width do not move
 #                                           (SKIP when the user is present)
+#   - flow:scrollbar-lane-kept-when-short   a page with nothing to scroll keeps the
+#                                           empty lane: same content width, no thumb
+#                                           (user request 2026-10-10)
 #
 # ASCII only (see lib.ps1 header).
 
@@ -70,7 +73,7 @@ if (Test-Path $log) {
     }
 }
 
-$expected = @('style', 'bar', 'settings-rest', 'settings-hover', 'done')
+$expected = @('style', 'bar', 'settings-rest', 'settings-hover', 'settings-short', 'done')
 $missing = @($expected | Where-Object { -not $steps.ContainsKey($_) })
 if ($missing.Count -gt 0) {
     Add-Check 'data:scroll-lane-log' 'FAIL' ("log lacks: {0}" -f ($missing -join ', '))
@@ -103,6 +106,16 @@ if (-not $moved) {
         -and (Num $h['pill']) -eq 8 -and (Num $h['inset']) -eq 0
     Add-Check 'flow:scrollbar-hover-keeps-content' (Verdict $ok) `
         ("content {0} -> {1}, lane {2} -> {3}, pill {4} -> {5}" -f $r['content'], $h['content'], $r['lane'], $h['lane'], $r['pill'], $h['pill'])
+}
+
+$s = $steps['settings-short']
+if ((Num $s['scrollable']) -gt 0) {
+    Add-Check 'flow:scrollbar-lane-kept-when-short' 'SKIP' ("the page still scrolls {0} DIP at this screen height" -f $s['scrollable'])
+} else {
+    $ok = $s['visible'] -eq 'True' -and (Num $s['lane']) -eq 8 -and $s['thumb'] -eq 'False' `
+        -and (Num $s['content']) -eq (Num $r['content'])
+    Add-Check 'flow:scrollbar-lane-kept-when-short' (Verdict $ok) `
+        ("lane {0} visible {1}, thumb shown {2}, content {3} (long page {4})" -f $s['lane'], $s['visible'], $s['thumb'], $s['content'], $r['content'])
 }
 
 return $script:Checks

@@ -814,10 +814,13 @@
           results" reads as breakage exactly when the user needs help most.
         -->
         <Grid>
+            <!-- 滚动条常驻占道（Visible，见 Controls.xaml 滚动条注释）：筛到只剩几张、再放开，
+                 卡片宽度不跳。 -->
             <local:BarCardsList x:Name="Cards" ItemTemplate="{StaticResource CardTemplate}"
                                 Background="Transparent" BorderThickness="0"
                                 HorizontalContentAlignment="Stretch"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                ScrollViewer.VerticalScrollBarVisibility="Visible"
                                 ScrollViewer.ScrollChanged="OnCardsScrolled"
                                 VirtualizingPanel.IsVirtualizing="True"
                                 VirtualizingPanel.VirtualizationMode="Recycling"

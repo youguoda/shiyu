@@ -1269,6 +1269,16 @@
       scrollbars occupy layout width natively — an overlay needs negative-
       margin tricks that cost more than the gutter they save, so scrolling
       content keeps an 8 DIP gutter and that stands as the accepted state.
+
+      The same goes for a bar that comes and goes (用户需求 2026-10-10，同一件事的
+      另一半): with Auto, the moment content grew long enough to scroll, the
+      lane appeared and the content rewrapped 8 DIP narrower. A scroll area
+      whose content changes while it is on screen — settings pages, the bar's
+      list, the library's lists and detail, the panel's and the reverse box's
+      output, editors that grow as you type — asks for Visible instead: the
+      lane is always there, and WPF's Track hides its own thumb while there is
+      nothing to scroll, so the lane is simply empty. Content that never
+      changes while shown (dropdowns, the preview) keeps Auto.
     -->
 
     <!-- The thumb: a pill that darkens on hover. Its Padding is the inset it

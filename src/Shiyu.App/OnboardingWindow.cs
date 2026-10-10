@@ -123,7 +123,7 @@ internal sealed class OnboardingWindow : Window
 
     private void BuildChrome()
     {
-        _body.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _body.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
         _body.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _body.Margin = new Thickness(24, 18, 24, 0);
 

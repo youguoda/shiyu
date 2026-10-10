@@ -67,7 +67,7 @@ internal sealed class GroupManagerWindow : Window
         {
             Content = _list,
             MaxHeight = 320,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
             Margin = new Thickness(0, 0, 0, 10),
         };
         root.Children.Add(scroll);
