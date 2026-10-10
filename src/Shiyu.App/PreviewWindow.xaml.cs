@@ -51,6 +51,9 @@ internal partial class PreviewWindow : Window
     /// <summary>The entry the panel is showing right now.</summary>
     public long CardId { get; private set; }
 
+    /// <summary>The card filled into the panel; the very same card again leaves the content alone.</summary>
+    private BarCard? _shown;
+
     /// <summary>Raised when the pointer comes to rest on the panel — the bar suspends its close buffer.</summary>
     public event Action? PointerRestingOnPanel;
 
@@ -135,17 +138,35 @@ internal partial class PreviewWindow : Window
         _band = band;
         Topmost = band == ZBand.Topmost;
 
-        var (width, height) = Measure(card);
+        // Called back mid fade-out (Space released and pressed again within
+        // the fade): the panel stays, so the fade must not finish by hiding it.
+        if (_takingDown)
+        {
+            _takingDown = false;
+            BeginAnimation(OpacityProperty, null);
+            Opacity = 1;
+        }
+
+        var (width, height) = Measure(card, scaleX);
         Width = width;
         Height = height;
 
-        // Everything this panel had in flight describes the previous card;
-        // its results are dropped the moment the panel moves on (O-36).
-        _backfills.Invalidate();
-
         var wasVisible = IsVisible;
-        Fill(card);
-        CardId = card.Id;
+
+        // The same card again (a held key's repeat, the pointer coming back
+        // from the panel): its content stays as it is. Filling it anew put the
+        // thumbnail back over an original that had already landed and dropped
+        // the decode in flight — at a key repeat's pace the picture flickered
+        // between blurry and sharp (用户实录 2026-10-09).
+        if (!wasVisible || !ReferenceEquals(card, _shown))
+        {
+            // Everything this panel had in flight describes the previous card;
+            // its results are dropped the moment the panel moves on (O-36).
+            _backfills.Invalidate();
+            Fill(card, scaleX);
+            _shown = card;
+            CardId = card.Id;
+        }
 
         var placed = PreviewPlacement.Place(
             anchor,
@@ -237,6 +258,9 @@ internal partial class PreviewWindow : Window
         }
     }
 
+    /// <summary>A fade-out is running; <see cref="ShowFor"/> calling the panel back cancels it.</summary>
+    private bool _takingDown;
+
     /// <summary>Removes the panel. The fade starts from a painted surface, so it composites.</summary>
     public void TakeDown()
     {
@@ -245,9 +269,17 @@ internal partial class PreviewWindow : Window
             return;
         }
 
+        _takingDown = true;
         var fade = Motion.Fade(0);
         fade.Completed += (_, _) =>
         {
+            if (!_takingDown)
+            {
+                // expected: 淡出途中被叫回来了——面板留着，这次淡出作废。
+                return;
+            }
+
+            _takingDown = false;
             BeginAnimation(OpacityProperty, null);
             Opacity = 1;
             Hide();
@@ -268,14 +300,15 @@ internal partial class PreviewWindow : Window
     /// line of fixed height, and a panel narrower than the row widens to fit
     /// it (never past MaxWidth) — so the row neither wraps nor clips, and the
     /// estimate can never come out short again (the 2026-10-05 clipped row).
+    /// Images also take the screen's scale: one image pixel to one screen pixel at most.
     /// </summary>
-    private (double Width, double Height) Measure(BarCard card)
+    private (double Width, double Height) Measure(BarCard card, double deviceScale)
     {
         var lineHeight = ThemeManager.Content.ContentLine;
 
         var size = card.Kind switch
         {
-            EntryKind.Image => PreviewSizing.ForImage(card.PixelWidth, card.PixelHeight),
+            EntryKind.Image => PreviewSizing.ForImage(card.PixelWidth, card.PixelHeight, deviceScale),
             EntryKind.Files => PreviewSizing.ForFiles(card.Files.Count, FileRowHeight),
             _ => TextSize(card, lineHeight),
         };
@@ -361,11 +394,16 @@ internal partial class PreviewWindow : Window
 
     // --- content -------------------------------------------------------------------
 
-    private void Fill(BarCard card)
+    private void Fill(BarCard card, double deviceScale)
     {
         // The card's label already carries an image's pixel size ("图片 ·
-        // 800×500"); appending it here again printed it twice.
-        KindText.Text = card.KindText;
+        // 800×500"); appending it here again printed it twice. An image whose
+        // original is gone (cleared by the retention period, say) can only
+        // show its 240-pixel thumbnail: the header says so, rather than
+        // leaving the blur unexplained.
+        KindText.Text = card.Kind == EntryKind.Image && !card.HasOriginal
+            ? card.KindText + " · 原图已不在，这是缩略图"
+            : card.KindText;
         WhenText.Text = card.WhenText;
 
         TextHost.Visibility = card.Kind == EntryKind.Text ? Visibility.Visible : Visibility.Collapsed;
@@ -383,11 +421,34 @@ internal partial class PreviewWindow : Window
 
         if (card.Kind == EntryKind.Image)
         {
-            // The thumbnail first — it is already decoded, and it is the
-            // database's forever promise — with the original upgrading it
-            // from a background decode when it lands (O-36).
-            ImageHost.Source = card.Thumbnail;
-            LoadOriginalBehind(card);
+            // One box for both pictures: the thumbnail and the original fill
+            // exactly the same rectangle, so the upgrade never shifts a pixel.
+            // The box is the image at one image pixel per screen pixel at most.
+            var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, deviceScale);
+            ImageHost.MaxWidth = display?.Width ?? double.PositiveInfinity;
+            ImageHost.MaxHeight = display?.Height ?? double.PositiveInfinity;
+
+            // Decoded to exactly the screen pixels the box covers, both sides —
+            // one bitmap pixel per screen pixel, edges flush with the box. A row
+            // without a stored size decodes by width alone (height 0: keep shape).
+            var decode = display is { } box
+                ? PreviewSizing.DecodeSize(card.PixelWidth, card.PixelHeight, box, deviceScale)
+                : (PreviewSizing.DecodeWidth(0, Width - PreviewSizing.ChromeHorizontal, deviceScale), 0);
+
+            if (card.OriginalPath is { Length: > 0 } path && KeptOriginal(path, decode) is { } kept)
+            {
+                // Seen moments ago (Space let go and pressed again, a step
+                // back up the list): sharp at once, no thumbnail in between.
+                ImageHost.Source = kept;
+            }
+            else
+            {
+                // The thumbnail first — it is already decoded, and it is the
+                // database's forever promise — with the original upgrading it
+                // from a background decode when it lands (O-36).
+                ImageHost.Source = card.Thumbnail;
+                LoadOriginalBehind(card, decode);
+            }
         }
 
         if (card.Kind == EntryKind.Files)
@@ -479,21 +540,55 @@ internal partial class PreviewWindow : Window
     }
 
     /// <summary>
-    /// The original at full fidelity, decoded no larger than the panel needs,
-    /// on the thread pool (O-36) — the file read is disk latency, an offline
-    /// network original is an SMB timeout, and neither belongs on the thread
-    /// that draws. The upgrade lands only if the panel still shows the card
-    /// it was decoded for; the thumbnail it would replace is the database's
-    /// forever promise either way.
+    /// Originals decoded moments ago, newest first, by path and decode size.
+    /// A few only — each is up to a few megabytes — enough for Space let go
+    /// and pressed again, or a step back up the list, to be sharp at once.
     /// </summary>
-    private void LoadOriginalBehind(BarCard card)
+    private readonly List<(string Path, (int Width, int Height) Size, BitmapSource Image)> _originals = [];
+
+    private const int OriginalsKept = 4;
+
+    private BitmapSource? KeptOriginal(string path, (int Width, int Height) size)
+    {
+        var index = _originals.FindIndex(kept => kept.Size == size && kept.Path == path);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var kept = _originals[index];
+        _originals.RemoveAt(index);
+        _originals.Insert(0, kept);
+        return kept.Image;
+    }
+
+    private void KeepOriginal(string path, (int Width, int Height) size, BitmapSource image)
+    {
+        _originals.RemoveAll(kept => kept.Size == size && kept.Path == path);
+        _originals.Insert(0, (path, size, image));
+        if (_originals.Count > OriginalsKept)
+        {
+            _originals.RemoveRange(OriginalsKept, _originals.Count - OriginalsKept);
+        }
+    }
+
+    /// <summary>
+    /// The original at full fidelity, decoded at the screen pixels the panel
+    /// shows it with, on the thread pool (O-36) — the file read is disk
+    /// latency, an offline network original is an SMB timeout, and neither
+    /// belongs on the thread that draws. The width used to be the box's DIP
+    /// width: on a 150% screen that is two thirds of the pixels shown, and
+    /// the preview came out soft (用户实录 2026-10-09). The upgrade lands only
+    /// if the panel still shows the card it was decoded for; the thumbnail it
+    /// would replace is the database's forever promise either way.
+    /// </summary>
+    private void LoadOriginalBehind(BarCard card, (int Width, int Height) decode)
     {
         if (card.OriginalPath is not { Length: > 0 } path)
         {
             return;
         }
 
-        var boxWidth = Math.Max(1, (int)(Width - PreviewSizing.ChromeHorizontal));
         var wanted = card.Id;
         var generation = _backfills.Epoch;
         var dispatcher = Dispatcher;
@@ -511,7 +606,7 @@ internal partial class PreviewWindow : Window
             BitmapSource? original = null;
             try
             {
-                original = Decode(new Uri(path), boxWidth);
+                original = Decode(new Uri(path), decode);
             }
             catch (Exception failure) when (
                 failure is IOException or UnauthorizedAccessException
@@ -528,6 +623,10 @@ internal partial class PreviewWindow : Window
 
             dispatcher.BeginInvoke(() =>
             {
+                // Kept even when the panel has moved on: coming back to this
+                // card is exactly when it pays.
+                KeepOriginal(path, decode, original);
+
                 if (_backfills.IsCurrent(generation) && CardId == wanted)
                 {
                     ImageHost.Source = original;
@@ -536,12 +635,18 @@ internal partial class PreviewWindow : Window
         });
     }
 
-    private static BitmapSource Decode(Uri source, int decodeWidth)
+    /// <summary>Decodes at a pixel size; a height of 0 keeps the picture's shape from the width.</summary>
+    private static BitmapSource Decode(Uri source, (int Width, int Height) size)
     {
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
-        image.DecodePixelWidth = decodeWidth;
+        image.DecodePixelWidth = size.Width;
+        if (size.Height > 0)
+        {
+            image.DecodePixelHeight = size.Height;
+        }
+
         image.UriSource = source;
         image.EndInit();
         image.Freeze();

@@ -472,6 +472,11 @@ public partial class App
                 _modules!.Bar.ProbeStartsAtNewest();
                 break;
 
+            // 按住空格预览图片：不抖、按屏幕像素清楚（用户实录 2026-10-09）。脚本负责按键。
+            case "preview-image":
+                _modules!.Bar.ProbePreviewImage();
+                break;
+
             case "quickbar":
                 // 票 26 合并后 quickbar 命令映射到粘贴模式的窄条：探针仍能
                 // 检"快速粘贴"这条意图，定位参数（384 DIP）在探针脚本里同步。

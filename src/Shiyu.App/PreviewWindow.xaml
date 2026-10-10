@@ -29,10 +29,13 @@
       与卡片之间不画连接（用户需求 2026-10-05 删去连接线与同色桥）：
       面板紧挨窄条、顶与行对齐，位置本身就说明它属于哪一行。
     -->
+    <!-- UseLayoutRounding：图片落在整屏幕像素上——原图按屏幕像素解码，再被半个像素的偏移
+         双线性一抹，又糊了（用户实录 2026-10-09）。文字的尺寸算术留有 2 DIP 余量，取整不会多折一行。 -->
     <Border x:Name="Root" CornerRadius="{DynamicResource Radius.Overlay}"
             Background="{DynamicResource Brush.SurfaceMaterial}"
             BorderThickness="0"
-            Padding="12,10">
+            Padding="12,10"
+            UseLayoutRounding="True">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -63,7 +66,9 @@
                                Foreground="{DynamicResource Brush.Text}"/>
                 </ScrollViewer>
 
+                <!-- 显示框（MaxWidth/MaxHeight）由 Fill 按屏幕像素定，缩略图与原图画进同一个框。 -->
                 <Image x:Name="ImageHost" Stretch="Uniform"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
                        RenderOptions.BitmapScalingMode="HighQuality"/>
 
                 <ScrollViewer x:Name="FilesHost" Focusable="False"

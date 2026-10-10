@@ -99,7 +99,7 @@ public partial class LibraryWindow
             DetailBody.Children.Add(image);
             if (entry is not null)
             {
-                FillDetailImage(entry, image);
+                FillDetailImage(entry, image, DetailBody.ActualWidth > 0 ? DetailBody.ActualWidth : 560, 320);
             }
         }
 
@@ -171,11 +171,28 @@ public partial class LibraryWindow
     /// is megabytes of PNG, and the decode used to happen between the list's
     /// two paints. The counter keeps a fast walk down the list from landing
     /// one entry's picture on another's row.
+    ///
+    /// Shown and decoded the way the bar's preview is (用户实录 2026-10-09：
+    /// 预览图片是低分辨率的): fitted into the box at one image pixel per screen
+    /// pixel at most, decoded at the screen pixels it is shown with — a fixed
+    /// 640 was blown up on any scaled screen and on any wide pane.
     /// </summary>
-    private void FillDetailImage(Entry entry, Image target)
+    private void FillDetailImage(Entry entry, Image target, double boxWidth, double boxHeight)
     {
         var request = ++_detailImageRequests;
         target.Source = null;
+
+        // The box lands on whole screen pixels and the original decodes to
+        // exactly them; a row without a stored size decodes by width alone.
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var decode = (Width: PreviewSizing.DecodeWidth(0, boxWidth, scale), Height: 0);
+        if (entry.ImageWidth > 0 && entry.ImageHeight > 0)
+        {
+            var display = PreviewSizing.FitImage(entry.ImageWidth, entry.ImageHeight, boxWidth, boxHeight, scale);
+            target.MaxWidth = display.Width;
+            target.MaxHeight = display.Height;
+            decode = PreviewSizing.DecodeSize(entry.ImageWidth, entry.ImageHeight, display, scale);
+        }
 
         var original = entry.HasOriginal ? entry.OriginalPath : null;
         var thumbnail = entry.ThumbnailPng;
@@ -183,7 +200,7 @@ public partial class LibraryWindow
 
         Task.Run(() =>
         {
-            var source = original is { Length: > 0 } path ? DecodeImageFile(path, 640) : null;
+            var source = original is { Length: > 0 } path ? DecodeImageFile(path, decode.Width, decode.Height) : null;
             source ??= AppIconCache.Decode(thumbnail, 480);
 
             dispatcher.BeginInvoke(() =>
@@ -205,8 +222,11 @@ public partial class LibraryWindow
         });
     }
 
-    /// <summary>Decodes an image file off the calling thread; null when it cannot be read.</summary>
-    private static ImageSource? DecodeImageFile(string path, int pixelWidth)
+    /// <summary>
+    /// Decodes an image file off the calling thread; null when it cannot be read.
+    /// A height of 0 keeps the picture's shape from the width.
+    /// </summary>
+    private static ImageSource? DecodeImageFile(string path, int pixelWidth, int pixelHeight)
     {
         try
         {
@@ -214,6 +234,11 @@ public partial class LibraryWindow
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.DecodePixelWidth = pixelWidth;
+            if (pixelHeight > 0)
+            {
+                image.DecodePixelHeight = pixelHeight;
+            }
+
             image.UriSource = new Uri(path);
             image.EndInit();
             image.Freeze();
@@ -486,7 +511,9 @@ public partial class LibraryWindow
             };
             RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
             PreviewBody.Children.Add(image);
-            FillDetailImage(entry, image);
+
+            // 预览层还没摆过（Collapsed），宽度从内容区取：减去预览正文的左右边距 24 + 24。
+            FillDetailImage(entry, image, Math.Max(200, HistoryContent.ActualWidth - 48), 520);
         }
         else if (item.Kind == EntryKind.Files && _store.Get(item.Id) is { } files)
         {

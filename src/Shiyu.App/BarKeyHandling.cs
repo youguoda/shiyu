@@ -310,7 +310,10 @@ internal partial class BarWindow
             case Key.Space when Keyboard.Modifiers == ModifierKeys.None
                 && (SearchBox.Text.Length == 0 || !IsTyping):
                 e.Handled = true;
-                if (_selected is { } card)
+
+                // 按住不放时键盘每 30 毫秒自动重复一次：那不是新的意图，只吞掉（用户实录
+                // 2026-10-09：预览图片会抖动——每次重复都把面板重灌了一遍）。
+                if (!e.IsRepeat && _selected is { } card)
                 {
                     RunPreviewCommand(_previewPolicy.SpaceDown(card.Id));
                 }

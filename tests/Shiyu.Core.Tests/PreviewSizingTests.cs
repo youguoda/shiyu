@@ -74,6 +74,69 @@ public class PreviewSizingTests
             PreviewSizing.ForImage(0, 0));
     }
 
+    // --- 屏幕像素（用户实录 2026-10-09：预览图片是低分辨率的）---------------------------
+
+    [Fact]
+    public void On_a_scaled_screen_a_small_image_shows_pixel_for_pixel_not_magnified()
+    {
+        // 150% 屏：300×200 的图照 DIP 原样摆会占 450×300 个屏幕像素——放大 1.5 倍，糊。
+        var (width, height) = PreviewSizing.FitImage(300, 200, 454, 502, deviceScale: 1.5);
+
+        Assert.Equal(200, width, precision: 3);
+        Assert.Equal(133.333, height, precision: 3);
+    }
+
+    [Fact]
+    public void A_large_image_fits_the_box_whatever_the_scale()
+    {
+        var (width, height) = PreviewSizing.FitImage(1920, 1080, 454, 502, deviceScale: 1.5);
+
+        Assert.Equal(454, width, precision: 3);
+        Assert.Equal(383 / 1.5, height, precision: 3);
+    }
+
+    [Fact]
+    public void Every_edge_lands_on_a_whole_screen_pixel()
+    {
+        // 800×500 塞进 454 宽：283.75 DIP 高 = 425.625 个屏幕像素。位图只能是整像素，画进这样的
+        // 框还得再缩放一次——一缩放就软。框落在整像素上，解码就能正好一比一。
+        var (width, height) = PreviewSizing.FitImage(800, 500, 454, 502, deviceScale: 1.5);
+
+        Assert.Equal(681, width * 1.5, precision: 6);
+        Assert.Equal(426, height * 1.5, precision: 6);
+    }
+
+    [Fact]
+    public void The_original_decodes_to_exactly_the_screen_pixels_it_fills()
+    {
+        Assert.Equal((681, 426), PreviewSizing.DecodeSize(800, 500, (454, 284), deviceScale: 1.5));
+
+        // 一比一显示的小图就按原图解码，一个像素也不多。
+        Assert.Equal((300, 200), PreviewSizing.DecodeSize(300, 200, (200, 400 / 3.0), deviceScale: 1.5));
+    }
+
+    [Fact]
+    public void The_original_is_decoded_at_screen_pixels_but_never_past_its_own()
+    {
+        Assert.Equal(681, PreviewSizing.DecodeWidth(1920, displayWidth: 454, deviceScale: 1.5));
+        Assert.Equal(454, PreviewSizing.DecodeWidth(1920, displayWidth: 454, deviceScale: 1.0));
+        Assert.Equal(300, PreviewSizing.DecodeWidth(300, displayWidth: 200, deviceScale: 1.5));
+
+        // 旧行没有尺寸：只按显示宽度。
+        Assert.Equal(681, PreviewSizing.DecodeWidth(0, displayWidth: 454, deviceScale: 1.5));
+    }
+
+    [Fact]
+    public void The_panel_wraps_the_pixel_for_pixel_image_on_a_scaled_screen()
+    {
+        var (width, height) = PreviewSizing.ForImage(600, 400, deviceScale: 2.0);
+
+        Assert.Equal(300 + PreviewSizing.ChromeHorizontal, width);
+        Assert.Equal(200 + PreviewSizing.ChromeVertical, height);
+        Assert.Equal((300.0, 200.0), PreviewSizing.ImageDisplay(600, 400, deviceScale: 2.0));
+        Assert.Null(PreviewSizing.ImageDisplay(0, 400, deviceScale: 2.0));
+    }
+
     [Fact]
     public void A_file_list_scales_with_its_rows_and_scrolls_past_the_cap()
     {

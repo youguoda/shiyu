@@ -45,6 +45,9 @@ internal sealed class BarModule
 #if DEBUG
     /// <summary>探针命令 bar-newest 的入口（见 BarWindow.ProbeStartsAtNewest）。</summary>
     internal void ProbeStartsAtNewest() => EnsureBar()?.ProbeStartsAtNewest();
+
+    /// <summary>探针命令 preview-image 的入口（见 BarWindow.ProbePreviewImage）。</summary>
+    internal void ProbePreviewImage() => EnsureBar()?.ProbePreviewImage();
 #endif
 
     /// <summary>

@@ -53,6 +53,46 @@ public class PreviewPolicyTests
         Assert.Equal(PreviewCommand.Retarget, policy.HoverEnter(2));
     }
 
+    [Fact]
+    public void A_held_space_repeating_never_reopens_the_card_already_showing()
+    {
+        // 按住空格，键盘每 30 毫秒自动重复一次 KeyDown；每一次都"重新打开"，图片就在缩略图与
+        // 原图之间来回闪（用户实录 2026-10-09：预览图片会抖动）。
+        var (policy, _) = Make();
+
+        Assert.Equal(PreviewCommand.Open, policy.SpaceDown(7));
+        Assert.Equal(PreviewCommand.None, policy.SpaceDown(7));
+        Assert.Equal(PreviewCommand.None, policy.SpaceDown(7));
+        Assert.True(policy.IsOpen);
+        Assert.Equal(7, policy.Card);
+
+        Assert.Equal(PreviewCommand.Close, policy.SpaceUp());
+    }
+
+    [Fact]
+    public void Space_over_a_hover_preview_of_that_card_takes_it_over_without_reopening()
+    {
+        var (policy, time) = Make();
+        policy.HoverEnter(3);
+        time.Advance(HoverDelay);
+        Assert.Equal(PreviewCommand.Open, policy.Tick());
+
+        Assert.Equal(PreviewCommand.None, policy.SpaceDown(3));
+
+        // The key owns it now: releasing it closes what it holds.
+        Assert.Equal(PreviewCommand.Close, policy.SpaceUp());
+    }
+
+    [Fact]
+    public void Space_on_another_card_still_opens_that_card()
+    {
+        var (policy, _) = Make();
+        policy.SpaceDown(1);
+
+        Assert.Equal(PreviewCommand.Open, policy.SpaceDown(2));
+        Assert.Equal(2, policy.Card);
+    }
+
     // --- hover dwell ------------------------------------------------------------
 
     [Fact]
@@ -164,6 +204,26 @@ public class PreviewPolicyTests
         policy.PreviewLeft();
         time.Advance(PreviewPolicy.HoverBufferMs);
         Assert.Equal(PreviewCommand.Close, policy.Tick());
+    }
+
+    [Fact]
+    public void Coming_back_from_the_panel_to_its_own_card_reloads_nothing()
+    {
+        var (policy, time) = Make();
+        policy.HoverEnter(1);
+        time.Advance(HoverDelay);
+        policy.Tick();
+
+        policy.HoverLeave();
+        policy.PreviewEntered();
+        Assert.Equal(PreviewCommand.None, policy.HoverEnter(1));
+        Assert.True(policy.IsOpen);
+
+        // A neighbour reached the same way still glides across.
+        policy.HoverLeave();
+        policy.PreviewEntered();
+        Assert.Equal(PreviewCommand.Retarget, policy.HoverEnter(2));
+        Assert.Equal(2, policy.Card);
     }
 
     // --- keyboard following --------------------------------------------------------

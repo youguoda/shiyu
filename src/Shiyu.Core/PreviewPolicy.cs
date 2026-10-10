@@ -130,6 +130,12 @@ public sealed class PreviewPolicy
                 _hoverEnteredAt = Clock();
                 return PreviewCommand.None;
 
+            case State.OverPreview when Card == card:
+                // Off the panel back onto its own card: nothing to carry over.
+                _state = State.Open;
+                _trigger = PreviewTrigger.Hover;
+                return PreviewCommand.None;
+
             case State.OverPreview:
                 // Off the panel onto a card: same crossing, same glide.
                 _state = State.Open;
@@ -194,13 +200,22 @@ public sealed class PreviewPolicy
         return PreviewCommand.None;
     }
 
-    /// <summary>Space went down: open now, owned by the key until it comes up.</summary>
+    /// <summary>
+    /// Space went down: open now, owned by the key until it comes up. A held
+    /// key repeats its key-down every ~30 ms, and a hover preview may already
+    /// show the card: when the panel is up on this very card, the key only
+    /// takes ownership — reopening it each time reset the picture to its
+    /// thumbnail and threw away the original in flight, and the preview
+    /// flickered between blurry and sharp (用户实录 2026-10-09).
+    /// </summary>
     public PreviewCommand SpaceDown(long card)
     {
+        var showing = IsOpen && Card == card;
+
         _state = State.Open;
         Card = card;
         _trigger = PreviewTrigger.Keyboard;
-        return PreviewCommand.Open;
+        return showing ? PreviewCommand.None : PreviewCommand.Open;
     }
 
     /// <summary>Space came up: close only what the key opened.</summary>

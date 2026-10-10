@@ -126,5 +126,86 @@ internal partial class BarWindow
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "bar-newest.log"), log.ToString());
     }
+
+    /// <summary>
+    /// 探针命令 preview-image（用户实录 2026-10-09：预览图片会抖动、是低分辨率的）。窄条开着，
+    /// 选中第一张图片卡；脚本从外面按下空格并按住——真实的 WM_KEYDOWN，连着自动重复——这里
+    /// 每几毫秒看一眼预览面板上的图：换了几次、有没有从原图退回缩略图、最后解码了多少像素、
+    /// 画了多大。日志一行一事。
+    /// </summary>
+    internal async void ProbePreviewImage()
+    {
+        var log = new StringBuilder();
+        var directory = DebugOverrides.ProbeDirectory!;
+
+        Summon();
+        for (var round = 0; round < 3; round++)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        // The thumbnails backfill from the thread pool; wait for the card's.
+        BarCard? card = null;
+        for (var waited = 0; waited < 50 && card?.Thumbnail is null; waited++)
+        {
+            card = VisibleRows.FirstOrDefault(row => row.Kind == EntryKind.Image);
+            await Task.Delay(100);
+        }
+
+        if (card is null)
+        {
+            File.WriteAllText(Path.Combine(directory, "preview-image.log"), "image|missing" + Environment.NewLine + "done" + Environment.NewLine);
+            return;
+        }
+
+        Select(card);
+        var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        log.AppendLine(FormattableString.Invariant(
+            $"selected|pixels={card.PixelWidth}x{card.PixelHeight}|original={card.HasOriginal}|scale={scale:F2}"));
+
+        // The script presses Space only once the image card is the selection.
+        File.WriteAllText(Path.Combine(directory, "preview-image.ready"), "ready");
+
+        // Watch the panel's picture from now until well after the script lets go of Space.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        System.Windows.Media.ImageSource? last = null;
+        var changes = 0;
+        var backToThumbnail = 0;
+        var sawOriginal = false;
+        while (clock.Elapsed < TimeSpan.FromSeconds(9))
+        {
+            var source = _preview is { IsVisible: true } shown ? shown.ImageHost.Source : null;
+            if (source is not null && !ReferenceEquals(source, last))
+            {
+                changes++;
+                var thumbnail = ReferenceEquals(source, card.Thumbnail);
+                if (thumbnail && sawOriginal)
+                {
+                    backToThumbnail++;
+                }
+
+                sawOriginal |= !thumbnail;
+                log.AppendLine(FormattableString.Invariant(
+                    $"source|at={clock.ElapsedMilliseconds}|kind={(thumbnail ? "thumbnail" : "original")}|px={(source as System.Windows.Media.Imaging.BitmapSource)?.PixelWidth ?? -1}"));
+                last = source;
+            }
+
+            await Task.Delay(5);
+        }
+
+        var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, scale);
+        var expected = display is { } box ? PreviewSizing.DecodeSize(card.PixelWidth, card.PixelHeight, box, scale) : (0, 0);
+        var final = last as System.Windows.Media.Imaging.BitmapSource;
+        log.AppendLine(FormattableString.Invariant(
+            $"final|kind={(last is null ? "none" : ReferenceEquals(last, card.Thumbnail) ? "thumbnail" : "original")}|px={final?.PixelWidth ?? -1}x{final?.PixelHeight ?? -1}|expected={expected.Item1}x{expected.Item2}|shown={_preview?.ImageHost.ActualWidth ?? -1:F2}x{_preview?.ImageHost.ActualHeight ?? -1:F2}|display={display?.Width ?? -1:F2}x{display?.Height ?? -1:F2}|changes={changes}|backToThumbnail={backToThumbnail}"));
+
+        if (_preview?.Content is FrameworkElement panel)
+        {
+            App.RenderToPng(panel, Path.Combine(directory, "preview-image.png"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "preview-image.log"), log.ToString());
+    }
 }
 #endif
