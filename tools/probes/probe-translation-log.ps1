@@ -22,6 +22,9 @@
 #   - flow:drag-kept        after a drag the box grows from where it was dropped
 #                           instead of snapping back beside the caret
 #   - flow:log-library      the library opens on the log page and lists both records
+#   - flow:log-expand       one selected record opens up in full, its result laid out
+#                           as Markdown; select them all and none does (user request
+#                           2026-10-10)
 #   - flow:log-settings     the settings row counts the records
 #
 # ASCII only (see lib.ps1 header).
@@ -114,6 +117,11 @@ $ok = $library -and $library['logPage'] -eq 'True' -and $library['logTab'] -eq '
     -and $library['count'] -eq '2 / 2' -and $library['historyVisible'] -eq 'False' -and $library['empty'] -eq 'False'
 $detail = if ($library) { "log page {0}, {1} item(s), count '{2}', history visible {3}" -f $library['logPage'], $library['items'], $library['count'], $library['historyVisible'] } else { 'no library line' }
 Add-Check 'flow:log-library' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+$expand = $lines['expand']
+$ok = $expand -and $expand['single'] -eq 'True' -and $expand['full'] -eq 'True' -and $expand['markdown'] -eq 'True' -and $expand['multi'] -eq '0'
+$detail = if ($expand) { "one selected: expanded {0}, full view shown {1}, laid out {2}; all selected: {3} expanded" -f $expand['single'], $expand['full'], $expand['markdown'], $expand['multi'] } else { 'no expand line' }
+Add-Check 'flow:log-expand' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 $settings = $lines['settings']
 $ok = $settings -and $settings['count'] -eq 'True'

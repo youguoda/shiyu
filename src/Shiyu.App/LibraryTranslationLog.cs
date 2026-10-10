@@ -21,6 +21,9 @@ public partial class LibraryWindow
     /// <summary>刚删掉、5 秒内还能撤销的翻译记录（与历史页的撤销共用一条撤销条）。</summary>
     private List<TranslationRecord>? _undoLog;
 
+    /// <summary>此刻展开着显示全文的那一行（只有单选时才有）。</summary>
+    private TranslationLogItem? _expandedLog;
+
     /// <summary>空态里「去设置」用：打开设置窗并定位到某一项。</summary>
     internal Action<string>? OpenSettingsAt { get; init; }
 
@@ -210,7 +213,36 @@ public partial class LibraryWindow
         return button;
     }
 
-    private void OnLogSelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateLogCommands();
+    private void OnLogSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateLogExpansion();
+        UpdateLogCommands();
+    }
+
+    /// <summary>
+    /// 单独选中的那一行展开、显示全部（用户需求 2026-10-10：翻译记录里点一下就能看全文）：
+    /// 原文整段、结果按 Markdown 排。多选时都收起——全选了要删，不该把整页撑开。键盘
+    /// ↑↓ 走的也是选择，展开跟着走。
+    /// </summary>
+    private void UpdateLogExpansion()
+    {
+        var only = LogList.SelectedItems.Count == 1 ? LogList.SelectedItem as TranslationLogItem : null;
+        if (ReferenceEquals(only, _expandedLog))
+        {
+            return;
+        }
+
+        if (_expandedLog is { } previous)
+        {
+            previous.Expanded = false;
+        }
+
+        _expandedLog = only;
+        if (only is not null)
+        {
+            only.Expanded = true;
+        }
+    }
 
     private void UpdateLogCommands()
     {
@@ -449,21 +481,75 @@ public partial class LibraryWindow
     /// <summary>探针命令 translation-log 的管理窗一段：在哪一页、列了几条、计数怎么写；渲一张 PNG。</summary>
     internal string ProbeLogPage(string picture)
     {
-        App.RenderToPng(RootGrid, picture);
         var first = LogList.Items.Count > 0 ? LogList.Items[0] as TranslationLogItem : null;
-        return FormattableString.Invariant(
+        var line = FormattableString.Invariant(
             $"library|logPage={_logPageActive}|logTab={LogTab.IsChecked}|items={LogList.Items.Count}|count={LogCountLabel.Text}|historyVisible={HistoryContent.IsVisible}|empty={LogEmpty.IsVisible}|title={Title}|firstMeta={first?.Meta}")
             + Environment.NewLine;
+
+        // 点一下看全文（用户需求 2026-10-10）：单选的那一行展开、结果按 Markdown 排进去；
+        // 全选时一行都不展开。
+        LogList.SelectedIndex = 0;
+        LogList.UpdateLayout();
+        var container = LogList.ItemContainerGenerator.ContainerFromIndex(0) as FrameworkElement;
+        var full = container is null ? null : Tree.FindDescendant<MarkdownBox>(container);
+        var single = FormattableString.Invariant(
+            $"|single={first?.Expanded}|full={full?.IsVisible}|markdown={full is not null && first is not null && full.Shown == first.Translated}");
+        App.RenderToPng(RootGrid, picture);
+
+        LogList.SelectAll();
+        LogList.UpdateLayout();
+        var expanded = LogList.Items.OfType<TranslationLogItem>().Count(item => item.Expanded);
+        LogList.SelectedIndex = 0;
+
+        return line + FormattableString.Invariant($"expand{single}|multi={expanded}") + Environment.NewLine;
     }
 #endif
 }
 
-/// <summary>翻译记录页的一行（只读视图）。原文压成一行；结果至多三行（<see cref="ClampHeight"/>）。</summary>
-internal sealed record TranslationLogItem(TranslationRecord Record, string Meta, string OriginalLine, double ClampHeight)
+/// <summary>
+/// 翻译记录页的一行（只读视图）。收起时原文压成一行、结果至多三行（<see cref="ClampHeight"/>），
+/// 结果去掉 Markdown 标记再显示；单独选中时展开（<see cref="Expanded"/>，用户需求 2026-10-10），
+/// 原文整段、结果按 Markdown 排。
+/// </summary>
+internal sealed class TranslationLogItem(TranslationRecord record, string meta, string originalLine, double clampHeight)
+    : System.ComponentModel.INotifyPropertyChanged
 {
+    private bool _expanded;
+    private string? _preview;
+
+    public TranslationRecord Record { get; } = record;
+
+    public string Meta { get; } = meta;
+
+    public string OriginalLine { get; } = originalLine;
+
+    public double ClampHeight { get; } = clampHeight;
+
     public long Id => Record.Id;
 
+    public string Original => Record.Original;
+
     public string Translated => Record.Translated;
+
+    /// <summary>收起时的结果：标题、列表、加粗都去掉标记，几行之内读得顺。第一次要时才算。</summary>
+    public string TranslatedPreview => _preview ??= MarkdownText.Plain(Record.Translated);
+
+    public bool Expanded
+    {
+        get => _expanded;
+        set
+        {
+            if (_expanded == value)
+            {
+                return;
+            }
+
+            _expanded = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Expanded)));
+        }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
 /// <summary>两扇窗共用的「清空翻译记录」确认（设置页的「立即清空」与管理窗的「清空全部」）。</summary>

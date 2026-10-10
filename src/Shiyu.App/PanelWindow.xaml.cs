@@ -325,7 +325,7 @@ public partial class PanelWindow : Window
 
         OriginalText.Text = text;
         OriginalText.ToolTip = text;
-        TranslatedText.Inlines.Clear();
+        TranslatedText.Clear();
         TranslatedText.Visibility = Visibility.Collapsed;
         SentencePairs.ItemsSource = null;
         UpdateDirectionLabel();
@@ -373,7 +373,7 @@ public partial class PanelWindow : Window
     /// <summary>引导卡：告诉用户去哪，而不是报一个错。</summary>
     private void ShowSetupCard()
     {
-        TranslatedText.Inlines.Clear();
+        TranslatedText.Clear();
         TranslatedText.Visibility = Visibility.Collapsed;
         SentencePairs.ItemsSource = null;
         ContentScroll.Visibility = Visibility.Collapsed;
@@ -681,7 +681,10 @@ public partial class PanelWindow : Window
         LoadingSkeleton.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>译文渲染：流式尾随静态 accent 光标块（2×18，不闪烁）。</summary>
+    /// <summary>
+    /// 译文渲染：按 Markdown 排（用户需求 2026-10-10，ADR-0014），流式尾随静态 accent 光标块
+    /// （与字同高，不闪烁）。复制、存入历史、自动复制拿的仍是 session.Text 原文。
+    /// </summary>
     private void RenderTranslation(TranslationSession session)
     {
         var text = session.Text;
@@ -699,21 +702,7 @@ public partial class PanelWindow : Window
         }
 
         TranslatedText.Visibility = Visibility.Visible;
-        TranslatedText.Inlines.Clear();
-        TranslatedText.Inlines.Add(new Run(text));
-
-        if (session.State == TranslationState.Streaming)
-        {
-            var caret = new Rectangle
-            {
-                Width = 2,
-                Height = 18,
-                Margin = new Thickness(2, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Bottom,
-            };
-            caret.SetResourceReference(Shape.FillProperty, "Brush.Accent");
-            TranslatedText.Inlines.Add(new InlineUIContainer(caret));
-        }
+        TranslatedText.Show(text, streaming: session.State == TranslationState.Streaming);
     }
 
     /// <summary>失败态：人话标题 + 说明 + 重试/服务设置；原始异常折叠。</summary>

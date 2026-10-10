@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <!-- 大模型输出按 Markdown 显示（ADR-0014）：BSD-2-Clause，无其它依赖。 -->
+    <PackageReference Include="Markdig" Version="1.4.0" />
   </ItemGroup>
 
 </Project>

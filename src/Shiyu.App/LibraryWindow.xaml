@@ -107,23 +107,46 @@
 
         <!--
           翻译记录的行（用户需求 2026-10-09）：元信息（时间 · 哪个框 · 模板）、原文（次级色，
-          一行）、结果（内容字号，至多三行）。结果是用户回来找的东西，所以它最醒目。
+          一行）、结果（内容字号，至多三行，去掉 Markdown 标记）。结果是用户回来找的东西，所以
+          它最醒目。单独选中的那一行展开（用户需求 2026-10-10：点一下看全文）：原文整段，结果
+          按 Markdown 排（ADR-0014）。展开的结果不接鼠标——点它就是点这一行，选择、双击复制照旧。
         -->
         <DataTemplate x:Key="LogRowTemplate">
             <StackPanel Margin="2,8,2,8">
                 <TextBlock Text="{Binding Meta}" FontSize="{DynamicResource Type.Caption}"
                            Foreground="{DynamicResource Brush.TextSecondary}"
                            TextTrimming="CharacterEllipsis"/>
-                <TextBlock Text="{Binding OriginalLine}" Margin="0,4,0,0"
-                           Foreground="{DynamicResource Brush.TextSecondary}"
-                           TextTrimming="CharacterEllipsis"/>
-                <TextBlock Text="{Binding Translated}" Margin="0,2,0,0"
-                           FontSize="{DynamicResource Type.Content}"
-                           LineHeight="{DynamicResource Line.Content}"
-                           LineStackingStrategy="BlockLineHeight"
-                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                           MaxHeight="{Binding ClampHeight}"/>
+                <StackPanel x:Name="Brief">
+                    <TextBlock Text="{Binding OriginalLine}" Margin="0,4,0,0"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding TranslatedPreview}" Margin="0,2,0,0"
+                               FontSize="{DynamicResource Type.Content}"
+                               LineHeight="{DynamicResource Line.Content}"
+                               LineStackingStrategy="BlockLineHeight"
+                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                               MaxHeight="{Binding ClampHeight}"/>
+                </StackPanel>
+                <StackPanel x:Name="Full" Visibility="Collapsed">
+                    <TextBlock Text="{Binding Original}" Margin="0,4,0,0"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               LineHeight="{DynamicResource Line.BodyMulti}"
+                               LineStackingStrategy="BlockLineHeight"
+                               TextWrapping="Wrap"/>
+                    <local:MarkdownBox x:Name="FullTranslation" Markdown="{Binding Translated}" Margin="0,6,0,0"
+                                       Style="{DynamicResource SelectableDocument}"
+                                       IsHitTestVisible="False" Focusable="False"
+                                       FontSize="{DynamicResource Type.Content}"
+                                       TextBlock.LineHeight="{DynamicResource Line.Content}"
+                                       TextBlock.LineStackingStrategy="BlockLineHeight"/>
+                </StackPanel>
             </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Expanded}" Value="True">
+                    <Setter TargetName="Brief" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="Full" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
     </Window.Resources>
 

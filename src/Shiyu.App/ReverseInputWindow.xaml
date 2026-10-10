@@ -46,27 +46,21 @@
             <!-- 输出：译文 / 整理好的提示词（紧凑内容字号，第一视觉位）。等新结果期间旧输出淡显，
                  流式中尾部挂静态 accent 光标块（2 宽、与字同高，同面板，票 22；不另做闪烁动画）。
                  失败态用 TranslationUserErrorMapper 的人话（与面板一致），并附"去设置"。
-                 结算之后换成 OutputBox：同样的字、同样的位置，能用鼠标选取、Ctrl+C 复制
-                 （用户需求 2026-10-05）；流式中仍是 TextBlock——光标块只能内联在它里面，
-                 流着的字也没人去选。 -->
+                 按 Markdown 排（用户需求 2026-10-10，ADR-0014），一直是同一个可选取的框：流式中
+                 与结算后同字同位，能用鼠标选取、Ctrl+C 复制（用户需求 2026-10-05）——旧的
+                 "流式 TextBlock、结算换 TextBox"两件套就此合一，结算时也不会再跳一下。 -->
             <!-- 输入框与输出区的滚动条都常驻占道（Visible，见 Controls.xaml 滚动条注释）：
                  打字、出字长到要滚的那一刻，字不重新折行。 -->
             <ScrollViewer x:Name="OutputScroll" Margin="0,8,0,0" MaxHeight="420"
                           VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
                           Visibility="Collapsed">
                 <StackPanel>
-                    <TextBlock x:Name="OutputText" Margin="4,0"
-                               FontSize="{DynamicResource Type.ContentCompact}"
-                               LineHeight="{DynamicResource Line.ContentCompact}"
-                               LineStackingStrategy="BlockLineHeight"
-                               TextWrapping="Wrap"/>
-                    <!-- 左边距 2 = TextBlock 的 4 减去 WPF 给 TextBox 正文加的 2 DIP 内缩。 -->
-                    <TextBox x:Name="OutputBox" Style="{DynamicResource SelectableText}"
-                             Margin="2,0" Visibility="Collapsed"
-                             FontSize="{DynamicResource Type.ContentCompact}"
-                             TextBlock.LineHeight="{DynamicResource Line.ContentCompact}"
-                             TextBlock.LineStackingStrategy="BlockLineHeight"
-                             AutomationProperties.Name="译文（可选取复制）"/>
+                    <local:MarkdownBox x:Name="OutputDoc" Style="{DynamicResource SelectableDocument}"
+                                       Margin="4,0" Visibility="Collapsed"
+                                       FontSize="{DynamicResource Type.ContentCompact}"
+                                       TextBlock.LineHeight="{DynamicResource Line.ContentCompact}"
+                                       TextBlock.LineStackingStrategy="BlockLineHeight"
+                                       AutomationProperties.Name="译文（可选取复制）"/>
                     <local:InfoBar x:Name="ErrorBar" Visibility="Collapsed"
                                    Severity="Danger" IsClosable="False"/>
                     <StackPanel x:Name="ErrorActions" Visibility="Collapsed" Orientation="Horizontal"

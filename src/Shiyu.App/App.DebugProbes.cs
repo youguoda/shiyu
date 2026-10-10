@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -382,7 +383,7 @@ public partial class App
             var search = bar?.FindName("SearchBox") as TextBox;
             var reverse = Windows.OfType<ReverseInputWindow>().FirstOrDefault();
             var input = reverse?.FindName("InputBox") as TextBox;
-            var output = reverse?.FindName("OutputText") as TextBlock;
+            var output = reverse?.FindName("OutputDoc") as MarkdownBox;
             log.AppendLine(FormattableString.Invariant(
                 $"size|{phase}|card={card?.FontSize}|cardLine={card?.LineHeight}|search={search?.FontSize}|reverseInput={input?.FontSize}|reverseOutput={output?.FontSize}"));
         }
@@ -542,6 +543,199 @@ public partial class App
         File.WriteAllText(Path.Combine(directory, "scroll-lane.log"), log.ToString());
     }
 
+    /// <summary>
+    /// 一段模型常写的 Markdown：每种块都有，外加一条不该能点的链接。逐行拼而不用原始字符串：
+    /// 本文件包在 #if DEBUG 里，Release 下预处理器会把行首的 "# 标题" 当成指令。
+    /// </summary>
+    private static readonly string MarkdownSample = string.Join('\n',
+        "# 发布说明",
+        "",
+        "这是 **加粗**、*斜体*、~~删除~~ 和 `行内代码`，还有[一个链接](https://example.com)。",
+        "第二行紧跟着，不并进上一行。",
+        "",
+        "## 步骤",
+        "1. 打开设置",
+        "2. 选择 **翻译**",
+        "   - 子项一",
+        "   - 子项二",
+        "3. 保存",
+        "",
+        "- [x] 已完成",
+        "- [ ] 未完成",
+        "",
+        "> 引用的一段话。",
+        "",
+        "```csharp",
+        "var answer = 42;",
+        "```",
+        "",
+        "| 词 | 释义 |",
+        "|:---|---:|",
+        "| apple | 苹果 |",
+        "",
+        "---",
+        "",
+        "[不该能点的链接](javascript:alert(1))");
+
+    /// <summary>
+    /// 探针命令 markdown（用户需求 2026-10-10：大模型的输出按 Markdown 显示，ADR-0014）。翻译框
+    /// （假后端先译完一句，再把样稿排进同一个译文框）与反向输入框各排一遍样稿：数标题、列表、
+    /// 表格、引用、分隔线、代码段、链接，看标记符号都被吃掉、单个换行留着、只有网页链接能点；
+    /// 再看流式光标结算即撤、同一段字重排不丢选区。两张 PNG 供人眼看。
+    /// </summary>
+    private async void ProbeMarkdown(AppShell shell)
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+
+        async Task Settle()
+        {
+            for (var round = 0; round < 6; round++)
+            {
+                await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            }
+        }
+
+        static IEnumerable<Block> AllBlocks(IEnumerable<Block> blocks)
+        {
+            foreach (var block in blocks)
+            {
+                yield return block;
+                IEnumerable<Block> children = block switch
+                {
+                    Section section => section.Blocks,
+                    List list => list.ListItems.SelectMany(item => item.Blocks),
+                    Table table => table.RowGroups.SelectMany(group => group.Rows)
+                        .SelectMany(row => row.Cells).SelectMany(cell => cell.Blocks),
+                    _ => [],
+                };
+                foreach (var child in AllBlocks(children))
+                {
+                    yield return child;
+                }
+            }
+        }
+
+        static IEnumerable<Inline> AllInlines(IEnumerable<Inline> inlines)
+        {
+            foreach (var inline in inlines)
+            {
+                yield return inline;
+                if (inline is Span span)
+                {
+                    foreach (var child in AllInlines(span.Inlines))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+        }
+
+        string Describe(string host, MarkdownBox box)
+        {
+            var blocks = AllBlocks(box.Document.Blocks).ToList();
+            var paragraphs = blocks.OfType<Paragraph>().ToList();
+            var headings = paragraphs
+                .Where(paragraph => paragraph.FontWeight == FontWeights.SemiBold && paragraph.FontSize > box.FontSize + 0.5)
+                .ToList();
+            var mono = FindResource("Font.Mono");
+            var links = paragraphs.SelectMany(paragraph => AllInlines(paragraph.Inlines)).OfType<Hyperlink>().ToList();
+            var text = new TextRange(box.Document.ContentStart, box.Document.ContentEnd).Text;
+            var markers = new[] { "**", "```", "|:---", "- [x]", "~~", "## " }.Count(text.Contains);
+            return FormattableString.Invariant(
+                $"{host}|headings={headings.Count}|lists={blocks.OfType<List>().Count()}|tables={blocks.OfType<Table>().Count()}|rows={blocks.OfType<Table>().Sum(table => table.RowGroups.Sum(group => group.Rows.Count))}|quotes={blocks.OfType<Section>().Count(section => section.BorderThickness.Left >= 3)}|rules={blocks.OfType<BlockUIContainer>().Count()}|code={paragraphs.Count(paragraph => Equals(paragraph.FontFamily, mono))}|links={links.Count}|openable={links.Count(link => link.NavigateUri is not null)}|markers={markers}|linebreak={text.Contains("。\r\n第二行")}|body={box.FontSize:F1}|h1={headings.FirstOrDefault()?.FontSize ?? 0:F1}");
+        }
+
+        static int Carets(MarkdownBox box)
+            => AllBlocks(box.Document.Blocks).OfType<Paragraph>()
+                .SelectMany(paragraph => AllInlines(paragraph.Inlines)).OfType<InlineUIContainer>().Count();
+
+        // 1. The panel: the fake backend settles one sentence, then the sample goes
+        // into the very box the translation landed in.
+        shell.ShowPanel?.Invoke("probe markdown", null);
+        PanelWindow? panel = null;
+        for (var waited = 0; waited < 80; waited++)
+        {
+            panel = Windows.OfType<PanelWindow>().FirstOrDefault(window => window.IsVisible);
+            if (panel is { TranslatedText: { Streaming: false, Shown.Length: > 0 } })
+            {
+                break;
+            }
+
+            await Task.Delay(100);
+        }
+
+        if (panel is null)
+        {
+            File.WriteAllText(Path.Combine(directory, "markdown.log"), "panel|missing" + Environment.NewLine + "done" + Environment.NewLine);
+            return;
+        }
+
+        // The panel's own follow-up renders (the settled state, the dictionary stage) go
+        // first; after that the sample goes in and everything below is measured in the
+        // same breath — a render of the panel's session would rightly put its text back.
+        await Task.Delay(800);
+        await Settle();
+        var box = panel.TranslatedText;
+        box.Show(MarkdownSample, streaming: false);
+        panel.UpdateLayout();
+        log.AppendLine(Describe("panel", box));
+
+        // Where the first glyph lands inside the box: the text must start at the
+        // box's own left edge, like the TextBlock it replaced.
+        var origin = box.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+        log.AppendLine(FormattableString.Invariant(
+            $"inset|first={origin.GetCharacterRect(LogicalDirection.Forward).Left:F2}|pagePadding={box.Document.PagePadding}|padding={box.Padding}"));
+        if (panel.Content is FrameworkElement panelRoot)
+        {
+            RenderToPng(panelRoot, Path.Combine(directory, "markdown-panel.png"));
+        }
+
+        // 2. Mid-stream the caret rides on the last line; settled, it is gone.
+        box.Show(MarkdownSample[..60], streaming: true);
+        var streamingCarets = Carets(box);
+        box.Show(MarkdownSample, streaming: false);
+        log.AppendLine(FormattableString.Invariant($"caret|streaming={streamingCarets}|settled={Carets(box)}"));
+
+        // 3. The same text again must not re-lay the document: a selection survives.
+        var start = box.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+        var end = start;
+        for (var step = 0; step < 4 && end.GetNextInsertionPosition(LogicalDirection.Forward) is { } next; step++)
+        {
+            end = next;
+        }
+
+        box.Selection.Select(start, end);
+        var before = box.Selection.Text;
+        box.Show(MarkdownSample, streaming: false);
+        log.AppendLine(FormattableString.Invariant($"selection|before={before}|after={box.Selection.Text}"));
+
+        // 4. The reverse box, at its compact size.
+        shell.ShowReverseInput?.Invoke();
+        await Settle();
+        if (Windows.OfType<ReverseInputWindow>().FirstOrDefault(window => window.IsVisible) is { } reverse)
+        {
+            // Measured in the same breath: the window re-renders its output from
+            // its own (empty) session on the next state change, as it should.
+            reverse.OutputDoc.Show(MarkdownSample, streaming: false);
+            reverse.OutputDoc.Visibility = Visibility.Visible;
+            reverse.OutputScroll.Visibility = Visibility.Visible;
+            reverse.UpdateLayout();
+            log.AppendLine(Describe("reverse", reverse.OutputDoc));
+            if (reverse.Content is FrameworkElement reverseRoot)
+            {
+                RenderToPng(reverseRoot, Path.Combine(directory, "markdown-reverse.png"));
+            }
+        }
+        else
+        {
+            log.AppendLine("reverse|missing");
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "markdown.log"), log.ToString());
+    }
+
     /// <summary>A window's content over the theme background, at 1.5×, into a PNG.</summary>
     internal static void RenderToPng(FrameworkElement root, string path)
     {
@@ -627,6 +821,11 @@ public partial class App
             // 指到滚动条时它不再挤别的控件（用户实录 2026-10-10）。脚本负责移鼠标。
             case "scroll-lane":
                 ProbeScrollLane();
+                break;
+
+            // 大模型的输出按 Markdown 显示（用户需求 2026-10-10，ADR-0014）。配 SHIYU_FAKE_BACKEND=1。
+            case "markdown":
+                ProbeMarkdown(shell);
                 break;
 
             // 内容字号：被阅读的文字跟着变，控件文字不变（用户需求 2026-10-09）。

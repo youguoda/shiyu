@@ -566,49 +566,17 @@ internal partial class ReverseInputWindow : Window
     private void RenderOutput()
     {
         var failed = _session.Status == ReverseInputStatus.Failed;
-
-        OutputText.Inlines.Clear();
         var output = _session.Output;
 
         // 旧输出淡显：次级色（读得清、又明显不是"现在的答案"）。
-        var foreground = _session.OutputFaded ? "Brush.TextSecondary" : "Brush.Text";
+        OutputDoc.SetResourceReference(ForegroundProperty, _session.OutputFaded ? "Brush.TextSecondary" : "Brush.Text");
 
-        // 结算之后换成可选取的 OutputBox（用户需求 2026-10-05：译文能用鼠标选取复制）。
-        // 流式中仍画 TextBlock——光标块只能内联在它里面，流着的字也没人去选。
-        var selectable = !_session.Running && output.Length > 0;
-
-        if (output.Length > 0 && !selectable)
-        {
-            var run = new Run(output);
-            run.SetResourceReference(TextElement.ForegroundProperty, foreground);
-            OutputText.Inlines.Add(run);
-        }
-
-        // 同一段字不重设：每次状态变化都会走到这里，重设会抹掉用户正在拖的选区。
-        if (selectable && OutputBox.Text != output)
-        {
-            OutputBox.Text = output;
-        }
-
-        OutputBox.SetResourceReference(ForegroundProperty, foreground);
-        OutputBox.Visibility = selectable ? Visibility.Visible : Visibility.Collapsed;
-
-        if (_session.Running)
-        {
-            // 与面板相同的静态 accent 光标块（不闪烁，票 22）：2 宽、与字同高——字号随
-            // 内容字号走（2026-10-09），块也跟着走。
-            var caret = new Rectangle
-            {
-                Width = 2,
-                Height = OutputText.FontSize,
-                Margin = new Thickness(2, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Bottom,
-            };
-            caret.SetResourceReference(Shape.FillProperty, "Brush.Accent");
-            OutputText.Inlines.Add(new InlineUIContainer(caret));
-        }
-
-        OutputText.Visibility = OutputText.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // 按 Markdown 排（用户需求 2026-10-10，ADR-0014）；流式中尾部挂与面板相同的静态 accent
+        // 光标块（票 22，与字同高——字号随内容字号走）。同一个框从流式到结算一直能选取复制
+        // （用户需求 2026-10-05）；同一段字不重排——每次状态变化都会走到这里，重排会抹掉用户
+        // 正在拖的选区。贴回、自动复制拿的仍是 _session.Output 原文。
+        OutputDoc.Show(output, streaming: _session.Running);
+        OutputDoc.Visibility = output.Length > 0 || _session.Running ? Visibility.Visible : Visibility.Collapsed;
 
         if (failed)
         {
@@ -627,9 +595,7 @@ internal partial class ReverseInputWindow : Window
             ErrorActions.Visibility = Visibility.Collapsed;
         }
 
-        OutputScroll.Visibility = OutputText.Visibility == Visibility.Visible
-            || OutputBox.Visibility == Visibility.Visible
-            || failed
+        OutputScroll.Visibility = OutputDoc.Visibility == Visibility.Visible || failed
             ? Visibility.Visible
             : Visibility.Collapsed;
 

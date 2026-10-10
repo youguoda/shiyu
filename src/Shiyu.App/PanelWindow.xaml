@@ -146,12 +146,14 @@
                                 Background="{DynamicResource Brush.StatePressed}"/>
                     </StackPanel>
 
-                    <!-- 译文 18/31，第一视觉位；流式中尾部跟一个静态 accent
-                         光标块（2×18，代码里以 InlineUIContainer 挂上）。 -->
-                    <TextBlock x:Name="TranslatedText" FontSize="{DynamicResource Type.Content}"
-                               LineHeight="{DynamicResource Line.Content}"
-                               LineStackingStrategy="BlockLineHeight"
-                               TextWrapping="Wrap"/>
+                    <!-- 译文 18/31，第一视觉位；按 Markdown 排（用户需求 2026-10-10，
+                         ADR-0014），能拖选复制。流式中尾部跟一个静态 accent 光标块
+                         （MarkdownBox 挂上，结算即撤）。 -->
+                    <local:MarkdownBox x:Name="TranslatedText" Style="{DynamicResource SelectableDocument}"
+                                       FontSize="{DynamicResource Type.Content}"
+                                       TextBlock.LineHeight="{DynamicResource Line.Content}"
+                                       TextBlock.LineStackingStrategy="BlockLineHeight"
+                                       AutomationProperties.Name="译文（可选取复制）"/>
 
                     <!-- 逐句对照：原文 14/24 次级色 + 译文 18/31，句对间距 12。 -->
                     <ItemsControl x:Name="SentencePairs" Visibility="Collapsed">

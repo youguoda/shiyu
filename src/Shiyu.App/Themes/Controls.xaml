@@ -531,6 +531,35 @@
     </Style>
 
     <!--
+      SelectableDocument（用户需求 2026-10-10，ADR-0014）：SelectableText 的 Markdown 版——
+      MarkdownBox 排好的一段输出，读起来就是排好的字：只读 RichTextBox 去掉框与底，拖选、
+      Ctrl+C、右键菜单是 RichTextBox 自带的。IsDocumentEnabled 让里面的链接能点（只放行
+      网页与邮件，见 MarkdownBox）。高度跟内容走，滚动交给外层。
+    -->
+    <Style x:Key="SelectableDocument" TargetType="RichTextBox">
+        <Setter Property="IsReadOnly" Value="True"/>
+        <Setter Property="IsReadOnlyCaretVisible" Value="False"/>
+        <Setter Property="IsDocumentEnabled" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RichTextBox">
+                    <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Disabled"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
       SearchBox（§4.7 胶囊；票 26 合并后只剩窄条一个表面，常驻与粘贴
       模式共用同一框）：高 32 真胶囊（圆角 = 高度/2 = Radius.Pill），
       左放大镜 16，占位次级色，聚焦描边转 Accent 1 DIP；右端可放
