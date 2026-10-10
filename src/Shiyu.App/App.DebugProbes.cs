@@ -330,6 +330,37 @@ public partial class App
     /// 窄条卡片正文与行高、反向输入框（紧凑档）随设置变，窄条搜索框（控件）始终是 14。
     /// 特大档各渲一张 PNG 进数据目录，供人眼看有没有挤坏。
     /// </summary>
+    /// <summary>
+    /// 探针命令 badge（用户需求 2026-10-10："翻译这段"去掉，只留一个「译」）：把翻译徽标亮出来，
+    /// 量它的尺寸、数它里面有几段字，渲一张 PNG。
+    /// </summary>
+    private async void ProbeBadge(AppShell shell)
+    {
+        shell.ShowBadge?.Invoke("probe badge text", null);
+        for (var round = 0; round < 6; round++)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        if (Windows.OfType<BadgeWindow>().FirstOrDefault(window => window.IsVisible) is { } badge
+            && badge.Content is FrameworkElement pill)
+        {
+            var texts = Descendants(badge).OfType<TextBlock>().Where(text => text.IsVisible).ToList();
+            log.AppendLine(FormattableString.Invariant(
+                $"badge|width={pill.ActualWidth:F0}|height={pill.ActualHeight:F0}|texts={texts.Count}|glyph={(texts.Count == 1 && texts[0].Text == "译")}"));
+            RenderToPng(pill, Path.Combine(directory, "badge.png"));
+        }
+        else
+        {
+            log.AppendLine("badge|missing");
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "badge.log"), log.ToString());
+    }
+
     private async void ProbeContentSize(AppShell shell)
     {
         shell.ToggleBar?.Invoke();
@@ -467,6 +498,11 @@ public partial class App
             // 悬停提示是拾语的样子、跟随主题（用户需求 2026-10-05）。
             case "tooltip":
                 ProbeTooltipLook(shell);
+                break;
+
+            // 翻译徽标只留一个「译」（用户需求 2026-10-10）。
+            case "badge":
+                ProbeBadge(shell);
                 break;
 
             // 内容字号：被阅读的文字跟着变，控件文字不变（用户需求 2026-10-09）。

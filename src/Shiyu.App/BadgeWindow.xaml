@@ -8,23 +8,21 @@
         AutomationProperties.Name="翻译这段选中的文字"
         TextElement.FontFamily="{DynamicResource Font.Ui}"
         TextElement.Foreground="{DynamicResource Brush.Text}">
-    <!-- 胶囊（§4.7，票 20）：高 32（Control.Height）、圆角 Radius.Pill=16。
-         12 DIP 透明边距让 Shadow.Badge 完整——胶囊非矩形，DWM 阴影贴不住，
-         徽标是浮层家族里唯一由 WPF 画阴影的窗。窗口按含边距的尺寸定位，
-         光标旁的落点不受影响。 -->
-    <Border x:Name="Pill" CornerRadius="{DynamicResource Radius.Pill}" Padding="12,6" Cursor="Hand"
-            MinHeight="{DynamicResource Control.Height}" Margin="12"
-            Background="{DynamicResource Brush.AccentFloating}" MouseLeftButtonUp="OnClicked">
+    <!-- 圆形徽标（§4.7，票 20；用户需求 2026-10-10：只留一个「译」，"翻译这段"四个字去掉）：
+         32 见方（Control.Height）、圆角 Radius.Pill=16，正好是个圆。说明退到悬停提示与
+         无障碍名里，和应用里别的纯图标按钮一样。12 DIP 透明边距让 Shadow.Badge 完整——
+         圆形非矩形，DWM 阴影贴不住，徽标是浮层家族里唯一由 WPF 画阴影的窗。窗口按含边距的
+         尺寸定位，光标旁的落点不受影响。 -->
+    <Border x:Name="Pill" CornerRadius="{DynamicResource Radius.Pill}" Cursor="Hand"
+            Width="{DynamicResource Control.Height}" Height="{DynamicResource Control.Height}" Margin="12"
+            Background="{DynamicResource Brush.AccentFloating}" MouseLeftButtonUp="OnClicked"
+            ToolTip="翻译这段选中的文字">
         <Border.Effect>
             <StaticResource ResourceKey="Shadow.Badge"/>
         </Border.Effect>
-        <StackPanel Orientation="Horizontal">
-            <TextBlock Text="译" Foreground="{DynamicResource Brush.TextOnAccent}"
-                       FontSize="{DynamicResource Type.Body}"
-                       FontWeight="{DynamicResource Weight.Emphasis}" />
-            <TextBlock Text="翻译这段" Foreground="{DynamicResource Brush.TextOnAccent}"
-                       FontSize="{DynamicResource Type.Body}" Margin="8,0,0,0"
-                       VerticalAlignment="Center" />
-        </StackPanel>
+        <TextBlock x:Name="Glyph" Text="译" Foreground="{DynamicResource Brush.TextOnAccent}"
+                   FontSize="{DynamicResource Type.Body}"
+                   FontWeight="{DynamicResource Weight.Emphasis}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" />
     </Border>
 </Window>
