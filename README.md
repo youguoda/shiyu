@@ -49,20 +49,31 @@
 ## 系统要求
 
 - Windows 11（在 Windows 10 上未做验收，不承诺可用）。
-- .NET 9 桌面运行时；自行构建则需要 .NET SDK 9（WPF 项目只能在 Windows 上构建）。
+- 安装包与 zip 都自带 .NET 运行时，无需另装；自行构建需要 .NET SDK 9（WPF 项目只能在
+  Windows 上构建）。
 
 ## 安装
 
-从 [Releases](https://github.com/youguoda/shiyu/releases) 下载最新的
-`shiyu-win-x64.zip`，校验（可选，同目录附 `.sha256` 与 `.sig` 签名）后解压到
-一个固定位置（例如 `%LOCALAPPDATA%\Programs\Shiyu`），运行其中的
-`Shiyu.App.exe`。
+从 [Releases](https://github.com/youguoda/shiyu/releases) 下载最新的安装包
+`shiyu-win-x64-setup.exe`，双击运行：
 
-- 包为 self-contained，无需另装 .NET 运行时。
+- 只为当前用户安装，不需要管理员权限；默认装在 `%LOCALAPPDATA%\Programs\Shiyu`，
+  可以在安装时换一个位置（新的或空的文件夹）。
+- 可以勾选在桌面创建快捷方式；开始菜单里总会有「拾语」。
+- 拾语正在运行时，安装和卸载会请你先从托盘退出它。
+- 卸载在 Windows「设置 → 应用」里。卸载时会问要不要同时删除历史记录、翻译记录和
+  设置，默认保留——以后重新安装还能接着用。
+- 安装包没有代码签名，Windows 可能提示「Windows 已保护你的电脑」：点「更多信息」→
+  「仍要运行」。想核对下载的文件，同目录附 `.sha256` 与 `.sig` 签名。
+
+也可以用免安装的 `shiyu-win-x64.zip`：校验后解压到一个固定位置（例如
+`%LOCALAPPDATA%\Programs\Shiyu`），运行其中的 `Shiyu.App.exe`。原来用 zip 的，
+直接运行安装包并装到原来的文件夹即可，历史记录与设置不受影响。
+
+- 两种方式都是 self-contained，无需另装 .NET 运行时。
 - 拾语默认开机自启，自启项指向你实际运行的位置——换了位置后从新位置运行一次，
   自启就会跟着过去。
-- 应用内"设置 → 关于 → 检查更新"可检查新版本；已装 rc1 的用户会收到 0.9.0 的
-  自动更新提示。
+- 应用内"设置 → 关于 → 检查更新"可检查新版本，安装版与免安装版都能原地更新。
 
 自行构建：
 
