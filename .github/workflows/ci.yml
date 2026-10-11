@@ -1,5 +1,6 @@
-# 拾语 CI：Windows 上构建整个解决方案并跑 Core 单测；Linux 上跑公共通道
-# Worker 的类型检查与 vitest。两个 job 互不依赖，并行执行。
+# 拾语 CI：Windows 上构建整个解决方案并跑 Core 单测，另一台 Windows 打安装包
+# 并真装真卸一遍；Linux 上跑公共通道 Worker 的类型检查与 vitest。三个 job
+# 互不依赖，并行执行。
 name: CI
 
 on:
@@ -57,6 +58,32 @@ jobs:
           name: core-test-results
           path: TestResults
           retention-days: 7
+
+  # 安装包（ADR-0015）：每次推送都真装一遍、真卸一遍，别等到发版那天才发现它坏了。
+  # 与发布流水线走同一组脚本（tools/installer/），构建机是一次性的，可以放心跑
+  # "连数据一起删"与清自启的检查。
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: 发布 self-contained win-x64
+        run: dotnet publish src/Shiyu.App/Shiyu.App.csproj -c Release -r win-x64 --self-contained true -p:Version=0.0.0-ci -o publish
+
+      - name: 打安装包
+        shell: pwsh
+        run: |
+          $iscc = & tools/installer/install-inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'inno')
+          & tools/installer/build-installer.ps1 -Version '0.0.0-ci' -PublishDir publish -OutputDir $PWD -Iscc $iscc | Out-Null
+
+      - name: 安装包冒烟（静默装 → 查 → 删数据 → 静默卸）
+        shell: pwsh
+        run: tools/installer/smoke-installer.ps1 -Setup shiyu-win-x64-setup.exe -Version '0.0.0-ci' -WithDesktopIcon -DestructiveChecks
 
   server:
     runs-on: ubuntu-latest

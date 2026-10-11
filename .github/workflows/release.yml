@@ -5,6 +5,8 @@ name: release
 # 仓库 secret SHIYU_UPDATE_SIGNING_KEY 里）；发布前用与客户端内置公钥
 # （Shiyu.Core UpdateSignature.BuiltInPublicKey）同一把的 pub.pem 在 runner
 # 上复验一次——两处钥匙不一致时这一步红掉，而不是把没验过的包发出去。
+# 安装包（ADR-0015）同样三件套：shiyu-win-x64-setup.exe + .sha256 + .sig；
+# 装、查、删数据、卸的冒烟不过，同样不发布。
 on:
   push:
     tags: ['v*']
@@ -64,6 +66,21 @@ jobs:
           # 格式与 UpdateStaging.VerifyInstaller 的解析一致：首个空白分隔字段是十六进制哈希。
           "$hash  shiyu-win-x64.zip" | Set-Content -NoNewline shiyu-win-x64.zip.sha256
 
+      # Inno Setup 版本钉死在 install-inno.ps1 里（下载按 SHA-256 核对、便携解包）：
+      # 构建机悄悄换了大版本，发出去的安装包也会跟着变。
+      - name: 打安装包与校验和（ADR-0015）
+        shell: pwsh
+        run: |
+          $iscc = & tools/installer/install-inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'inno')
+          $setup = & tools/installer/build-installer.ps1 -Version '${{ steps.version.outputs.version }}' -PublishDir publish -OutputDir $PWD -Iscc $iscc
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  shiyu-win-x64-setup.exe" | Set-Content -NoNewline shiyu-win-x64-setup.exe.sha256
+
+      # 构建机是一次性的：这里可以放心试"连数据一起删"与卸载时清自启（-DestructiveChecks）。
+      - name: 安装包冒烟（静默装 → 查 → 删数据 → 静默卸，不过不发布）
+        shell: pwsh
+        run: tools/installer/smoke-installer.ps1 -Setup shiyu-win-x64-setup.exe -Version '${{ steps.version.outputs.version }}' -WithDesktopIcon -DestructiveChecks
+
       - name: 签名（私钥只在临时文件里存在片刻）
         shell: pwsh
         env:
@@ -76,6 +93,7 @@ jobs:
           try {
             [System.IO.File]::WriteAllText($key, $env:SHIYU_UPDATE_SIGNING_KEY)
             & $openssl dgst -sha256 -sign $key -out shiyu-win-x64.zip.sig shiyu-win-x64.zip
+            & $openssl dgst -sha256 -sign $key -out shiyu-win-x64-setup.exe.sig shiyu-win-x64-setup.exe
           }
           finally {
             Remove-Item $key -Force -ErrorAction SilentlyContinue
@@ -95,7 +113,10 @@ jobs:
           $openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
           if (-not $openssl) { $openssl = 'C:\Program Files\Git\usr\bin\openssl.exe' }
           try {
-            & $openssl dgst -sha256 -verify pub.pem -signature shiyu-win-x64.zip.sig shiyu-win-x64.zip
+            foreach ($file in 'shiyu-win-x64.zip', 'shiyu-win-x64-setup.exe') {
+              & $openssl dgst -sha256 -verify pub.pem -signature "$file.sig" $file
+              if ($LASTEXITCODE -ne 0) { throw "signature check failed for $file" }
+            }
           }
           finally {
             Remove-Item pub.pem -Force -ErrorAction SilentlyContinue
@@ -119,6 +140,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           args=(release create "$GITHUB_REF_NAME"
+                shiyu-win-x64-setup.exe shiyu-win-x64-setup.exe.sha256 shiyu-win-x64-setup.exe.sig
                 shiyu-win-x64.zip shiyu-win-x64.zip.sha256 shiyu-win-x64.zip.sig
                 --title "拾语 ${{ steps.version.outputs.version }}"
                 --notes-file release-notes.md)

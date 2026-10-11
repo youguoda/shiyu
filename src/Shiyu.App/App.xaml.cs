@@ -33,6 +33,12 @@ public partial class App : Application
             Environment.Exit(0);
         }
 
+        // 卸载程序的「同时删除数据」（ADR-0015）：同样不建窗口、不进托盘，删完即退。
+        if (UserDataCommand.TryRun(e.Args) is { } removed)
+        {
+            Environment.Exit(removed);
+        }
+
         // 先于一切业务接线（O-05）：处理器挂上之后，启动路径上的任何闪失
         // 才有日志与托盘兜底，而不是把进程直接带走——对一个托盘常驻的
         // 记录工具，崩溃就等于静默停止记录。
@@ -159,6 +165,13 @@ public partial class App : Application
 
         _modules.Retention.Start(shell);
         StartupPreference.Apply(shell.Settings);
+
+#if !DEBUG
+        // 安装版（ADR-0015）：应用内更新原地换了文件，「应用和功能」里那一行的版本号跟上；
+        // 便携版没有那把卸载键，装在别处的那一份也不归这里管——都不动。
+        InstallRegistration.SyncDisplayVersion(AppContext.BaseDirectory, UpdateService.CurrentDisplay);
+#endif
+
         if (!shell.IsProbe)
         {
             _modules.Update.StartWatch(shell);
