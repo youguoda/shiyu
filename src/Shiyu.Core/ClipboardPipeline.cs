@@ -67,6 +67,13 @@ public sealed partial class ClipboardPipeline : IDisposable
     public bool RecordImages { get; set; } = true;
 
     /// <summary>
+    /// Whether a copy that deserves a badge is offered one (「翻译徽标」, user
+    /// request 2026-10-13). Off changes nothing about recording: the entry is
+    /// written either way, only <see cref="BadgeDeserved"/> stays quiet.
+    /// </summary>
+    public bool OfferBadges { get; set; } = true;
+
+    /// <summary>
     /// The fingerprint of the last recorded image, with the clipboard arrival
     /// it was taken at. The same copy arrives more than once — an application
     /// publishes its bitmap in several clipboard formats in turn, and each
@@ -255,7 +262,7 @@ public sealed partial class ClipboardPipeline : IDisposable
 
     private void Offer(string text)
     {
-        if (ContentClassifier.DeservesBadge(text))
+        if (OfferBadges && ContentClassifier.DeservesBadge(text))
         {
             BadgeDeserved?.Invoke(text);
         }

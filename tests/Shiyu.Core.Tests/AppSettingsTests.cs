@@ -267,6 +267,45 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void The_translate_badge_is_off_for_a_file_that_never_mentioned_it()
+    {
+        // 用户需求 2026-10-13：「翻译徽标」默认关，升级上来的文件读成关——复制外语不再自动弹
+        // 「译」，开过拖选徽标的也一样（不迁移：用户选的就是"打开才弹"）。
+        Assert.True(AppSettings.TryParse("""{ "SelectionBadge": true }""", out var upgraded));
+        Assert.False(upgraded.TranslateBadge);
+        Assert.True(upgraded.SelectionBadge);
+
+        Assert.True(AppSettings.TryParse(
+            System.Text.Json.JsonSerializer.Serialize(new AppSettings { TranslateBadge = true }),
+            out var on));
+        Assert.True(on.TranslateBadge);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void The_drag_select_badge_needs_both_switches(bool master, bool dragSelect, bool expected)
+    {
+        // 总开关关着时拖选开关的值原样留着，但拖选徽标不生效（鼠标钩子不装）。
+        var settings = new AppSettings { TranslateBadge = master, SelectionBadge = dragSelect };
+
+        Assert.Equal(expected, settings.DragSelectBadge);
+    }
+
+    [Fact]
+    public void The_drag_select_verdict_is_derived_and_never_written_to_the_file()
+    {
+        using var file = new TempFile();
+        new AppSettings { TranslateBadge = true, SelectionBadge = true }.Save(file.Path_);
+
+        var saved = File.ReadAllText(file.Path_);
+        Assert.Contains("\"TranslateBadge\": true", saved);
+        Assert.DoesNotContain("DragSelectBadge", saved);
+    }
+
+    [Fact]
     public void A_stored_zero_delay_comes_back_as_the_hover_switch_turned_off()
     {
         // Before the switch, "0" was how hover previews were turned off: the

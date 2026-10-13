@@ -67,6 +67,7 @@ public class SettingsSchemaTests
             ["translate.log"] = "translate",
             ["translate.log-retention"] = "translate",
             ["translate.log-clear"] = "translate",
+            ["translate.badge"] = "translate",
             ["hotkeys.selection-badge"] = "translate",
             ["translate.hotkey-ref"] = "translate",
 
@@ -352,6 +353,32 @@ public class SettingsSchemaTests
         var item = Items().Single(i => i.Id == "hotkeys.selection-badge");
         Assert.Equal(SettingsControl.Toggle, item.Control);
         Assert.Equal("translate", SettingsSchema.FindPageOf(item.Id)!.Id);
+    }
+
+    [Fact]
+    public void The_translate_badge_master_is_off_by_default_and_drag_select_folds_under_it()
+    {
+        // 用户需求 2026-10-13：「翻译徽标」打开时才弹「译」，默认关。拖选是它的子项——
+        // 总开关关着时那一行收起，说了也不算。
+        Assert.False(new AppSettings().TranslateBadge);
+
+        var master = Items().Single(i => i.Id == "translate.badge");
+        Assert.Equal(SettingsControl.Toggle, master.Control);
+        Assert.Null(master.Parent);
+        Assert.Equal("translate", SettingsSchema.FindPageOf(master.Id)!.Id);
+        Assert.Equal("translate.badge", Items().Single(i => i.Id == "hotkeys.selection-badge").Parent);
+
+        // 子行只显示标签：拖选要常驻鼠标监听这件事得写在总开关看得见的说明里。
+        Assert.Contains("鼠标监听", master.Hint);
+    }
+
+    [Fact]
+    public void The_translate_badge_can_be_found_by_what_the_user_calls_it()
+    {
+        foreach (var query in new[] { "翻译徽标", "翻译按钮", "徽标", "小窗", "弹出" })
+        {
+            Assert.Contains(SettingsSearch.Find(query), hit => hit.Item.Id == "translate.badge");
+        }
     }
 
     [Fact]

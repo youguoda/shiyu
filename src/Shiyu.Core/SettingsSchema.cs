@@ -334,9 +334,17 @@ public static class SettingsSchema
                     Hint: "删除全部翻译记录；剪贴板历史不受影响。",
                     Keywords: ["清空", "删除", "翻译记录", "立即", "一键"],
                     Icon: "E74D")),
-            new SettingsSection("translate.trigger", "拖选",
+            // 用户需求 2026-10-13：徽标先有总开关，默认关——关着时复制、拖选都不弹「译」。拖选那条
+            // 折成它的子项（子行只显示标签），鼠标钩子的开销于是写进总开关的说明里。
+            new SettingsSection("translate.trigger", "翻译徽标",
                 new SettingsItem(
-                    "hotkeys.selection-badge", "拖选后出翻译徽标", SettingsControl.Toggle,
+                    "translate.badge", "翻译徽标", SettingsControl.Toggle,
+                    Hint: "复制外语后，光标旁浮现「译」徽标，点击才翻译。默认关闭，关着时什么都不弹，翻译照样能用快捷键。打开后还能选「拖选文字后也弹出」，它要常驻全局鼠标监听，每一次鼠标事件都会多绕一段拾语。",
+                    Keywords: ["徽标", "译", "翻译按钮", "按钮", "小窗", "弹出", "弹窗", "复制", "外语", "打扰", "开关"],
+                    Icon: "F2B7"),
+                new SettingsItem(
+                    "hotkeys.selection-badge", "拖选文字后也弹出", SettingsControl.Toggle,
+                    Parent: "translate.badge",
                     Hint: "在任意应用里拖选文字后，光标旁浮现「译」徽标，点击才翻译，无需记快捷键。需要常驻全局鼠标监听（低级鼠标钩子，每一次鼠标事件都会多绕一段拾语），默认关闭；关闭即刻摘钩，拾语退出时钩子自动还给系统。与「划词翻译」热键并存，互不影响。",
                     Keywords: ["划词", "拖选", "选中", "徽标", "翻译", "鼠标", "钩子", "监听", "开销"],
                     Icon: "E721"),

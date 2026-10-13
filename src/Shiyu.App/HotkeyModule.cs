@@ -178,7 +178,8 @@ internal sealed class HotkeyModule
     /// 装上/摘掉划词的鼠标钩子，随设置即时生效——与 Win+V 接管同一个模式。
     /// 默认不装（票 37 的硬约束）：全局低级鼠标钩子让每一次鼠标事件都多绕
     /// 一段本进程，这笔开销只有用户自己点头才花。钩子活在本进程里，关闭
-    /// 即刻摘钩，进程退出或被强杀时系统自动还原。
+    /// 即刻摘钩，进程退出或被强杀时系统自动还原。「翻译徽标」总开关关着时
+    /// 拖选开关再开也不装（用户需求 2026-10-13）：没有徽标要弹，钩子白花。
     /// </summary>
     private void ApplySelectionBadge()
     {
@@ -190,7 +191,7 @@ internal sealed class HotkeyModule
             return;
         }
 
-        if (shell.Settings.SelectionBadge)
+        if (shell.Settings.DragSelectBadge)
         {
             if (_mouseDrag is null)
             {

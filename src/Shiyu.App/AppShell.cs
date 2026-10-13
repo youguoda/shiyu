@@ -244,6 +244,7 @@ internal sealed class AppShell
         {
             RecordImages = Settings.RecordImages,
             RecordFiles = Settings.RecordFiles,
+            OfferBadges = Settings.TranslateBadge,
         };
 
         pipeline.ImageFailed += reason => TellUser($"复制的图片没能保存：{reason}");
@@ -315,8 +316,8 @@ internal sealed class AppShell
     }
 
     /// <summary>
-    /// 排除名单与录制开关的换新（原单体应用函数的第 4 段）：规则在活的策略
-    /// 对象上就地换新，下一次复制就按新规则裁决。
+    /// 排除名单、录制开关与翻译徽标的换新（原单体应用函数的第 4 段）：规则在活的
+    /// 策略对象上就地换新，下一次复制就按新规则裁决。
     /// </summary>
     public void ApplyPipelineSettings(AppSettings updated)
     {
@@ -326,6 +327,7 @@ internal sealed class AppShell
         {
             Pipeline.RecordImages = updated.RecordImages;
             Pipeline.RecordFiles = updated.RecordFiles;
+            Pipeline.OfferBadges = updated.TranslateBadge;
         }
     }
 

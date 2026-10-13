@@ -228,12 +228,27 @@ public sealed record AppSettings
     public bool TakeOverWinV { get; init; }
 
     /// <summary>
+    /// 「翻译徽标」总开关（用户需求 2026-10-13）：开着，光标旁才会浮"译"徽标——复制外语
+    /// 之后，以及另开了 <see cref="SelectionBadge"/> 时拖选文字之后。默认关闭：徽标是不请
+    /// 自来的打扰，只在用户点头后出现；关着时翻译照样走划词翻译、翻译剪贴板两个热键。
+    /// </summary>
+    public bool TranslateBadge { get; init; }
+
+    /// <summary>
     /// 拖选文字后光标旁浮"译"徽标，点击才翻译（划词徽章模式，票 37）。
     /// 默认关闭：它要常驻一个全局低级鼠标钩子，每一次鼠标事件都会多绕
     /// 一段本进程——这笔开销不为用户决定，只有用户自己点头才花。钩子
     /// 活在本进程里，关闭即刻摘钩，退出或被强杀时系统自动还原。
+    /// 挂在 <see cref="TranslateBadge"/> 之下，实际生效看 <see cref="DragSelectBadge"/>。
     /// </summary>
     public bool SelectionBadge { get; init; }
+
+    /// <summary>
+    /// 拖选徽标此刻是否真的生效：总开关与拖选开关都开着。总开关关着时拖选开关的值原样
+    /// 留着（再打开总开关还是用户上次的选择），但鼠标钩子不装、拖选不取词。
+    /// </summary>
+    [JsonIgnore]
+    public bool DragSelectBadge => TranslateBadge && SelectionBadge;
 
     /// <summary>
     /// Look for a newer release shortly after startup. On by default: for a

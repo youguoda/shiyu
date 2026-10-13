@@ -147,6 +147,39 @@ public class BadgeOfferTests
     }
 
     [Fact]
+    public void With_the_badge_switched_off_the_copy_is_recorded_and_offers_nothing()
+    {
+        // 「翻译徽标」关着（用户需求 2026-10-13，默认关）：外语照样入册，只是不弹「译」。
+        using var database = new TempDatabase();
+        var (clipboard, store, pipeline, offers) = Build(database, new ExclusionPolicy());
+        using var _ = store;
+        using var __ = pipeline;
+        pipeline.OfferBadges = false;
+
+        clipboard.Emit("Could you send me the revised figures before Friday?");
+        clipboard.Emit("Could you send me the revised figures before Friday?");
+
+        Assert.Empty(offers);
+        Assert.Equal(1, store.Count());
+    }
+
+    [Fact]
+    public void Switching_the_badge_back_on_takes_effect_from_the_next_copy()
+    {
+        using var database = new TempDatabase();
+        var (clipboard, store, pipeline, offers) = Build(database, new ExclusionPolicy());
+        using var _ = store;
+        using var __ = pipeline;
+
+        pipeline.OfferBadges = false;
+        clipboard.Emit("The first sentence nobody is offered a badge for.");
+        pipeline.OfferBadges = true;
+        clipboard.Emit("The second sentence arrives after the switch went on.");
+
+        Assert.Equal(["The second sentence arrives after the switch went on."], offers);
+    }
+
+    [Fact]
     public void Excluded_content_never_reaches_the_badge_either()
     {
         using var database = new TempDatabase();

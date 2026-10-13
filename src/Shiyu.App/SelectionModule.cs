@@ -81,8 +81,9 @@ internal sealed class SelectionModule
         }
 
         // 总开关传实时值：装钩与事件抵达之间设置若被关掉，这里也拦得住。
+        // 「翻译徽标」与拖选开关两层都算（DragSelectBadge），关掉哪一层都拦。
         if (SelectionBadgeFilter.JudgeBeforeCapture(
-                shell.Settings.SelectionBadge, DesktopShell.IsForeground())
+                shell.Settings.DragSelectBadge, DesktopShell.IsForeground())
             != SelectionBadgeVerdict.Offer)
         {
             return;
