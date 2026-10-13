@@ -68,6 +68,7 @@ internal static class SettingsBindings
     {
         "action.sound" => settings.ActionSound,
         "look.lightweight" => settings.LightweightWhenHidden,
+        "look.source-icons" => settings.ShowSourceIcons,
         "bar.pinned" => settings.BarPinned,
         "record.images" => settings.RecordImages,
         "record.files" => settings.RecordFiles,
@@ -101,6 +102,7 @@ internal static class SettingsBindings
         "action.sound" => current with { ActionSound = AsBool(text) },
         "bar.pinned" => current with { BarPinned = AsBool(text) },
         "look.lightweight" => current with { LightweightWhenHidden = AsBool(text) },
+        "look.source-icons" => current with { ShowSourceIcons = AsBool(text) },
         "record.images" => current with { RecordImages = AsBool(text) },
         "record.files" => current with { RecordFiles = AsBool(text) },
         "winv.takeover" => current with { TakeOverWinV = AsBool(text) },

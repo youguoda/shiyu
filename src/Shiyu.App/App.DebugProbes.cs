@@ -333,6 +333,60 @@ public partial class App
     /// 特大档各渲一张 PNG 进数据目录，供人眼看有没有挤坏。
     /// </summary>
     /// <summary>
+    /// 探针命令 source-icons（用户需求 2026-10-14：来源图标可以关；关掉或取不到图标时那一格什么
+    /// 都不放）。种子数据里谁都没有图标：先给 probe-browser 存一枚，窄条与管理窗里就有"有图标"和
+    /// "取不到"两种行。开着看一遍，经 store 关掉再看一遍；关着时按住 Ctrl 的数字键帽仍浮在行首。
+    /// </summary>
+    private async void ProbeSourceIcons(AppShell shell)
+    {
+        var log = new StringBuilder();
+
+        static async Task Settle(int milliseconds)
+        {
+            await Task.Delay(milliseconds);
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        shell.Store.SaveApplicationIcon("probe-browser", ProbeIconPng());
+
+        _modules!.Bar.ProbeShowPinned();
+        await Settle(1200);
+        log.Append(_modules.Bar.ProbeIconSlots("on"));
+
+        _modules.Library.Show();
+        await Settle(1200);
+        log.Append(_modules.Library.ProbeIconSlots("on"));
+
+        shell.TryUpdateSettings(settings => settings with { ShowSourceIcons = false });
+        await Settle(800);
+        log.Append(_modules.Bar.ProbeIconSlots("off"));
+        log.Append(_modules.Library.ProbeIconSlots("off"));
+        log.Append(await _modules.Bar.ProbeKeycap());
+
+        File.WriteAllText(
+            Path.Combine(DebugOverrides.ProbeDirectory!, "source-icons.log"), log + "done" + Environment.NewLine);
+
+        // 一枚 32 像素的实心圆角方块，当作 probe-browser 的应用图标。
+        static byte[] ProbeIconPng()
+        {
+            var visual = new DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawRoundedRectangle(
+                    new SolidColorBrush(Color.FromRgb(0x2B, 0x7C, 0xD3)), null, new Rect(0, 0, 32, 32), 6, 6);
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var stream = new MemoryStream();
+            encoder.Save(stream);
+            return stream.ToArray();
+        }
+    }
+
+    /// <summary>
     /// 探针命令 badge（用户需求 2026-10-10："翻译这段"去掉，只留一个「译」）：把翻译徽标亮出来，
     /// 量它的尺寸与圆角（2026-10-13 起是圆角方形）、数它里面有几段字，渲一张 PNG。
     /// </summary>
@@ -845,6 +899,11 @@ public partial class App
             // 内容字号：被阅读的文字跟着变，控件文字不变（用户需求 2026-10-09）。
             case "content-size":
                 ProbeContentSize(shell);
+                break;
+
+            // 来源图标可以关；关掉或取不到图标时那一格什么都不放（用户需求 2026-10-14）。
+            case "source-icons":
+                ProbeSourceIcons(shell);
                 break;
 
             // 反向输入框的译文能用鼠标选取复制（用户需求 2026-10-05）。配 SHIYU_FAKE_BACKEND=1。

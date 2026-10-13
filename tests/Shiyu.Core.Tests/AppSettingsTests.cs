@@ -248,6 +248,19 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void Source_icons_stay_on_for_an_older_file_and_a_turned_off_switch_round_trips()
+    {
+        // 用户需求 2026-10-14：新开关默认开——升级上来的文件没有这一项，照旧显示图标。
+        Assert.True(AppSettings.TryParse("{}", out var fresh));
+        Assert.True(fresh.ShowSourceIcons);
+
+        Assert.True(AppSettings.TryParse(
+            System.Text.Json.JsonSerializer.Serialize(new AppSettings { ShowSourceIcons = false }),
+            out var off));
+        Assert.False(off.ShowSourceIcons);
+    }
+
+    [Fact]
     public void The_hover_preview_switch_defaults_off_and_round_trips()
     {
         // 用户需求 2026-10-09：预览弹窗默认关闭——没写这一项的设置文件读成关。

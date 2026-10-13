@@ -275,6 +275,12 @@ public sealed record AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter<ContentFontSize>))]
     public ContentFontSize ContentFontSize { get; init; } = ContentFontSize.Standard;
 
+    /// <summary>
+    /// 来源图标（用户需求 2026-10-14）：窄条卡片与管理窗列表里，用图标标出内容是从哪个应用复制
+    /// 来的。默认开，与原来一致；关掉后那一格收起。开着而某个应用取不到图标时，那一格空着。
+    /// </summary>
+    public bool ShowSourceIcons { get; init; } = true;
+
     public string CaptureHotkey { get; init; } = "Ctrl+Shift+Z";
 
     public string ClipboardTranslateHotkey { get; init; } = "Ctrl+Shift+X";

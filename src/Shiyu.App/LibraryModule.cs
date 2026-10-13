@@ -9,7 +9,22 @@ internal sealed class LibraryModule
     private AppShell? _shell;
     private LibraryWindow? _library;
 
-    public void Attach(AppShell shell) => _shell = shell;
+    public void Attach(AppShell shell)
+    {
+        _shell = shell;
+
+        // 「来源图标」（用户需求 2026-10-14）：开着的管理窗当场照新设置重建各行。只认这一项，
+        // 别的设置改了不打扰列表（重建会把行模型整个换掉）。
+        var showIcons = shell.Settings.ShowSourceIcons;
+        shell.SettingsChanged += settings =>
+        {
+            if (settings.ShowSourceIcons != showIcons)
+            {
+                showIcons = settings.ShowSourceIcons;
+                _library?.ApplySourceIcons();
+            }
+        };
+    }
 
     /// <summary>
     /// One library window, reused. Opening a second copy of the same history
@@ -55,4 +70,10 @@ internal sealed class LibraryModule
         Show();
         _library?.ShowTranslationLogPage();
     }
+
+#if DEBUG
+    /// <summary>探针命令 source-icons 的管理窗一段（见 LibraryWindow.ProbeIconSlots）。</summary>
+    internal string ProbeIconSlots(string phase)
+        => _library?.ProbeIconSlots(phase) ?? $"lib-{phase}|missing{Environment.NewLine}";
+#endif
 }

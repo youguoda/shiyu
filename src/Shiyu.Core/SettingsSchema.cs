@@ -112,7 +112,15 @@ public static class SettingsSchema
                     Choices: ["较小", "小", "标准", "大", "特大"],
                     Hint: "被阅读的文字有多大：窄条卡片、预览、翻译面板的译文与反向输入框跟着变；按钮、菜单与设置项保持原样。",
                     Keywords: ["字号", "字体", "文字", "大小", "放大", "缩小", "看不清", "阅读"],
-                    Icon: "E8D2")),
+                    Icon: "E8D2"),
+
+                // 用户需求 2026-10-14：来源图标可以关。关掉后那一格收起；开着而某个应用取不到图标时，
+                // 那一格留空——不再拿拾语的标志顶上（用户选定「什么都不放」）。
+                new SettingsItem(
+                    "look.source-icons", "来源图标", SettingsControl.Toggle,
+                    Hint: "窄条卡片和管理窗列表里，用图标标出内容是从哪个应用复制来的。关掉后不显示；取不到图标的应用，那一格空着。管理窗的说明行仍会写出来源应用的名字。",
+                    Keywords: ["图标", "来源", "应用", "程序", "隐藏", "显示", "卡片", "窄条", "管理窗", "复制来源"],
+                    Icon: "E71D")),
             new SettingsSection("general.performance", "性能",
                 new SettingsItem(
                     "look.lightweight", "轻量模式", SettingsControl.Toggle,

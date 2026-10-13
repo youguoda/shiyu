@@ -103,7 +103,8 @@ internal partial class BarWindow
             // demand, not an identity worn on the face.
             WhenText = RelativeTime.For(entry.CreatedAt, DateTimeOffset.Now),
             WhenToolTip = $"{entry.CreatedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
-            Icon = _icons.For(entry.SourceApp),
+            Icon = _settings.ShowSourceIcons ? _icons.For(entry.SourceApp) : null,
+            ShowIcon = _settings.ShowSourceIcons,
             Thumbnail = null,
             OriginalPath = entry.OriginalPath,
             HasOriginal = entry.HasOriginal,

@@ -220,6 +220,7 @@ internal partial class BarWindow : Window
             || settings.BarImageHeight != _settings.BarImageHeight
             || settings.BarFileCount != _settings.BarFileCount
             || settings.BarCardTooltips != _settings.BarCardTooltips
+            || settings.ShowSourceIcons != _settings.ShowSourceIcons
             || !settings.BarActions.SequenceEqual(_settings.BarActions);
         var pinChanged = settings.BarPinned != _settings.BarPinned;
 

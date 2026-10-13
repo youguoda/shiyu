@@ -75,6 +75,9 @@ internal sealed class BarCard : INotifyPropertyChanged
 
     public ImageSource? Icon { get; init; }
 
+    /// <summary>「来源图标」开着（用户需求 2026-10-14）：图标那一格在不在卡片上。</summary>
+    public bool ShowIcon { get; init; } = true;
+
     private ImageSource? _thumbnail;
 
     /// <summary>
@@ -281,7 +284,11 @@ internal sealed class BarCard : INotifyPropertyChanged
 
     public Visibility IconVisibility => Icon is null ? Visibility.Collapsed : Visibility.Visible;
 
-    public Visibility FallbackIconVisibility => Icon is null ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>
+    /// 图标那一格：开关关着就收起，类型与时间往左靠；开着而取不到图标时留着空格（用户需求
+    /// 2026-10-14：什么都不放，不再拿拾语的标志顶上）。
+    /// </summary>
+    public Visibility IconSlotVisibility => ShowIcon ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility ImageVisibility =>
         Kind == EntryKind.Image ? Visibility.Visible : Visibility.Collapsed;

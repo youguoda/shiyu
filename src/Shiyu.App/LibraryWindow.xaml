@@ -53,14 +53,13 @@
                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
                            RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Border>
-                <Grid Grid.Column="2" Width="18" Height="18" Margin="0,0,6,0" VerticalAlignment="Center"
-                      UseLayoutRounding="True">
+                <!-- 来源图标：「来源图标」关掉时整格收起；开着而取不到图标时留空，各行仍对齐
+                     （用户需求 2026-10-14，不再拿拾语的标志顶上；来源名写在说明行里）。 -->
+                <Grid x:Name="IconSlot" Grid.Column="2" Width="18" Height="18" Margin="0,0,6,0" VerticalAlignment="Center"
+                      UseLayoutRounding="True" Visibility="{Binding IconSlotVisibility}">
                     <Image Source="{Binding Icon}" Visibility="{Binding IconVisibility}"
                            RenderOptions.BitmapScalingMode="HighQuality"
                            SnapsToDevicePixels="True"/>
-                    <!-- 没有来源图标时的回退：拾语的品牌标志（小号母版，矢量）。 -->
-                    <Image Source="{DynamicResource Brand.Mark}"
-                           Visibility="{Binding FallbackIconVisibility}"/>
                 </Grid>
                 <StackPanel Grid.Column="3" VerticalAlignment="Center">
                     <!-- 同理用 DockPanel：置顶字形占 Auto，标题拿剩余宽，省略号才有宽可省。 -->

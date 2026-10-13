@@ -228,6 +228,73 @@ internal partial class BarWindow
         set => SearchBox.Text = value;
     }
 
+    /// <summary>
+    /// 探针命令 source-icons 的窄条一段（用户需求 2026-10-14：来源图标可以关，空着时什么都不放）。
+    /// 每张已实现的卡一行：卡上有没有图标、图标格在不在、格里显出几张图（拾语标志的回退已撤，
+    /// 取不到图标时应为 0）。
+    /// </summary>
+    internal string ProbeIconSlots(string phase)
+    {
+        var log = new StringBuilder();
+        foreach (var container in RealizedContainers())
+        {
+            if (container.DataContext is not BarCard card || Named(container, "IconSlot") is not { } slot)
+            {
+                continue;
+            }
+
+            var images = ProbeVisuals(slot).OfType<System.Windows.Controls.Image>().Count(image => image.IsVisible);
+            log.AppendLine(FormattableString.Invariant(
+                $"bar-{phase}|icon={card.Icon is not null}|slot={slot.IsVisible}|images={images}"));
+        }
+
+        if (Content is FrameworkElement root)
+        {
+            App.RenderToPng(root, Path.Combine(DebugOverrides.ProbeDirectory!, $"source-icons-bar-{phase}.png"));
+        }
+
+        return log.ToString();
+    }
+
+    /// <summary>
+    /// 图标格收起时按住 Ctrl：数字键帽仍浮在这一行最左端（不占布局，什么都不挪），18 见方。
+    /// 量第一张卡：键帽是否显出、宽度、离这一行左缘多远、写的是哪个数字。
+    /// </summary>
+    internal async Task<string> ProbeKeycap()
+    {
+        SetKeyHints(true);
+        for (var round = 0; round < 3; round++)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        var first = RealizedContainers().FirstOrDefault();
+        var badge = first is null ? null : Tree.FindDescendant<RowKeyBadge>(first);
+        var row = first is null ? null : Named(first, "MetaRow");
+        var line = badge is null || row is null
+            ? "keycap|missing"
+            : FormattableString.Invariant(
+                $"keycap|visible={badge.IsVisible}|width={badge.ActualWidth:F0}|left={badge.TranslatePoint(new Point(0, 0), row).X:F0}|text={(badge.Child as TextBlock)?.Text}");
+        SetKeyHints(false);
+        return line + Environment.NewLine;
+    }
+
+    private static FrameworkElement? Named(DependencyObject root, string name)
+        => ProbeVisuals(root).OfType<FrameworkElement>().FirstOrDefault(element => element.Name == name);
+
+    private static IEnumerable<DependencyObject> ProbeVisuals(DependencyObject root)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var deeper in ProbeVisuals(child))
+            {
+                yield return deeper;
+            }
+        }
+    }
+
     internal void ProbeClickPin()
         => PinToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 

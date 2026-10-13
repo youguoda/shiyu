@@ -307,40 +307,43 @@
                          and takes it back afterwards.
                          纯文本不再自报类型（§6.1）：扫读位留给信息量——链接、
                          "图片 · 1920×1080"、"3 个文件"。 -->
-                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                        <!-- 来源图标 18×18（§6.1 卡片）：位图是最快的识别线索；
-                             键帽就盖在它上面，同 18 单位。HighQuality + 像素
-                             对齐：源是 32px 帧，125%/150% 缩放下缩小渲染，
-                             默认 Linear 缩放边缘发糊（2026-10-04 走查）。 -->
-                        <Grid DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,6,0"
-                              UseLayoutRounding="True">
-                            <Image Source="{Binding Icon}" Visibility="{Binding IconVisibility}"
-                                   RenderOptions.BitmapScalingMode="HighQuality"
-                                   SnapsToDevicePixels="True"/>
-                            <!-- 没有来源图标时的回退：拾语的品牌标志（小号母版，矢量）。 -->
-                            <Image Source="{DynamicResource Brand.Mark}"
-                                   Visibility="{Binding FallbackIconVisibility}"/>
-                            <!-- Covers the icon exactly while Ctrl is held. -->
-                            <local:RowKeyBadge Visibility="Collapsed"/>
-                        </Grid>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <local:HandoverText Text="{Binding WhenText}" FontSize="{DynamicResource Type.Caption}"
-                                                Foreground="{DynamicResource Brush.TextSecondary}"
-                                                VerticalAlignment="Center"
-                                                ToolTip="{Binding WhenToolTip}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                    ToolTip="{Binding KindToolTip}"
-                                    Visibility="{Binding KindLabelVisibility}">
-                            <TextBlock Text="{Binding KindGlyph}" FontFamily="{DynamicResource Font.Icon}"
-                                       FontSize="{DynamicResource Size.IconXs}"
-                                       Foreground="{DynamicResource Brush.TextSecondary}"
-                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <TextBlock Text="{Binding KindText}" FontSize="{DynamicResource Type.Caption}"
-                                       Foreground="{DynamicResource Brush.TextSecondary}"
-                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-                    </DockPanel>
+                    <Grid x:Name="MetaRow" Grid.Row="0" Margin="0,0,0,6">
+                        <DockPanel>
+                            <!-- 来源图标 18×18（§6.1 卡片）：位图是最快的识别线索；
+                                 键帽就盖在它上面，同 18 单位。HighQuality + 像素
+                                 对齐：源是 32px 帧，125%/150% 缩放下缩小渲染，
+                                 默认 Linear 缩放边缘发糊（2026-10-04 走查）。
+                                 用户需求 2026-10-14：「来源图标」关掉时整格收起；开着而
+                                 取不到图标时留空，不再拿拾语的标志顶上。 -->
+                            <Grid x:Name="IconSlot" DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,6,0"
+                                  UseLayoutRounding="True" Visibility="{Binding IconSlotVisibility}">
+                                <Image Source="{Binding Icon}" Visibility="{Binding IconVisibility}"
+                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                       SnapsToDevicePixels="True"/>
+                            </Grid>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <local:HandoverText Text="{Binding WhenText}" FontSize="{DynamicResource Type.Caption}"
+                                                    Foreground="{DynamicResource Brush.TextSecondary}"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip="{Binding WhenToolTip}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                        ToolTip="{Binding KindToolTip}"
+                                        Visibility="{Binding KindLabelVisibility}">
+                                <TextBlock Text="{Binding KindGlyph}" FontFamily="{DynamicResource Font.Icon}"
+                                           FontSize="{DynamicResource Size.IconXs}"
+                                           Foreground="{DynamicResource Brush.TextSecondary}"
+                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Text="{Binding KindText}" FontSize="{DynamicResource Type.Caption}"
+                                           Foreground="{DynamicResource Brush.TextSecondary}"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DockPanel>
+                        <!-- 按住 Ctrl 时的数字键帽：浮在这一行的最左端，正好盖住图标那一格；图标关掉、
+                             那一格收起时，照样浮在行首。浮层不占布局，显隐时什么都不挪。 -->
+                        <local:RowKeyBadge Visibility="Collapsed" Width="18" Height="18"
+                                           HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    </Grid>
 
                     <!-- Body: text clamped to N lines, images to N units, a
                          colour entry preceded by a swatch of itself. The

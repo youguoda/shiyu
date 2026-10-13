@@ -41,6 +41,14 @@ internal sealed partial class BarModule
         ShowQuickPaste();
     }
 
+    /// <summary>探针命令 source-icons 的窄条一段（见 BarWindow.ProbeIconSlots）。</summary>
+    internal string ProbeIconSlots(string phase)
+        => EnsureBar()?.ProbeIconSlots(phase) ?? $"bar-{phase}|missing{Environment.NewLine}";
+
+    /// <summary>探针命令 source-icons 的键帽一段（见 BarWindow.ProbeKeycap）。</summary>
+    internal async Task<string> ProbeKeycap()
+        => EnsureBar() is { } bar ? await bar.ProbeKeycap() : $"keycap|missing{Environment.NewLine}";
+
     /// <summary>经 store 钉住，和头部图钉同一条路（落盘的是探针自己的临时数据目录）。</summary>
     private void ProbePin() => _shell!.TryUpdateSettings(s => s with { BarPinned = true });
 

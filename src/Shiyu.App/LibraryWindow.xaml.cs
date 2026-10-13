@@ -232,6 +232,20 @@ public partial class LibraryWindow : Window
         }
     }
 
+    /// <summary>
+    /// 「来源图标」改了（用户需求 2026-10-14）：按新设置重建各行，已经载入的页与选中都不动，
+    /// 图标那一格当场收起或回来。
+    /// </summary>
+    public void ApplySourceIcons()
+    {
+        var chosen = EntryList.SelectedItems.OfType<EntryItem>().Select(item => item.Id).ToHashSet();
+        Rebuild();
+        foreach (var item in _items.Where(item => chosen.Contains(item.Id)))
+        {
+            EntryList.SelectedItems.Add(item);
+        }
+    }
+
     private void ReloadPreservingSelection()
     {
         var chosen = EntryList.SelectedItems.OfType<EntryItem>().Select(item => item.Id).ToHashSet();
@@ -262,9 +276,11 @@ public partial class LibraryWindow : Window
         var blobs = _store.BlobsOf(
             [.. batch.Where(entry => entry.Kind == EntryKind.Image).Select(entry => entry.Id)]);
 
+        // 「来源图标」（用户需求 2026-10-14）每页现读：设置改了，下一次重载就照新的来。
+        var showIcons = _settings().ShowSourceIcons;
         foreach (var entry in batch)
         {
-            _items.Add(EntryItem.From(entry, blobs.GetValueOrDefault(entry.Id), _icons.For));
+            _items.Add(EntryItem.From(entry, blobs.GetValueOrDefault(entry.Id), _icons.For, showIcons));
         }
     }
 
@@ -1122,17 +1138,23 @@ internal sealed record EntryItem(
     public Visibility ThumbnailVisibility =>
         Thumbnail is null ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>An application with no findable icon gets Shiyu's own mark, never a hole.</summary>
+    /// <summary>「来源图标」开着（用户需求 2026-10-14）：图标那一格在不在行上。</summary>
+    public bool ShowIcon { get; init; } = true;
+
     public Visibility IconVisibility =>
         Icon is null ? Visibility.Collapsed : Visibility.Visible;
 
-    public Visibility FallbackIconVisibility =>
-        Icon is null ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>
+    /// 图标那一格：开关关着就收起；开着而取不到图标时留着空格，各行的正文仍对齐（用户需求
+    /// 2026-10-14：什么都不放，不再拿拾语的标志顶上——来源应用名本来就写在说明行里）。
+    /// </summary>
+    public Visibility IconSlotVisibility => ShowIcon ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>True while the full-size image is still on disk.</summary>
     public bool CanDrag => OriginalPath is { Length: > 0 } path && File.Exists(path);
 
-    public static EntryItem From(Entry entry, EntryBlobs? payload, Func<string?, ImageSource?> iconOf)
+    public static EntryItem From(
+        Entry entry, EntryBlobs? payload, Func<string?, ImageSource?> iconOf, bool showIcon = true)
     {
         var collapsed = string.Join(' ', entry.Text.Split(
             ['\r', '\n', '\t'],
@@ -1158,12 +1180,13 @@ internal sealed record EntryItem(
             preview,
             $"{when}  ·  {source}  ·  {tail}",
             AppIconCache.Decode(payload?.ThumbnailPng, pixelWidth: 240),
-            iconOf(entry.SourceApp),
+            showIcon ? iconOf(entry.SourceApp) : null,
             entry.OriginalPath,
             entry.IsPinned,
             entry.Kind,
             entry.TranslatedFrom)
         {
+            ShowIcon = showIcon,
             Favorite = entry.Favorite,
             Subtype = entry.Subtype,
             CreatedAt = entry.CreatedAt,

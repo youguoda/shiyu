@@ -26,6 +26,7 @@ public class SettingsSchemaTests
             ["store.start-with-windows"] = "general",
             ["theme"] = "general",
             ["look.content-size"] = "general",
+            ["look.source-icons"] = "general",
             ["look.lightweight"] = "general",
             ["store.directory"] = "general",
             ["store.usage"] = "general",
@@ -378,6 +379,30 @@ public class SettingsSchemaTests
         foreach (var query in new[] { "翻译徽标", "翻译按钮", "徽标", "小窗", "弹出" })
         {
             Assert.Contains(SettingsSearch.Find(query), hit => hit.Item.Id == "translate.badge");
+        }
+    }
+
+    [Fact]
+    public void The_source_icon_switch_sits_with_the_appearance_and_is_on_by_default()
+    {
+        // 用户需求 2026-10-14：来源图标可以关，默认开（与原来一致），跟主题、内容字号同在「外观」。
+        Assert.True(new AppSettings().ShowSourceIcons);
+
+        var item = Items().Single(i => i.Id == "look.source-icons");
+        Assert.Equal(SettingsControl.Toggle, item.Control);
+        Assert.Null(item.Parent);
+        Assert.Equal("general", SettingsSchema.FindPageOf(item.Id)!.Id);
+        Assert.Contains(
+            SettingsSchema.Tree.Single(p => p.Id == "general").Sections.Single(s => s.Id == "general.appearance").Items,
+            i => i.Id == "look.source-icons");
+    }
+
+    [Fact]
+    public void The_source_icon_switch_can_be_found_by_what_the_user_calls_it()
+    {
+        foreach (var query in new[] { "来源图标", "图标", "隐藏 图标", "复制来源" })
+        {
+            Assert.Contains(SettingsSearch.Find(query), hit => hit.Item.Id == "look.source-icons");
         }
     }
 
