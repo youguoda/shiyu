@@ -18,6 +18,10 @@
 #   - flow:scrollbar-lane-kept-when-short   a page with nothing to scroll keeps the
 #                                           empty lane: same content width, no thumb
 #                                           (user request 2026-10-10)
+#   - flow:scroller-no-focus-frame          no scroll area in settings draws the dotted
+#                                           focus frame or stops Tab; the page scroller
+#                                           still takes focus (keyboard scrolling) and has
+#                                           no frame to draw (user report 2026-10-13)
 #
 # ASCII only (see lib.ps1 header).
 
@@ -73,7 +77,7 @@ if (Test-Path $log) {
     }
 }
 
-$expected = @('style', 'bar', 'settings-rest', 'settings-hover', 'settings-short', 'done')
+$expected = @('style', 'bar', 'settings-rest', 'settings-hover', 'settings-short', 'focus', 'done')
 $missing = @($expected | Where-Object { -not $steps.ContainsKey($_) })
 if ($missing.Count -gt 0) {
     Add-Check 'data:scroll-lane-log' 'FAIL' ("log lacks: {0}" -f ($missing -join ', '))
@@ -117,5 +121,10 @@ if ((Num $s['scrollable']) -gt 0) {
     Add-Check 'flow:scrollbar-lane-kept-when-short' (Verdict $ok) `
         ("lane {0} visible {1}, thumb shown {2}, content {3} (long page {4})" -f $s['lane'], $s['visible'], $s['thumb'], $s['content'], $r['content'])
 }
+
+$f = $steps['focus']
+$ok = (Num $f['scrollers']) -gt 0 -and $f['framed'] -eq '0' -and $f['page-takes-focus'] -eq 'True' -and $f['page-frame'] -eq 'False'
+Add-Check 'flow:scroller-no-focus-frame' (Verdict $ok) `
+    ("{0} of {1} scroll areas framed or tab stops; the page scroller takes focus {2}, draws a frame {3}" -f $f['framed'], $f['scrollers'], $f['page-takes-focus'], $f['page-frame'])
 
 return $script:Checks

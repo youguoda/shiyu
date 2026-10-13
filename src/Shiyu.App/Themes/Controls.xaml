@@ -1280,6 +1280,19 @@
     </Style>
 
     <!--
+      滚动区本身不是一个停靠点（用户实录 2026-10-13：设置页整块内容外面一圈黑色点线）。
+      WPF 的 ScrollViewer 默认是 Tab 的停靠点，拿到键盘焦点时画系统默认的点线焦点框——
+      框住的是整页，像个没画完的边框；而且停在那里什么也做不了，键盘用户还得再按一次 Tab
+      才进到页里。现在 Tab 直接进到页里的控件，页面跟着焦点滚；点一下空白处它照样拿焦点，
+      PageUp/PageDown 与方向键照样能滚，只是不再画那圈框。隐式样式只设这两项，模板仍是
+      主题的那份；所有窗口、模板里的滚动区一并生效。
+    -->
+    <Style TargetType="ScrollViewer">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="IsTabStop" Value="False"/>
+    </Style>
+
+    <!--
       The modern scrollbar (ticket 39): an 8 DIP lane holding a pill thumb
       6 DIP wide at rest and the full 8 while the pointer is on the lane, in
       TextTertiary at 40% (60% on the pill itself); a transparent track with

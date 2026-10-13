@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -538,6 +539,19 @@ public partial class App
         _modules.Settings.ShowAt("about.version");
         await Settle();
         log.AppendLine(Measure("settings-short", settings.PageScroller));
+
+        // 5. Scroll areas draw no focus frame and are no Tab stop (用户实录 2026-10-13：设置页
+        // 整块内容外面一圈点线，正好框住内容列). A press on blank page space hands keyboard
+        // focus to the page scroller itself (ScrollViewer focuses itself on mouse down);
+        // once the keyboard is in use, WPF draws the focused element's focus visual — by
+        // default the system's dotted frame, round the whole page. The scroller keeps
+        // taking focus (PageUp/PageDown, arrows); it just has no frame to draw.
+        var scrollers = Descendants(settings).OfType<ScrollViewer>().ToList();
+        var framed = scrollers.Count(viewer => viewer.IsTabStop || viewer.FocusVisualStyle is not null);
+        settings.Activate();
+        var holds = ReferenceEquals(Keyboard.Focus(settings.PageScroller), settings.PageScroller);
+        log.AppendLine(FormattableString.Invariant(
+            $"focus|scrollers={scrollers.Count}|framed={framed}|page-takes-focus={holds}|page-frame={settings.PageScroller.FocusVisualStyle is not null}"));
 
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(directory, "scroll-lane.log"), log.ToString());
