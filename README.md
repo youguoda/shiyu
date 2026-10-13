@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/youguoda/shiyu/actions/workflows/ci.yml/badge.svg)](https://github.com/youguoda/shiyu/actions/workflows/ci.yml)
 
+**简体中文** | [English](README.en.md)
+
 Windows 11 托盘里的剪贴板历史与翻译工具。
 
 > 筌者所以在鱼，得鱼而忘筌；言者所以在意，得意而忘言。
