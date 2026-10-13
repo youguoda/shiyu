@@ -108,13 +108,23 @@ internal sealed class TranslationModule
     /// 时慢路缺席，行为退回票 35 原状。
     /// </summary>
     private IDictionaryApi? BuildDictionary(string word)
-        => DictionaryWord.IsEnglishWord(word)
+    {
+#if DEBUG
+        // 探针：假后端配假词典（SHIYU_FAKE_BACKEND=1），单词态的探针同样不碰网络。
+        if (DebugOverrides.FakeBackend)
+        {
+            return new DebugFakeDictionary();
+        }
+#endif
+
+        return DictionaryWord.IsEnglishWord(word)
             ? new FallbackDictionary(
                 new BudgetedDictionary(new FreeDictionaryApi(HttpClients.Shared)),
                 OwnKeyDictionary())
             : DictionaryWord.IsChineseWord(word)
                 ? OwnKeyDictionary()
                 : null;
+    }
 
     /// <summary>
     /// 自备密钥后端的唯一组装点（票 08）：预设解析出的附加字段与温度规则
@@ -193,6 +203,14 @@ internal sealed class TranslationModule
         }
 
         var log = _panel is null ? "no-panel" + Environment.NewLine : await _panel.ProbeTemplatePicker();
+
+        // 单词态也能换模板（用户需求 2026-10-13）：同一扇面板换成一个词再走一遍。
+        if (_panel is not null)
+        {
+            ShowPanel("setup");
+            log += await _panel.ProbeWordTemplates();
+        }
+
         System.IO.File.WriteAllText(
             System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-templates.log"), log + "done" + Environment.NewLine);
     }

@@ -30,19 +30,6 @@ public partial class PanelWindow
     {
         var log = new StringBuilder();
 
-        async Task Settled()
-        {
-            for (var waited = 0; waited < 50 && _session is { State: TranslationState.Idle or TranslationState.Streaming }; waited++)
-            {
-                await Task.Delay(100);
-            }
-
-            for (var round = 0; round < 4; round++)
-            {
-                await Dispatcher.Yield(DispatcherPriority.ContextIdle);
-            }
-        }
-
         await Settled();
         log.AppendLine(FormattableString.Invariant($"chip|visible={TemplateButton.IsVisible}"));
 
@@ -75,6 +62,66 @@ public partial class PanelWindow
         return log.ToString();
 
         List<Button> Rows() => Descendants(TemplateList).OfType<Button>().ToList();
+    }
+
+    /// <summary>
+    /// 探针命令 panel-templates 的单词一段（用户需求 2026-10-13：翻译单词时也能换模板）。面板已
+    /// 开在一个词上：chip 在、词典布局在；换到改写类，词头与卡让位、原文回来；切回翻译类，卡原样
+    /// 回来、不重查。再在改写类下开一个新词：不查卡；切回翻译类才补查一次。
+    /// </summary>
+    internal async Task<string> ProbeWordTemplates()
+    {
+        var log = new StringBuilder();
+        var rewrite = PromptTemplates.All(_settings).First(template => template.Kind == PromptTemplateKind.Rewrite);
+
+        await Settled();
+        Line("word");
+        Render("panel-word.png");
+
+        await SwitchTemplate(rewrite);
+        await Settled();
+        Line("rewrite");
+        Render("panel-word-rewrite.png");
+
+        await SwitchTemplate(PromptTemplates.Standard);
+        await Settled();
+        Line("back");
+
+        await SwitchTemplate(rewrite);
+        await TranslateAsync("record");
+        await Settled();
+        Line("fresh-rewrite");
+
+        await SwitchTemplate(PromptTemplates.Standard);
+        await Settled();
+        Line("fresh-back");
+
+        return log.ToString();
+
+        void Line(string step) => log.AppendLine(FormattableString.Invariant(
+            $"{step}|chip={TemplateButton.IsVisible}|header={WordHeader.IsVisible}|original={OriginalText.IsVisible}|card={DictionaryArea.IsVisible}|speak={SpeakButton.IsVisible}|lookups={DebugFakeDictionary.Lookups}"));
+
+        void Render(string file)
+        {
+            if (Content is FrameworkElement root)
+            {
+                App.RenderToPng(root, System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, file));
+            }
+        }
+    }
+
+    /// <summary>等这一轮翻译收尾（最多 5 秒），再让界面把排着的布局与渲染做完。</summary>
+    private async Task Settled()
+    {
+        for (var waited = 0; waited < 50 && _session is { State: TranslationState.Idle or TranslationState.Streaming }; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        for (var round = 0; round < 4; round++)
+        {
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
     }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)

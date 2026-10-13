@@ -388,17 +388,45 @@ public class PanelTemplateStateTests
     }
 
     [Fact]
-    public void A_single_word_is_always_translated_by_the_standard_template_and_has_no_button()
+    public void A_single_word_is_translated_by_the_chosen_template_and_keeps_the_button()
     {
-        // 单词态（词典卡）不受模板影响：一律按标准翻译；按钮在单词态下隐藏，
-        // 原有的方向标签照旧。模式分段在单词态本来就是藏着的。
+        // 用户需求 2026-10-13：翻译单词时也能换模板。原先单词态一律按标准、按钮隐藏，
+        // 用户在单词的面板上找不到切换的地方。词典布局照旧，模式分段在单词态本来就藏着。
+        var state = PanelTemplateState.For(PromptTemplates.Colloquial, templatesApply: true, wordMode: true);
+
+        Assert.Equal(PromptTemplate.ColloquialId, state.Template.Id);
+        Assert.True(state.ButtonVisible);
+        Assert.True(state.DirectionVisible);
+        Assert.False(state.ModeSegmentVisible);
+        Assert.True(state.WordLayout);
+    }
+
+    [Fact]
+    public void A_single_word_under_a_rewrite_template_leaves_the_dictionary_layout()
+    {
+        // 改写的结果不是这个词的释义：词头与词典卡让位，照句子态摆，按钮还在、能切回去。
         var state = PanelTemplateState.For(PromptTemplates.PromptOptimize, templatesApply: true, wordMode: true);
+
+        Assert.Equal(PromptTemplate.PromptOptimizeId, state.Template.Id);
+        Assert.True(state.ButtonVisible);
+        Assert.False(state.WordLayout);
+        Assert.False(state.ModeSegmentVisible);
+    }
+
+    [Fact]
+    public void Where_templates_do_not_apply_a_single_word_keeps_the_dictionary_layout()
+    {
+        // 免费引擎按标准翻译，选着的改写模板不作数，词典布局照旧。
+        var state = PanelTemplateState.For(PromptTemplates.PromptOptimize, templatesApply: false, wordMode: true);
 
         Assert.Equal("standard", state.Template.Id);
         Assert.False(state.ButtonVisible);
-        Assert.True(state.DirectionVisible);
-        Assert.False(state.ModeSegmentVisible);
+        Assert.True(state.WordLayout);
     }
+
+    [Fact]
+    public void A_sentence_never_gets_the_dictionary_layout()
+        => Assert.False(PanelTemplateState.For(PromptTemplates.Standard, templatesApply: true, wordMode: false).WordLayout);
 
     [Fact]
     public void Where_templates_do_not_apply_the_button_hides_and_requests_are_standard()

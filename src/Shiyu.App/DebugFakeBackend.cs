@@ -24,4 +24,23 @@ internal sealed class DebugFakeBackend : ITranslationBackend
         yield return request.Text;
     }
 }
+
+/// <summary>
+/// 与假后端同一个开关的假词典（用户需求 2026-10-13：单词态也能换模板）：给一张只有一条义项的
+/// 卡、不碰网络，并记下查了几次——改写类模板下不查、切回翻译类时补查、查过的不重查，探针都要
+/// 数得出来。计数是进程级的：每个探针都是新进程。
+/// </summary>
+internal sealed class DebugFakeDictionary : IDictionaryApi
+{
+    private static int _lookups;
+
+    public static int Lookups => Volatile.Read(ref _lookups);
+
+    public Task<DictionaryCard?> LookupAsync(string word, CancellationToken cancellation = default)
+    {
+        Interlocked.Increment(ref _lookups);
+        return Task.FromResult<DictionaryCard?>(
+            new DictionaryCard(word, "/probe/", [new DictionarySense("n.", ["probe sense"], [], [])]));
+    }
+}
 #endif

@@ -365,40 +365,45 @@ public static class PromptTemplates
 /// 面板头部与布局据此取舍：纯数据，WPF 只负责照着显示。
 ///
 /// <list type="bullet">
-/// <item>单词态（词典卡）不受模板影响，一律按标准翻译，按钮隐藏；</item>
-/// <item>模板不生效（免费引擎没有 prompt）时同样隐藏按钮、按标准构建请求，
+/// <item>模板不生效（免费引擎没有 prompt）时隐藏按钮、按标准构建请求，
 /// 免费引擎下回声换向照常工作；</item>
+/// <item>单词态也照当前模板翻译、按钮照常在（用户需求 2026-10-13，原先一律按标准、
+/// 按钮隐藏）；词典布局（词头、词典卡）只配翻译类模板，改写类照句子态摆；</item>
 /// <item>模板含 <c>{target}</c> 时头部读作"中文 ⇄ 英语 · 口语"，不含时只显示模板名；</item>
 /// <item>改写类模板下隐藏"整段 / 逐句"分段——逐句对照是给译文用的，改写结果和
 /// 原文的句子对不上。</item>
 /// </list>
 /// </summary>
-/// <param name="Template">实际发给后端的模板（单词态与不生效时是标准）。</param>
+/// <param name="Template">实际发给后端的模板（不生效时是标准）。</param>
 /// <param name="AccessibleName">按钮的无障碍名：用运行时模板的全名，随状态更新。</param>
+/// <param name="WordLayout">摆单词态的词典布局：词头行、词典卡，原文块与 footer 的朗读让位。</param>
 public sealed record PanelTemplateState(
     PromptTemplate Template,
     string AccessibleName,
     bool ButtonVisible,
     bool DirectionVisible,
-    bool ModeSegmentVisible)
+    bool ModeSegmentVisible,
+    bool WordLayout)
 {
     /// <param name="runtime">面板当下选着的模板（只活在进程里）。</param>
     /// <param name="templatesApply"><see cref="AppSettings.PromptTemplatesApply"/>。</param>
-    /// <param name="wordMode">单词态：词典卡。</param>
+    /// <param name="wordMode">单词态：原文是一个词。</param>
     public static PanelTemplateState For(PromptTemplate runtime, bool templatesApply, bool wordMode)
     {
-        var buttonVisible = templatesApply && !wordMode;
-        var effective = buttonVisible ? runtime : PromptTemplates.Standard;
+        var effective = templatesApply ? runtime : PromptTemplates.Standard;
 
         return new PanelTemplateState(
             effective,
             $"提示词模板：{runtime.Name}，点击切换",
-            buttonVisible,
+            templatesApply,
 
             // 按钮不在时，方向标签照旧；在时看模板用不用得着译文语言。
-            DirectionVisible: !buttonVisible || runtime.UsesTarget,
+            DirectionVisible: !templatesApply || runtime.UsesTarget,
 
             // 单词态本来就没有模式分段；改写类固定为整段。
-            ModeSegmentVisible: !wordMode && effective.Kind == PromptTemplateKind.Translate);
+            ModeSegmentVisible: !wordMode && effective.Kind == PromptTemplateKind.Translate,
+
+            // 改写类的结果不是这个词的释义：词头与词典卡收起，原文与结果照句子态摆。
+            WordLayout: wordMode && effective.Kind == PromptTemplateKind.Translate);
     }
 }

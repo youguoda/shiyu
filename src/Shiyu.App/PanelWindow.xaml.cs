@@ -185,11 +185,20 @@ public partial class PanelWindow : Window
     /// <summary>ApplySentenceMode 正在程序化设 IsChecked 的标记（防 Checked 回环）。</summary>
     private bool _applyingMode;
 
-    /// <summary>单词态（票 22）：词头行就位、模式分段隐藏、footer 不放朗读。</summary>
+    /// <summary>
+    /// 单词态（票 22）：原文是一个词。翻译类模板下摆词典布局——词头行就位、模式分段隐藏、
+    /// footer 不放朗读（<see cref="PanelTemplateState.WordLayout"/>）；改写类模板照句子态摆。
+    /// </summary>
     private bool _wordMode;
 
     /// <summary>词典卡换代号：新一次翻译自增，迟到的卡据此知道自己过时了。</summary>
     private int _cardRun;
+
+    /// <summary>
+    /// 这段原文的词典卡发查过没有。改写类模板下的单词不查：卡不上屏，查了白花一次模型调用
+    /// （中文词与免费词典查不到的英文词走 LLM 词典化）；切回翻译类模板时补查（<see cref="RequestCard"/>）。
+    /// </summary>
+    private bool _cardRequested;
 
     private IReadOnlyList<SenseGroupView> _senseGroups = [];
 
@@ -283,7 +292,10 @@ public partial class PanelWindow : Window
         _template = PromptTemplates.Reconcile(_settings, settings, _template);
         _settings = settings;
         _templatesApply = settings.PromptTemplatesApply;
-        ApplyTemplateChrome();
+
+        // 整套布局而不只是头部：模板生不生效会改单词的摆法（引导卡上点「用免费引擎」就是
+        // 这样——改写模板不再作数，单词回到词典布局，随后补的卡才有地方上屏）。
+        ApplyLayoutMode();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -304,6 +316,7 @@ public partial class PanelWindow : Window
         CloseTemplateList();
         _original = text;
         _cardRun++;
+        _cardRequested = false;
         _lastError = null;
         CollapseError();
 
@@ -365,7 +378,7 @@ public partial class PanelWindow : Window
         // 查询与翻译并行发出（省一轮往返），但渲染严格排在翻译之后——
         // 用户先看到译文，再看到词典细节，顺序即"两阶段"的含义。
         var cardRun = _cardRun;
-        var cardTask = FetchDictionaryCard(text);
+        var cardTask = RequestCard();
         await RunTranslation();
         await RenderCardWhenCurrent(cardTask, cardRun);
     }
@@ -413,7 +426,7 @@ public partial class PanelWindow : Window
 
             // 与 TranslateAsync 的主路径同一个次序：词典查询与翻译并行发出，卡排在译文之后渲染。
             var cardRun = _cardRun;
-            var cardTask = FetchDictionaryCard(_original);
+            var cardTask = RequestCard();
             await RunTranslation();
             await RenderCardWhenCurrent(cardTask, cardRun);
         }
@@ -475,8 +488,8 @@ public partial class PanelWindow : Window
             UpdateLayout();
         });
 
-        // 提示词模板（票 42）：单词态（词典卡）与模板不生效（免费引擎）时一律按标准
-        // 构建，这样免费引擎下回声换向照常工作。
+        // 提示词模板（票 42）：模板不生效（免费引擎）时一律按标准构建，这样免费引擎下
+        // 回声换向照常工作。单词态也照当前模板走（用户需求 2026-10-13）。
         var template = PanelTemplateState.For(_template, _templatesApply, _wordMode).Template;
 
         await session.RunAsync(
@@ -535,6 +548,21 @@ public partial class PanelWindow : Window
         CopyTranslation();
         _keepTranslation?.Invoke(_original, translated);
         MarkSaved();
+    }
+
+    /// <summary>
+    /// 该查卡时发查：摆着词典布局、这段原文还没查过。否则交回一张不会来的卡——
+    /// 改写类模板下不查，查过的不重查（换方向、重试都还是这个词）。
+    /// </summary>
+    private Task<DictionaryCard?> RequestCard()
+    {
+        if (!_templateState.WordLayout || _cardRequested)
+        {
+            return Task.FromResult<DictionaryCard?>(null);
+        }
+
+        _cardRequested = true;
+        return FetchDictionaryCard(_original);
     }
 
     /// <summary>
@@ -632,7 +660,9 @@ public partial class PanelWindow : Window
             return group;
         }).ToList();
         CardSenses.ItemsSource = _senseGroups;
-        DictionaryArea.Visibility = Visibility.Visible;
+
+        // 卡在路上时用户可能已换到改写类模板：数据先放着，切回翻译类时由 ApplyLayoutMode 亮出来。
+        DictionaryArea.Visibility = _templateState.WordLayout ? Visibility.Visible : Visibility.Collapsed;
         UpdateLayout();
     }
 
@@ -791,7 +821,14 @@ public partial class PanelWindow : Window
     {
         // 模式分段与方向标签一并随模板取舍（票 42）：单词态没有分段，改写类固定整段。
         ApplyTemplateChrome();
-        WordHeader.Visibility = _wordMode ? Visibility.Visible : Visibility.Collapsed;
+
+        // 词典布局跟着模板走（用户需求 2026-10-13：单词也能换模板）：改写类收起词头与卡，
+        // 切回翻译类，已经到了的卡原样回来。
+        var wordLayout = _templateState.WordLayout;
+        WordHeader.Visibility = wordLayout ? Visibility.Visible : Visibility.Collapsed;
+        DictionaryArea.Visibility = wordLayout && CardSenses.ItemsSource is not null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         ApplySentenceMode();
     }
 
@@ -805,7 +842,7 @@ public partial class PanelWindow : Window
 
     /// <summary>
     /// 头部按模板换脸（票 42）：模板含 {target} 时读作"中文 ⇄ 英语 · 口语"，不含时隐藏
-    /// 源语言、⇄ 与目标语言，只显示模板名；单词态与模板不生效（免费引擎）时按钮隐藏。
+    /// 源语言、⇄ 与目标语言，只显示模板名；模板不生效（免费引擎）时按钮隐藏。
     /// 取舍全在 <see cref="PanelTemplateState"/>（Core，有测试），这里只照着显示。
     /// </summary>
     private void ApplyTemplateChrome()
@@ -816,7 +853,7 @@ public partial class PanelWindow : Window
         TemplateName.Text = _template.Name;
         if (!state.ButtonVisible)
         {
-            // 单词态、模板不生效时 chip 退场：它打开的列表不能比它活得久。
+            // 模板不生效时 chip 退场：它打开的列表不能比它活得久。
             CloseTemplateList();
         }
 
@@ -891,13 +928,17 @@ public partial class PanelWindow : Window
             }
 
             _template = next;
-            ApplyTemplateChrome();
 
-            // 改写类固定整段，切回翻译类恢复用户原来的选择。
-            ApplySentenceMode();
+            // 改写类固定整段、单词收起词典布局；切回翻译类恢复用户原来的选择与词典布局。
+            ApplyLayoutMode();
             ResetCopyLabel();
             ResetSaveLabel();
+
+            // 单词从改写类切回翻译类：这个词的卡还没查过就此刻补查，与主路径同一个次序。
+            var cardRun = _cardRun;
+            var cardTask = RequestCard();
             await RunTranslation();
+            await RenderCardWhenCurrent(cardTask, cardRun);
         }
         catch (Exception failure)
         {
@@ -938,10 +979,10 @@ public partial class PanelWindow : Window
         {
             WholeSegment.IsChecked = !_sentenceMode;
             SentenceSegment.IsChecked = _sentenceMode;
-            SpeakButton.Visibility = _wordMode ? Visibility.Collapsed : Visibility.Visible;
+            SpeakButton.Visibility = _templateState.WordLayout ? Visibility.Collapsed : Visibility.Visible;
 
-            // 顶部原文块：逐句模式的原文在句对里；单词模式的"原文"是词头。
-            OriginalText.Visibility = SentenceView || _wordMode
+            // 顶部原文块：逐句模式的原文在句对里；词典布局下的"原文"是词头。
+            OriginalText.Visibility = SentenceView || _templateState.WordLayout
                 ? Visibility.Collapsed
                 : Visibility.Visible;
 
