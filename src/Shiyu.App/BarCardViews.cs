@@ -186,6 +186,9 @@ internal sealed class BarCardContainer : ListBoxItem
 
             // A row realized while Ctrl is held must arrive with its badge.
             host.ApplyKeyHintsTo(badge, tray);
+
+            // 上屏的图片卡换上按屏幕像素解码的原图（用户实录 2026-10-14：图片模糊）。
+            host.RequestSharpImage(card);
         }
 
         tray.Reset();

@@ -49,6 +49,26 @@ internal sealed partial class BarModule
     internal async Task<string> ProbeKeycap()
         => EnsureBar() is { } bar ? await bar.ProbeKeycap() : $"keycap|missing{Environment.NewLine}";
 
+    /// <summary>
+    /// 探针命令 bar-sharp 的入口（用户实录 2026-10-14：窄条中的图片显示模糊；见
+    /// BarWindow.ProbeSharpImages）。开窄条之前先让最新那张图片的原图"过了保留期"——删掉文件，
+    /// 它该留在缩略图上；其余还有原图的，上屏后该换上按屏幕像素解码的那张。
+    /// </summary>
+    internal void ProbeSharpImages()
+    {
+        var expired = _shell!.Store.ImagesWithOriginals()
+            .OrderByDescending(entry => entry.CreatedAt)
+            .FirstOrDefault();
+        if (expired?.OriginalPath is { } path)
+        {
+            File.Delete(path);
+        }
+
+        ProbePin();
+        ShowQuickPaste();
+        EnsureBar()?.ProbeSharpImages(expired?.Id ?? -1);
+    }
+
     /// <summary>经 store 钉住，和头部图钉同一条路（落盘的是探针自己的临时数据目录）。</summary>
     private void ProbePin() => _shell!.TryUpdateSettings(s => s with { BarPinned = true });
 

@@ -48,7 +48,9 @@ public sealed class AppIconCache
 
     /// <summary>
     /// Decodes stored PNG bytes at the size they will be shown, because a list
-    /// full of rows has no use for the pixels it is not displaying.
+    /// full of rows has no use for the pixels it is not displaying. A width of
+    /// zero keeps the stored size: asking for more than a small thumbnail holds
+    /// only blows it up twice (once here, once on screen) and blurs it the more.
     /// </summary>
     internal static ImageSource? Decode(byte[]? png, int pixelWidth)
     {
@@ -62,7 +64,11 @@ public sealed class AppIconCache
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.DecodePixelWidth = Math.Max(1, pixelWidth);
+            if (pixelWidth > 0)
+            {
+                bitmap.DecodePixelWidth = pixelWidth;
+            }
+
             bitmap.StreamSource = new MemoryStream(png);
             bitmap.EndInit();
 

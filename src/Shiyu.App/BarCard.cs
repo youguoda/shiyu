@@ -97,6 +97,15 @@ internal sealed class BarCard : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// 已经要过按屏幕像素解码的原图（用户实录 2026-10-14：窄条中的图片显示模糊）：容器回收后
+    /// 再拿到这张卡，不重复排队。
+    /// </summary>
+    internal bool SharpRequested { get; set; }
+
+    /// <summary><see cref="Thumbnail"/> 已是按屏幕像素解码的原图：晚到的缩略图不再盖上去。</summary>
+    internal bool IsSharp { get; set; }
+
     public string? OriginalPath { get; init; }
 
     public bool HasOriginal { get; init; }

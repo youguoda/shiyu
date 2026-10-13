@@ -924,6 +924,11 @@ public partial class App
                 _modules!.Bar.ProbeStartsAtNewest();
                 break;
 
+            // 窄条里的图片按屏幕像素解码原图，不再拿 240 像素的缩略图放大（用户实录 2026-10-14）。
+            case "bar-sharp":
+                _modules!.Bar.ProbeSharpImages();
+                break;
+
             // 常驻钉住：撤掉常驻窄条，头部加图钉与齿轮，设置里一个开关、默认关（用户需求 2026-10-10）。
             case "bar-pin":
                 _modules!.Bar.ProbePinBehaviour();

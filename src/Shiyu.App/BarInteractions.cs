@@ -341,15 +341,16 @@ internal partial class BarWindow
     private System.Windows.Media.Imaging.BitmapSource? DecodeThumbnailNow(long id)
     {
         var payload = _store.BlobsOf([id]).GetValueOrDefault(id);
-        var decoded = AppIconCache.Decode(payload?.ThumbnailPng, 320);
+        var decoded = AppIconCache.Decode(payload?.ThumbnailPng, 0);
 
         if (decoded is not null)
         {
-            // What the drag carries, later cards show too.
+            // What the drag carries, later cards show too — unless the card
+            // already holds its sharp original.
             var card = _cards.FirstOrDefault(c => c.Id == id)
                 ?? _pinned.FirstOrDefault(c => c.Id == id);
 
-            if (card is not null)
+            if (card is not null && !card.IsSharp)
             {
                 card.Thumbnail = decoded;
             }

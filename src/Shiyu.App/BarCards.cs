@@ -148,20 +148,38 @@ internal partial class BarWindow
     }
 
     /// <summary>
-    /// A file copy made entirely of images previews as pictures: names alone
-    /// answer "which file", not "what was in it". Runs on the thread pool
-    /// (O-36) — the file read is disk latency, and this used to happen on the
-    /// thread that draws. A missing or unreadable file falls back to the
-    /// rows — a struck-through name says more than nothing.
+    /// Decodes a picture on disk at the width the card's image box needs in
+    /// screen pixels (<see cref="CardImageFit"/>; 用户实录 2026-10-14：窄条中
+    /// 的图片显示模糊——按固定 320 解码，在 150% 的屏上要放大近一倍).
+    /// Used for a file copy made entirely of images, which previews as a
+    /// picture (names alone answer "which file", not "what was in it"), and
+    /// for an image entry's original. Runs on the thread pool (O-36) — the
+    /// file read is disk latency. An unknown size is read from the file header
+    /// first, pixels untouched. A missing or unreadable file gives null and the
+    /// card keeps what it shows — rows, or the stored thumbnail.
     /// </summary>
-    private static ImageSource? DecodeFileImage(string path, int pixelWidth)
+    private static BitmapSource? DecodeToFit(
+        string path, int pixelWidth, int pixelHeight, double boxWidth, double boxHeight, double scale)
     {
         try
         {
+            if (pixelWidth <= 0 || pixelHeight <= 0)
+            {
+                using var stream = File.OpenRead(path);
+                var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None)
+                    .Frames[0];
+                (pixelWidth, pixelHeight) = (frame.PixelWidth, frame.PixelHeight);
+            }
+
+            var width = CardImageFit.DecodeWidth(pixelWidth, pixelHeight, boxWidth, boxHeight, scale);
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
-            image.DecodePixelWidth = Math.Max(1, pixelWidth);
+            if (width < pixelWidth)
+            {
+                image.DecodePixelWidth = width;
+            }
+
             image.UriSource = new Uri(path);
             image.EndInit();
             image.Freeze();
@@ -171,9 +189,65 @@ internal partial class BarWindow
             failure is IOException or UnauthorizedAccessException
             or NotSupportedException or System.IO.FileFormatException)
         {
-            // expected: 扩展名长得像图片、内容不是可解码位图——行兜底。
+            // expected: 扩展名长得像图片、内容不是可解码位图，或原图读不出——卡片留着原来那张。
             return null;
         }
+    }
+
+    /// <summary>
+    /// The image box a card's picture fills: the bar's width (a touch wider
+    /// than the real box — better a few pixels more than a blur) and the
+    /// screen scale of the monitor the bar is on.
+    /// </summary>
+    private (double Width, double Scale) ImageBox()
+        => (ActualWidth > 0 ? ActualWidth : Width, VisualTreeHelper.GetDpi(this).DpiScaleX);
+
+    /// <summary>Sharp decodes run one after another, never stampeding the pool.</summary>
+    private Task _sharpening = Task.CompletedTask;
+
+    /// <summary>
+    /// 卡片真正上屏时（容器拿到它）换上按屏幕像素解码的原图（用户实录 2026-10-14：窄条中的
+    /// 图片显示模糊）。存下的缩略图只有 240 像素宽，铺满卡片要放大两倍多；原图还在（默认留
+    /// 30 天）就按 <see cref="CardImageFit"/> 算出的宽度重解一次。只为上屏的卡做：列表是虚拟化
+    /// 的，滚不到的卡不花这份功夫。原图过了保留期的，照旧显示缩略图。
+    /// </summary>
+    internal void RequestSharpImage(BarCard card)
+    {
+        if (card.SharpRequested || card.Kind != EntryKind.Image || card.OriginalPath is not { } path || !card.HasOriginal)
+        {
+            return;
+        }
+
+        card.SharpRequested = true;
+        var generation = _cardBackfills.Epoch;
+        var (boxWidth, scale) = ImageBox();
+        double boxHeight = card.ImageHeight;
+
+        _sharpening = _sharpening.ContinueWith(
+            _ =>
+            {
+                // 排队期间列表已经换了：这张卡不会再上屏，省下这次解码。
+                if (!_cardBackfills.IsCurrent(generation))
+                {
+                    return;
+                }
+
+                var sharp = DecodeToFit(path, card.PixelWidth, card.PixelHeight, boxWidth, boxHeight, scale);
+                if (sharp is null)
+                {
+                    return;
+                }
+
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (_cardBackfills.IsCurrent(generation))
+                    {
+                        card.IsSharp = true;
+                        card.Thumbnail = sharp;
+                    }
+                });
+            },
+            TaskScheduler.Default);
     }
 
     private void Rebuild()
@@ -282,13 +356,18 @@ internal partial class BarWindow
             var work = _pendingBackfills.ToArray();
             _pendingBackfills.Clear();
             var generation = _cardBackfills.Epoch;
+            var (boxWidth, scale) = ImageBox();
 
             Task.Run(() =>
             {
                 foreach (var item in work)
                 {
-                    var thumbnail = AppIconCache.Decode(item.ThumbnailPng, 320);
-                    var preview = item.PreviewPath is null ? null : DecodeFileImage(item.PreviewPath, 320);
+                    // 缩略图按存下的尺寸解（0 = 不强改宽度）：再放大一道只会更糊；上屏后
+                    // RequestSharpImage 换上按屏幕像素解的原图。
+                    var thumbnail = AppIconCache.Decode(item.ThumbnailPng, 0);
+                    var preview = item.PreviewPath is null
+                        ? null
+                        : DecodeToFit(item.PreviewPath, 0, 0, boxWidth, item.Card.ImageHeight, scale);
 
                     Dispatcher.BeginInvoke(() =>
                     {
@@ -297,7 +376,8 @@ internal partial class BarWindow
                             return;
                         }
 
-                        if (thumbnail is not null)
+                        // 原图先到了（上屏得早、缩略图排得靠后）：不拿缩略图盖回去。
+                        if (thumbnail is not null && !item.Card.IsSharp)
                         {
                             item.Card.Thumbnail = thumbnail;
                         }

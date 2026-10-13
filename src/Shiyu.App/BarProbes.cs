@@ -229,6 +229,55 @@ internal partial class BarWindow
     }
 
     /// <summary>
+    /// 探针命令 bar-sharp（用户实录 2026-10-14：窄条中的图片显示模糊）。把每张图片卡依次滚上屏，
+    /// 等它的原图解码落定，记：原图尺寸、原图在不在、换没换上清晰的那张、实际解码出的像素宽、按
+    /// <see cref="CardImageFit"/> 应有的宽、图片区在屏幕上占的物理像素宽。被拿掉原图的那张
+    /// （<paramref name="expiredId"/>）该留在缩略图上，按缩略图本身的尺寸解码。渲一张 PNG。
+    /// </summary>
+    internal async void ProbeSharpImages(long expiredId)
+    {
+        var log = new StringBuilder();
+
+        static async Task Settle(int milliseconds)
+        {
+            await Task.Delay(milliseconds);
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+        }
+
+        await Settle(1000);
+        var (boxWidth, scale) = ImageBox();
+        foreach (var card in _cards.Where(card => card.Kind == EntryKind.Image).ToList())
+        {
+            Cards.ScrollIntoView(card);
+            await Settle(600);
+
+            var decoded = (card.Thumbnail as System.Windows.Media.Imaging.BitmapSource)?.PixelWidth ?? 0;
+            var expected = CardImageFit.DecodeWidth(card.PixelWidth, card.PixelHeight, boxWidth, card.ImageHeight, scale);
+            var body = Cards.ItemContainerGenerator.ContainerFromItem(card) is DependencyObject container
+                ? Named(container, "ImageBody")
+                : null;
+            var shown = body is null ? -1 : (int)Math.Ceiling(body.ActualWidth * scale);
+            log.AppendLine(FormattableString.Invariant(
+                $"image|expired={card.Id == expiredId}|original={card.PixelWidth}x{card.PixelHeight}|hasOriginal={card.HasOriginal}|sharp={card.IsSharp}|decoded={decoded}|expected={expected}|shown={shown}|scale={scale:F2}"));
+        }
+
+        // 渲图停在一张换上了原图的卡上：留在缩略图上的那张看不出差别。
+        if ((_cards.FirstOrDefault(card => card.IsSharp) ?? _cards.FirstOrDefault(card => card.Kind == EntryKind.Image)) is { } pictured)
+        {
+            Cards.ScrollIntoView(pictured);
+            await Settle(300);
+        }
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        if (Content is FrameworkElement root)
+        {
+            App.RenderToPng(root, Path.Combine(directory, "bar-sharp.png"));
+        }
+
+        File.WriteAllText(Path.Combine(directory, "bar-sharp.log"), log + "done" + Environment.NewLine);
+    }
+
+    /// <summary>
     /// 探针命令 source-icons 的窄条一段（用户需求 2026-10-14：来源图标可以关，空着时什么都不放）。
     /// 每张已实现的卡一行：卡上有没有图标、图标格在不在、格里显出几张图（拾语标志的回退已撤，
     /// 取不到图标时应为 0）。
