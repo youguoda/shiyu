@@ -4,6 +4,15 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 修复
+
+- **开着「也用 Win+V 呼出」时，有时按 V、Shift+V、Ctrl+V 都会呼出窄条，打不出字也粘贴不了，退出
+  拾语才恢复**：拾语靠自己记住的「Win 键按下、松开」来认 Win+V。Win+L 锁屏时，Win 的松开发生在锁屏
+  界面上，拾语看不到，就一直以为 Win 还按着，解锁后每个 V 都被当成 Win+V。现在每次按 V 时直接问
+  Windows「Win 此刻按着吗」，不会再卡住。在修复版之前遇到时，按一下 Win 键再按 Esc 也能解开。
+
 ## [0.14.0] - 2026-10-12
 
 ### 新增
