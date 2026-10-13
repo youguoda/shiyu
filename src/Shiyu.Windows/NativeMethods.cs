@@ -213,6 +213,16 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
 
+    /// <summary>窗口此刻是不是最小化着。</summary>
+    [DllImport("user32.dll")]
+    internal static extern bool IsIconic(IntPtr hWnd);
+
+    /// <summary>SW_RESTORE：从最小化还原到最小化之前的样子，最大化的仍是最大化。</summary>
+    internal const int SwRestore = 9;
+
+    [DllImport("user32.dll")]
+    internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
     /// <summary>
     /// GetGUIThreadInfo's answer (票 26 的插入符锚点): only the caret fields
     /// matter here. rcCaret is in the CLIENT coordinates of hwndCaret.

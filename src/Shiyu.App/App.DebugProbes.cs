@@ -901,6 +901,11 @@ public partial class App
                 }
                 break;
 
+            // 点托盘图标，设置窗要到最前（用户实录 2026-10-13）：最小化、最大化后最小化、被盖住，再开。
+            case "settings-front":
+                _modules!.Settings.ProbeBringToFront();
+                break;
+
             case "panel":
                 _modules!.Translation.ShowPanel(text);
                 break;

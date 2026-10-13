@@ -44,4 +44,13 @@ public readonly record struct ForegroundWindow(IntPtr Handle)
     /// </summary>
     /// <returns>回来之后目标窗口是否在前台——贴之前据此决定敢不敢发 Ctrl+V。</returns>
     public bool Restore() => IsSomething && ForegroundReclaim.Run(WindowsForegroundPlatform.Instance, Handle);
+
+    /// <summary>
+    /// 把拾语自己的窗口摆到用户眼前：最小化的先还原，再走 <see cref="Restore"/> 的同一条序列
+    /// （<see cref="ForegroundReclaim.BringToFront"/>）。用户实录 2026-10-13：点托盘图标，设置窗有时
+    /// 不在最前——那一下点击落在任务栏上，单靠 Activate 会被前台锁挡下。
+    /// </summary>
+    /// <returns>此刻这扇窗是否在前台。</returns>
+    public bool BringToFront()
+        => IsSomething && ForegroundReclaim.BringToFront(WindowsForegroundPlatform.Instance, Handle);
 }

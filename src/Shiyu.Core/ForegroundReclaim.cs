@@ -31,6 +31,12 @@ public interface IForegroundPlatform
     void TapF24();
 
     void Pause(TimeSpan duration);
+
+    /// <summary>IsIconic：窗口此刻是不是最小化着。</summary>
+    bool IsMinimized(IntPtr window);
+
+    /// <summary>ShowWindow(SW_RESTORE)：从最小化还原到最小化之前的样子（最大化的仍是最大化）。</summary>
+    void Unminimize(IntPtr window);
 }
 
 /// <summary>
@@ -52,6 +58,27 @@ public static class ForegroundReclaim
     public static readonly TimeSpan SettleStep = TimeSpan.FromMilliseconds(10);
 
     public const int SettleSteps = 3;
+
+    /// <summary>
+    /// 把本进程自己的一扇窗摆到用户眼前（用户实录 2026-10-13：点托盘图标，设置窗有时不在最前）。
+    /// 最小化的先还原，再走 <see cref="Run"/>。托盘的那一下点击落在任务栏上，本进程不一定有资格
+    /// 抢前台：普通的激活被前台锁挡下时，Windows 只闪一下任务栏按钮，窗口仍压在别的程序底下。
+    /// </summary>
+    /// <returns>此刻目标窗口是否在前台。</returns>
+    public static bool BringToFront(IForegroundPlatform platform, IntPtr target)
+    {
+        if (target == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        if (platform.IsMinimized(target))
+        {
+            platform.Unminimize(target);
+        }
+
+        return Run(platform, target);
+    }
 
     /// <returns>此刻目标窗口是否在前台。</returns>
     public static bool Run(IForegroundPlatform platform, IntPtr target)

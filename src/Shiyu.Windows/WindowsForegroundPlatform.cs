@@ -49,4 +49,8 @@ internal sealed class WindowsForegroundPlatform : IForegroundPlatform
     }
 
     public void Pause(TimeSpan duration) => Thread.Sleep(duration);
+
+    public bool IsMinimized(IntPtr window) => NativeMethods.IsIconic(window);
+
+    public void Unminimize(IntPtr window) => NativeMethods.ShowWindow(window, NativeMethods.SwRestore);
 }

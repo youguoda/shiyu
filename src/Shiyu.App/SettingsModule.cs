@@ -1,4 +1,7 @@
+using System.Windows;
+using System.Windows.Interop;
 using Shiyu.Core;
+using Shiyu.Windows;
 
 namespace Shiyu.App;
 
@@ -24,7 +27,7 @@ internal sealed class SettingsModule
 
         if (_window is not null)
         {
-            _window.Activate();
+            BringToFront(_window);
             return;
         }
 
@@ -44,6 +47,7 @@ internal sealed class SettingsModule
         };
         _window.Closed += (_, _) => _window = null;
         _window.Show();
+        BringToFront(_window);
 
         /// <summary>
         /// A backup's settings land the way every write does: through the
@@ -86,6 +90,15 @@ internal sealed class SettingsModule
             return null;
         }
     }
+
+    /// <summary>
+    /// 设置窗摆到用户眼前（用户实录 2026-10-13：点托盘图标，设置窗有时不在最前）。只调
+    /// Activate 不够：已经开着的窗口最小化时不会还原；托盘的那一下点击落在任务栏上，激活又常被
+    /// Windows 的前台锁挡下，只闪一下任务栏按钮。这里最小化的先还原，挡下了就走与反向输入框
+    /// 回贴同一条兜底序列。托盘、再次启动拾语、别处的深链都从这里进。
+    /// </summary>
+    private static void BringToFront(Window window)
+        => new ForegroundWindow(new WindowInteropHelper(window).Handle).BringToFront();
 
     /// <summary>
     /// Opens the settings window landed on one item — the deep link other
@@ -137,6 +150,71 @@ internal sealed class SettingsModule
         log += FormattableString.Invariant(
             $"disk|plain={stored.Contains("-probe-", StringComparison.Ordinal)}|protected={stored.Contains(AppSettings.SecretMarker, StringComparison.Ordinal)}{Environment.NewLine}");
         System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "credentials.log"), log + "done" + Environment.NewLine);
+    }
+
+    /// <summary>
+    /// 探针命令 settings-front（用户实录 2026-10-13：点托盘图标，设置窗有时不在最前）。托盘左键走的
+    /// 就是 <see cref="Show"/>：开一次；最小化后再开；最大化再最小化后再开（应回到最大化）；被本进程的
+    /// 另一扇窗盖住后再开。每一步记窗口状态、是不是前台。托盘点击后本进程没有资格抢前台的那种前台锁，
+    /// 探针造不出来——那一步的时序在 Core 的 ForegroundReclaim 测试里钉着。
+    /// </summary>
+    internal async void ProbeBringToFront()
+    {
+        var log = new System.Text.StringBuilder();
+
+        Show();
+        await Settle();
+        Line("open");
+
+        _window!.WindowState = WindowState.Minimized;
+        await Settle();
+        Show();
+        await Settle();
+        Line("restored");
+
+        _window.WindowState = WindowState.Maximized;
+        await Settle();
+        _window.WindowState = WindowState.Minimized;
+        await Settle();
+        Show();
+        await Settle();
+        Line("maximized");
+
+        _window.WindowState = WindowState.Normal;
+        var cover = new Window
+        {
+            Title = "probe cover",
+            Left = _window.Left,
+            Top = _window.Top,
+            Width = _window.ActualWidth,
+            Height = _window.ActualHeight,
+            ShowInTaskbar = false,
+        };
+        cover.Show();
+        cover.Activate();
+        await Settle();
+        var coverInFront = new ForegroundWindow(new WindowInteropHelper(cover).Handle).IsForeground;
+        Show();
+        await Settle();
+        log.AppendLine(FormattableString.Invariant($"cover|inFront={coverInFront}"));
+        Line("uncovered");
+        cover.Close();
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "settings-front.log"), log + "done" + Environment.NewLine);
+
+        static async Task Settle()
+        {
+            await Task.Delay(400);
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+        }
+
+        void Line(string step)
+        {
+            var handle = new WindowInteropHelper(_window!).Handle;
+            log.AppendLine(FormattableString.Invariant(
+                $"{step}|state={_window!.WindowState}|foreground={new ForegroundWindow(handle).IsForeground}"));
+        }
     }
 #endif
 

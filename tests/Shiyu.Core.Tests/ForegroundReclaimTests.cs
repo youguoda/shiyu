@@ -86,6 +86,24 @@ public class ForegroundReclaimTests
         public void TapF24() => Calls.Add("F24");
 
         public void Pause(TimeSpan duration) => Calls.Add("pause");
+
+        /// <summary>目标窗口最小化着。</summary>
+        public bool Minimized { get; set; }
+
+        /// <summary>SW_RESTORE 顺带把它激活到前台（前台没被锁时的常态）。</summary>
+        public bool UnminimizeActivates { get; set; }
+
+        public bool IsMinimized(IntPtr window) => window == Target && Minimized;
+
+        public void Unminimize(IntPtr window)
+        {
+            Calls.Add($"unminimize:{window.ToInt32():X}");
+            Minimized = false;
+            if (UnminimizeActivates)
+            {
+                Front = window;
+            }
+        }
     }
 
     private static IEnumerable<string> Meaningful(FakeForeground platform)
@@ -209,6 +227,62 @@ public class ForegroundReclaimTests
         var platform = new FakeForeground();
 
         Assert.False(ForegroundReclaim.Run(platform, IntPtr.Zero));
+
+        Assert.Empty(platform.Calls);
+    }
+
+    // --- 把自己的窗摆到眼前（用户实录 2026-10-13：点托盘图标，设置窗有时不在最前） --------------
+
+    [Fact]
+    public void Bringing_a_window_already_in_front_touches_nothing()
+    {
+        var platform = new FakeForeground { Front = Target };
+
+        Assert.True(ForegroundReclaim.BringToFront(platform, Target));
+
+        Assert.Empty(Meaningful(platform));
+    }
+
+    [Fact]
+    public void A_minimized_window_is_restored_before_anything_else()
+    {
+        var platform = new FakeForeground { Minimized = true, UnminimizeActivates = true };
+
+        Assert.True(ForegroundReclaim.BringToFront(platform, Target));
+
+        // 还原时已经到了前台：不再设前台，更不发键。
+        Assert.Equal(["unminimize:1001"], Meaningful(platform));
+    }
+
+    [Fact]
+    public void A_window_behind_others_goes_through_the_same_forced_sequence_when_activation_is_refused()
+    {
+        // 托盘的那一下点击落在任务栏上，普通的激活被前台锁挡下——这正是设置窗压在底下的那一次。
+        var platform = new FakeForeground { SetForegroundWorks = attempt => attempt >= 2 };
+
+        Assert.True(ForegroundReclaim.BringToFront(platform, Target));
+
+        Assert.DoesNotContain(platform.Calls, call => call.StartsWith("unminimize", StringComparison.Ordinal));
+        Assert.Equal(["set:1001", "allow"], Meaningful(platform).Take(2));
+        Assert.Contains("F24", platform.Calls);
+    }
+
+    [Fact]
+    public void A_minimized_window_whose_restore_is_not_activated_is_then_brought_forward()
+    {
+        var platform = new FakeForeground { Minimized = true };
+
+        Assert.True(ForegroundReclaim.BringToFront(platform, Target));
+
+        Assert.Equal(["unminimize:1001", "set:1001"], Meaningful(platform));
+    }
+
+    [Fact]
+    public void Bringing_no_window_touches_nothing()
+    {
+        var platform = new FakeForeground { Minimized = true };
+
+        Assert.False(ForegroundReclaim.BringToFront(platform, IntPtr.Zero));
 
         Assert.Empty(platform.Calls);
     }
