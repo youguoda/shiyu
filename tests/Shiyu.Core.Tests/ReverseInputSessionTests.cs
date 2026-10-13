@@ -1179,6 +1179,120 @@ public class ReverseInputSessionTests
         Assert.Contains("重试", session.Hint);
     }
 
+    // --- 回车按钮（用户需求 2026-10-13：点它就是按一下 Enter） ------------------------------------
+
+    [Fact]
+    public void The_enter_button_is_greyed_until_there_is_something_to_send()
+    {
+        var (session, _) = Open();
+        Assert.False(session.CanEnter);
+        Assert.Equal("回车：贴回", session.EnterButtonName);
+
+        session.TextChanged("你好");
+        Assert.True(session.CanEnter);
+
+        session.TextChanged("   ");
+        Assert.False(session.CanEnter);
+    }
+
+    [Fact]
+    public void The_enter_button_follows_a_translation_to_the_paste()
+    {
+        var (session, clock) = Open();
+        session.TextChanged("你好");
+        Assert.Equal("贴回", session.EnterAction);
+
+        clock.Advance(Debounce);
+        var run = session.Tick().Run!;
+
+        // 译到一半按：标记"译完就贴回"，按钮随即变灰——再按一次什么都不会多发生。
+        Assert.True(session.CanEnter);
+        session.Enter();
+        Assert.False(session.CanEnter);
+        Assert.Equal("贴回", session.EnterAction);
+
+        Assert.Equal("Hello", session.Completed(run.Seq, "Hello").Paste);
+    }
+
+    [Fact]
+    public void The_enter_button_waits_out_a_rewrite_and_then_offers_the_paste()
+    {
+        var (session, _) = Open(PromptTemplates.PromptOptimize);
+        Assert.False(session.CanEnter);
+        Assert.Equal("整理", session.EnterAction);
+
+        session.TextChanged("写个脚本");
+        Assert.True(session.CanEnter);
+        Assert.Equal("回车：整理", session.EnterButtonName);
+
+        // 整理中按了也不会贴（跑完先停下给人过目），按钮变灰。
+        var run = session.Enter().Run!;
+        Assert.False(session.CanEnter);
+
+        session.Completed(run.Seq, "Write a script.");
+        Assert.True(session.CanEnter);
+        Assert.Equal("贴回", session.EnterAction);
+    }
+
+    [Fact]
+    public void After_a_failure_the_enter_button_offers_a_retry()
+    {
+        var (session, clock) = Open();
+        var run = TypeAndRun(session, clock, "你好");
+
+        session.Failed(run.Seq, null, "boom");
+
+        Assert.True(session.CanEnter);
+        Assert.Equal("重试", session.EnterAction);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Wherever_the_hint_names_what_Enter_does_the_button_names_the_same_step(bool rewrite)
+    {
+        var (session, clock) = Open(rewrite ? PromptTemplates.PromptOptimize : PromptTemplates.Standard);
+        var seen = 0;
+
+        void Check()
+        {
+            if (session.Hint.Contains("Enter", StringComparison.Ordinal))
+            {
+                Assert.Contains(session.EnterAction, session.Hint);
+                seen++;
+            }
+        }
+
+        Check();
+        session.TextChanged("你好");
+        Check();
+        clock.Advance(Debounce);
+        var run = session.Tick().Run ?? session.Enter().Run!;
+        Check();
+        session.Completed(run.Seq, "Hello");
+        Check();
+        session.TextChanged("你好吗");
+        clock.Advance(Debounce);
+        var second = session.Tick().Run ?? session.Enter().Run!;
+        session.Failed(second.Seq, null, "boom");
+        Check();
+
+        Assert.True(seen >= 4);
+    }
+
+    [Fact]
+    public void The_session_says_when_the_input_method_is_composing()
+    {
+        var (session, _) = Open();
+        Assert.False(session.Composing);
+
+        session.SetComposing(true);
+        Assert.True(session.Composing);
+
+        session.SetComposing(false);
+        Assert.False(session.Composing);
+    }
+
     // --- 落定的输出（翻译记录只记它，用户需求 2026-10-09） ----------------------------------
 
     [Fact]

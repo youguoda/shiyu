@@ -854,6 +854,11 @@ public partial class App
                     "hello probe, this sentence runs long enough to wrap onto a second line of the reverse box");
                 break;
 
+            // 反向输入框的回车按钮（用户需求 2026-10-13）。配 SHIYU_FAKE_BACKEND=1；只点不会贴回的那一步。
+            case "reverse-enter":
+                _modules!.ReverseInput.ProbeEnterButton("hello probe enter button");
+                break;
+
             // 把列表翻到底后重开、外部写、粘贴呼出：都必须回到最新的那条
             // （用户实录 2026-10-04：打开窄条有时停在最底部）。
             case "bar-newest":

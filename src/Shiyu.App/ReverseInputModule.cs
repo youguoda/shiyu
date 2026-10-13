@@ -39,6 +39,20 @@ internal sealed class ReverseInputModule
         System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "reverse-select.log"), log + "done" + Environment.NewLine);
     }
 
+    /// <summary>探针命令 reverse-enter 的入口（见 ReverseInputWindow.ProbeEnterButton）。</summary>
+    internal async void ProbeEnterButton(string text)
+    {
+        Show();
+        if (_window is null)
+        {
+            return;
+        }
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = await _window.ProbeEnterButton(text, System.IO.Path.Combine(directory, "reverse-enter.png"));
+        System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "reverse-enter.log"), log + "done" + Environment.NewLine);
+    }
+
     /// <summary>探针命令 translation-log 的反向输入框一段（见 ReverseInputWindow.ProbeTranslationLog）。</summary>
     internal async Task<string> ProbeTranslationLog(string text)
     {

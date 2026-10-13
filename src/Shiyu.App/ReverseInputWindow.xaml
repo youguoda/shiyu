@@ -78,13 +78,12 @@
             <!-- 底栏：方向 chip · 模板 chip（左）；Enter 此刻会做什么（右）。两枚 chip 都是
                  浮层里的中性文字钮（FlyoutButton 配次级文字色）：静止态只有一处 accent，
                  就是流式中的光标块（ADR-0012 #13）。名字随状态更新（a11y）。
-                 模板 chip 点开完整列表（含不在 Ctrl+E 循环里的）；免费引擎下没有 prompt，隐藏。 -->
+                 模板 chip 点开完整列表（含不在 Ctrl+E 循环里的）；免费引擎下没有 prompt，隐藏。
+                 最右是回车按钮（用户需求 2026-10-13）：点它就是按一下 Enter，此刻是哪一步看左边的
+                 提示；同是中性图标钮。不拿焦点，点完键盘还在输入框里。Enter 无事可做时变灰。
+                 宽度不够时让提示截断，chip 与按钮保持完整：chip 先靠左、按钮靠右，提示填中间。 -->
             <DockPanel Margin="0,8,0,0" LastChildFill="True">
-                <TextBlock x:Name="HintText" DockPanel.Dock="Right" VerticalAlignment="Center"
-                           Margin="12,0,4,0" TextTrimming="CharacterEllipsis"
-                           FontSize="{DynamicResource Type.Caption}"
-                           Foreground="{DynamicResource Brush.TextTertiary}"/>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Button x:Name="DirectionChip" Style="{DynamicResource FlyoutButton}"
                             Height="{DynamicResource Control.Height}" Padding="8,0"
                             Cursor="Hand" Click="OnDirectionChipClick"
@@ -107,6 +106,16 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
+                <Button x:Name="EnterButton" DockPanel.Dock="Right" Style="{DynamicResource IconButton}"
+                        Focusable="False" Cursor="Hand" Click="OnEnterButtonClick"
+                        AutomationProperties.Name="回车">
+                    <TextBlock x:Name="EnterGlyph" Text="&#xE751;" FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}"/>
+                </Button>
+                <TextBlock x:Name="HintText" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Margin="12,0,4,0" TextTrimming="CharacterEllipsis"
+                           FontSize="{DynamicResource Type.Caption}"
+                           Foreground="{DynamicResource Brush.TextTertiary}"/>
             </DockPanel>
         </StackPanel>
     </Border>

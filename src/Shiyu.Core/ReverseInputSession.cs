@@ -264,6 +264,34 @@ public sealed class ReverseInputSession(TimeProvider clock)
         }
     }
 
+    /// <summary>
+    /// 回车按钮（用户需求 2026-10-13）能不能点：<see cref="Enter"/> 此刻有没有事可做。没有输入、
+    /// 改写类正在整理（跑完先停下给人过目）、已经按过"译完就贴回"时，再按一次什么都不会发生。
+    /// </summary>
+    public bool CanEnter => Status switch
+    {
+        ReverseInputStatus.Empty => false,
+        ReverseInputStatus.Running => Template.Kind == PromptTemplateKind.Translate && !_wantCommit,
+        _ => true,
+    };
+
+    /// <summary>回车按钮做的那一步，与 <see cref="Hint"/> 里 Enter 后面的词一致：贴回、整理或重试。</summary>
+    public string EnterAction => Status switch
+    {
+        ReverseInputStatus.Failed => "重试",
+        ReverseInputStatus.Ready => "贴回",
+        _ => Template.Kind == PromptTemplateKind.Rewrite ? "整理" : "贴回",
+    };
+
+    /// <summary>回车按钮的无障碍名：念得出此刻按下去是哪一步。</summary>
+    public string EnterButtonName => $"回车：{EnterAction}";
+
+    /// <summary>
+    /// 输入法正在组字。键盘上的 Enter 这时归输入法（选字上屏），回车按钮跟它一致、不往前走——
+    /// 组字中的输入框文字含着还没选字的拼音，这时往前走会把拼音译出去。
+    /// </summary>
+    public bool Composing => _composing;
+
     /// <summary>防抖还要等多久；没有待跑的防抖给 null。界面据此装一个单发的定时器，到点调 <see cref="Tick"/>。</summary>
     public TimeSpan? TimeUntilTick()
         => _debounceAt is { } at ? TimeSpan.FromTicks(Math.Max(0, (at - clock.GetUtcNow()).Ticks)) : null;

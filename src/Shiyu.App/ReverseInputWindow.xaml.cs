@@ -560,6 +560,10 @@ internal partial class ReverseInputWindow : Window
 
         HintText.Text = _session.Hint;
 
+        EnterButton.IsEnabled = _session.CanEnter;
+        EnterButton.ToolTip = $"{_session.EnterAction}（Enter）";
+        AutomationProperties.SetName(EnterButton, _session.EnterButtonName);
+
         RenderOutput();
     }
 
@@ -604,6 +608,23 @@ internal partial class ReverseInputWindow : Window
         {
             OutputScroll.ScrollToEnd();
         }
+    }
+
+    // --- 回车按钮 -------------------------------------------------------------------------
+
+    /// <summary>
+    /// 回车按钮（用户需求 2026-10-13）：点它就是按一下 Enter，走同一个 <see cref="ReverseInputSession.Enter"/>——
+    /// 跑、贴回或重试。输入法正在组字时不动：键盘上的 Enter 这时归输入法，按钮跟它一致。
+    /// 按钮不拿焦点，点完键盘还在输入框里，接着打字、再按 Enter 都照旧。
+    /// </summary>
+    private void OnEnterButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (_session.Composing)
+        {
+            return;
+        }
+
+        Apply(_session.Enter());
     }
 
     // --- chip -----------------------------------------------------------------------------
