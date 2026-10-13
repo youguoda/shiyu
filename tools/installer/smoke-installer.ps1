@@ -80,6 +80,9 @@ if ($DestructiveChecks) {
     Check 'the data folder is gone' (-not (Test-Path $data))
 
     # What the app itself writes on first start (StartupRegistration): a quoted exe path.
+    # A fresh user profile may not have the Run key yet (the CI runner's did not, 2026-10-14);
+    # the app creates it (CreateSubKey), so this stand-in does too.
+    if (-not (Test-Path $runKey)) { New-Item -Path $runKey -Force | Out-Null }
     Set-ItemProperty $runKey -Name 'Shiyu' -Value ('"' + (Join-Path $dir 'Shiyu.App.exe') + '"')
 }
 
