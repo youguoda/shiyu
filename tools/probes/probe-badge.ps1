@@ -1,12 +1,15 @@
-# probe-badge.ps1 - the translate badge is a single glyph in a circle (user request
-# 2026-10-10: drop the words beside it, keep only the one character).
+# probe-badge.ps1 - the translate badge is a single glyph on a rounded square (user
+# requests 2026-10-10: drop the words beside it, keep only the one character;
+# 2026-10-13: the circle becomes a rounded square).
 #
 # The DEBUG command "badge" shows the badge the way a copy or a drag-select does,
-# logs its size and the text runs inside it, and renders badge.png into the data dir.
+# logs its size, corner radius and the text runs inside it, and renders badge.png
+# into the data dir.
 #
 # Checks:
-#   - flow:badge-single-glyph   exactly one visible text run: the glyph alone
-#   - flow:badge-circle         the pill is square (a circle with the pill radius)
+#   - flow:badge-single-glyph     exactly one visible text run: the glyph alone
+#   - flow:badge-rounded-square   square, with the overlay radius - rounded corners,
+#                                 well short of the half-width that makes a circle
 #
 # ASCII only (see lib.ps1 header).
 
@@ -51,8 +54,12 @@ $ok = $fields['texts'] -eq '1' -and $fields['glyph'] -eq 'True'
 Add-Check 'flow:badge-single-glyph' $(if ($ok) { 'PASS' } else { 'FAIL' }) `
     ("{0} text run(s), glyph alone {1}" -f $fields['texts'], $fields['glyph'])
 
-$ok = $fields['width'] -eq $fields['height'] -and [int]$fields['width'] -gt 0
-Add-Check 'flow:badge-circle' $(if ($ok) { 'PASS' } else { 'FAIL' }) `
-    ("pill {0}x{1} DIP" -f $fields['width'], $fields['height'])
+# -as converts culture-invariantly and gives $null (a failed check) for a missing field.
+$width = $fields['width'] -as [double]
+$radius = $fields['radius'] -as [double]
+$ok = $fields['width'] -eq $fields['height'] -and $width -gt 0 `
+    -and $fields['radius'] -eq $fields['radiusExpect'] -and $radius -gt 0 -and $radius -lt ($width / 2)
+Add-Check 'flow:badge-rounded-square' $(if ($ok) { 'PASS' } else { 'FAIL' }) `
+    ("tile {0}x{1} DIP, corner radius {2} (expected {3})" -f $fields['width'], $fields['height'], $fields['radius'], $fields['radiusExpect'])
 
 return $script:Checks

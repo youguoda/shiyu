@@ -334,7 +334,7 @@ public partial class App
     /// </summary>
     /// <summary>
     /// 探针命令 badge（用户需求 2026-10-10："翻译这段"去掉，只留一个「译」）：把翻译徽标亮出来，
-    /// 量它的尺寸、数它里面有几段字，渲一张 PNG。
+    /// 量它的尺寸与圆角（2026-10-13 起是圆角方形）、数它里面有几段字，渲一张 PNG。
     /// </summary>
     private async void ProbeBadge(AppShell shell)
     {
@@ -347,12 +347,12 @@ public partial class App
         var directory = DebugOverrides.ProbeDirectory!;
         var log = new StringBuilder();
         if (Windows.OfType<BadgeWindow>().FirstOrDefault(window => window.IsVisible) is { } badge
-            && badge.Content is FrameworkElement pill)
+            && badge.Content is Border tile)
         {
             var texts = Descendants(badge).OfType<TextBlock>().Where(text => text.IsVisible).ToList();
             log.AppendLine(FormattableString.Invariant(
-                $"badge|width={pill.ActualWidth:F0}|height={pill.ActualHeight:F0}|texts={texts.Count}|glyph={(texts.Count == 1 && texts[0].Text == "译")}"));
-            RenderToPng(pill, Path.Combine(directory, "badge.png"));
+                $"badge|width={tile.ActualWidth:F0}|height={tile.ActualHeight:F0}|radius={tile.CornerRadius.TopLeft}|radiusExpect={((CornerRadius)FindResource("Radius.Overlay")).TopLeft}|texts={texts.Count}|glyph={(texts.Count == 1 && texts[0].Text == "译")}"));
+            RenderToPng(tile, Path.Combine(directory, "badge.png"));
         }
         else
         {
