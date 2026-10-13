@@ -27,7 +27,11 @@ public sealed class WinVHook : IDisposable
 {
     private const int WhKeyboardLl = 13;
 
-    private readonly WinVFilter _filter = new();
+    // Whether Win is down is asked of Windows at every V press, not only remembered
+    // from the events this hook happened to see (用户实录 2026-10-13: after Win+L the
+    // release fell on the lock screen, the filter kept "Win held", and every plain V
+    // summoned the bar until Shiyu quit).
+    private readonly WinVFilter _filter = new(WinIsDown);
     private readonly LowLevelHookThread _host;
     private readonly SynchronizationContext? _context;
 
@@ -53,6 +57,9 @@ public sealed class WinVHook : IDisposable
             NativeMethods.keybd_event(0xFF, 0, 2, UIntPtr.Zero);
             Triggered?.Invoke();
         }, null);
+
+        // Logged off the hook thread too: the callback must never wait on a file.
+        _filter.StaleWinCorrected += () => _context?.Post(_ => Log.Event(LogEvent.WinVStaleWinCorrected), null);
 
         // Installing waits for the system's verdict: a refused hook throws
         // Win32Exception out of this constructor instead of failing invisibly
@@ -101,6 +108,16 @@ public sealed class WinVHook : IDisposable
             ? new IntPtr(1)
             : NativeMethods.CallNextHookEx(hook, code, wParam, lParam);
     }
+
+    /// <summary>
+    /// Either Win key down, per Windows itself (the high bit of the async state). Called on
+    /// the hook thread for a V press: the Win press it answers about went through the
+    /// hook chain earlier, so the system has already counted it — and a release no hook
+    /// saw (the lock screen, an elevated window) is counted all the same.
+    /// </summary>
+    private static bool WinIsDown()
+        => (NativeMethods.GetAsyncKeyState(0x5B) & 0x8000) != 0
+            || (NativeMethods.GetAsyncKeyState(0x5C) & 0x8000) != 0;
 
     public void Dispose()
     {

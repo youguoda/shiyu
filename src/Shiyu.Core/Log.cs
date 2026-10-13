@@ -43,6 +43,13 @@ public enum LogEvent
 
     // 界面动作
     OpenLinkFailed,
+
+    // 全局键盘钩子
+    /// <summary>
+    /// Win+V 接管的钩子记着"Win 按着"，系统却说没按——一次没看见的松开（Win+L 锁屏最常见），
+    /// 用户实录 2026-10-13。这次的 V 已按普通打字放行；记一笔，好在现场看得到它发生过几次。
+    /// </summary>
+    WinVStaleWinCorrected,
 }
 
 /// <summary>
