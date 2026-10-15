@@ -99,6 +99,64 @@ public class ClipboardRestoreTests
     public void The_restore_waits_400_milliseconds()
         => Assert.Equal(TimeSpan.FromMilliseconds(400), ReversePaste.RestoreDelay);
 
+    // --- 取词借走之后的判定（用户实录 2026-10-15）------------------------------------------
+    //
+    // 回贴不还，剪贴板上留着用户刚贴出去的译文；取词不还，留着的是用户没要过的选中文字。所以取词
+    // 只要还有写得回去的文字或文件就写回去，附带的图片格式丢掉（ADR-0003：保文本格式，异类格式
+    // 接受有损）；回贴的判定照旧从严。
+
+    [Fact]
+    public void A_capture_puts_back_an_office_copy_without_its_picture_forms()
+    {
+        // Word、Excel 复制的文字都附着图元文件、位图。原来取词只还纯文字，连 HTML、RTF 也丢。
+        var office = TextOnly() with { Html = "<b>x</b>", Rtf = @"{\rtf1 x}", LostFormats = ["CF_ENHMETAFILE", "CF_BITMAP"] };
+
+        Assert.Equal(RestoreVerdict.Restore, ClipboardRestore.CaptureVerdict(office));
+        Assert.Equal(RestoreVerdict.SkipUnrestorableFormat, ClipboardRestore.Decide(office, 3, 3));
+    }
+
+    [Fact]
+    public void A_capture_cannot_put_back_a_screenshot()
+    {
+        var screenshot = new ClipboardBackup(null, null, null, [], false, ["CF_DIB", "PNG"], Empty: false);
+
+        Assert.Equal(RestoreVerdict.SkipUnrestorableFormat, ClipboardRestore.CaptureVerdict(screenshot));
+    }
+
+    [Fact]
+    public void A_capture_does_not_turn_cut_files_into_copied_ones()
+    {
+        var cut = new ClipboardBackup(
+            null, null, null, [@"C:\a.txt"], false, [ClipboardFormats.CutDropEffect], Empty: false);
+        var copied = cut with { LostFormats = [] };
+
+        Assert.Equal(RestoreVerdict.SkipUnrestorableFormat, ClipboardRestore.CaptureVerdict(cut));
+        Assert.Equal(RestoreVerdict.Restore, ClipboardRestore.CaptureVerdict(copied));
+    }
+
+    [Fact]
+    public void A_capture_never_puts_a_password_back_without_its_marker()
+    {
+        var password = TextOnly("hunter2") with { Excluded = true, LostFormats = ["CF_DIB"] };
+
+        Assert.Equal(RestoreVerdict.SkipExcluded, ClipboardRestore.CaptureVerdict(password));
+    }
+
+    [Fact]
+    public void A_capture_puts_back_plain_text_files_and_an_empty_clipboard_and_not_lone_html()
+    {
+        Assert.Equal(RestoreVerdict.Restore, ClipboardRestore.CaptureVerdict(TextOnly()));
+        Assert.Equal(
+            RestoreVerdict.Restore,
+            ClipboardRestore.CaptureVerdict(new ClipboardBackup(null, null, null, [@"C:\a.txt"], false, [], false)));
+        Assert.Equal(
+            RestoreVerdict.Restore,
+            ClipboardRestore.CaptureVerdict(new ClipboardBackup(null, null, null, [], false, [], Empty: true)));
+        Assert.Equal(
+            RestoreVerdict.SkipUnrestorableFormat,
+            ClipboardRestore.CaptureVerdict(new ClipboardBackup(null, "<b>x</b>", null, [], false, [], Empty: false)));
+    }
+
     // --- 格式分类 ----------------------------------------------------------------------
 
     [Theory]

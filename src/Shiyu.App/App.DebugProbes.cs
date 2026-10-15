@@ -913,6 +913,12 @@ public partial class App
                     "hello probe, this sentence runs long enough to wrap onto a second line of the reverse box");
                 break;
 
+            // 取词借走的剪贴板在别的程序抢着读时也还得回去（用户实录 2026-10-15）。脚本先把记事本放到
+            // 前台、选中全文；会动真剪贴板，不在 run-all 里。
+            case "capture-restore":
+                _modules!.Selection.ProbeCaptureRestore();
+                break;
+
             // 反向输入框的回车按钮（用户需求 2026-10-13）。配 SHIYU_FAKE_BACKEND=1；只点不会贴回的那一步。
             case "reverse-enter":
                 _modules!.ReverseInput.ProbeEnterButton("hello probe enter button");

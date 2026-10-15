@@ -6,7 +6,11 @@ namespace Shiyu.Core.Tests;
 public class SelectionDebtTests
 {
     private static DeferredCapture Debt(string text = "选中文字", string borrowed = "用户原文")
-        => new(text, CaptureOutcome.Captured, borrowed);
+        => new(text, CaptureOutcome.Captured, TextBackup(borrowed), SequenceBefore: 0, SequenceSealed: 1);
+
+    /// <summary>只有文字的一份快照（用户剪贴板里是一段普通文字时的样子）。</summary>
+    private static ClipboardBackup TextBackup(string text)
+        => new(text, null, null, [], Excluded: false, LostFormats: [], Empty: false);
 
     // --- the fade path -----------------------------------------------------------
 
@@ -193,8 +197,10 @@ public class SelectionDebtTests
         var oldest = capture.CaptureDeferRestore()!;
         ledger.Offer(oldest);
         ledger.Accepted();
-        platform.PutOnClipboard("第二段选中");
-        ledger.Offer(new DeferredCapture("第二段选中", CaptureOutcome.Captured, "选中文字"));
+        platform.WriteClipboardText("第二段选中");
+        var sealedAt = platform.ClipboardSequenceNumber();
+        ledger.Offer(new DeferredCapture(
+            "第二段选中", CaptureOutcome.Captured, TextBackup("选中文字"), sealedAt - 1, sealedAt));
 
         foreach (var due in ledger.Exit().Restore)
         {

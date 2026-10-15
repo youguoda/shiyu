@@ -120,7 +120,7 @@ public class SelectionCaptureTests
         // Restoring must put back "nothing", not leave the captured text
         // sitting there as though the user had copied it.
         Assert.Null(platform.CurrentClipboard);
-        Assert.Contains(null, platform.Writes);
+        Assert.True(Assert.Single(platform.Restores).Empty);
     }
 
     [Fact]
@@ -251,13 +251,13 @@ public class SelectionCaptureTests
 
         var deferred = capture.CaptureDeferRestore();
         Assert.NotNull(deferred);
-        Assert.True(capture.Restore(deferred));
+        Assert.Equal(CaptureRestore.Restored, capture.Restore(deferred));
 
         Assert.Equal("the user's own clipboard", platform.CurrentClipboard);
     }
 
     [Fact]
-    public void A_deferred_capture_that_captures_nothing_still_gives_the_clipboard_back()
+    public void A_deferred_capture_that_captures_nothing_writes_nothing_back()
     {
         var (platform, capture) = Build("the user's own clipboard");
         platform.AnswersAfterPolls = null;
@@ -270,7 +270,10 @@ public class SelectionCaptureTests
         Assert.Empty(platform.Writes);
         Assert.Equal("the user's own clipboard", platform.CurrentClipboard);
 
-        Assert.True(capture.Restore(deferred));
+        // 用户实录 2026-10-15：原来这里也要写一遍"还原"，多一次撞上剪贴板被占着的机会，
+        // 撞上就弹「未能还原」。剪贴板根本没动过，什么都不用写。
+        Assert.Equal(CaptureRestore.Untouched, capture.Restore(deferred));
+        Assert.Empty(platform.Restores);
         Assert.Equal("the user's own clipboard", platform.CurrentClipboard);
     }
 
@@ -300,8 +303,8 @@ public class SelectionCaptureTests
         Assert.NotNull(deferred);
         Assert.True(deferred.Succeeded);
 
-        // 还原同样撞上坏写——如实报告失败，这正是调用方要转告用户的。
-        Assert.False(capture.Restore(deferred));
+        // 还原同样撞上坏写——如实报告没写上，调用方隔一会儿再试，试不上才转告用户。
+        Assert.Equal(CaptureRestore.Busy, capture.Restore(deferred));
     }
 
     [Fact]
@@ -314,7 +317,7 @@ public class SelectionCaptureTests
         Assert.NotNull(deferred);
         Assert.Null(deferred.Borrowed);
 
-        capture.Restore(deferred);
+        Assert.Equal(CaptureRestore.Restored, capture.Restore(deferred));
 
         // 还的是"空"，不是留下选中文字冒充用户复制过它。
         Assert.Null(platform.CurrentClipboard);
@@ -332,7 +335,7 @@ public class SelectionCaptureTests
         // 徽标还挂着的时候用户自己复制了新东西——剪贴板已经往前走了。
         platform.PutOnClipboard("something newer");
 
-        Assert.True(capture.Restore(deferred));
+        Assert.Equal(CaptureRestore.Superseded, capture.Restore(deferred));
 
         // 还原被跳过：踩掉用户更新的复制比不还旧债更糟。
         Assert.Equal("something newer", platform.CurrentClipboard);
@@ -368,8 +371,8 @@ public class CaptureWaitsForModifierReleaseTests
 
         var result = capture.Capture();
 
-        // 三回还按着、第四回松开了：等三回，再借剪贴板、再发键。
-        Assert.Equal(["wait", "wait", "wait", "read", "copy"], platform.Events.Take(5));
+        // 三回还按着、第四回松开了：等三回，再借剪贴板（拍快照）、再发键。
+        Assert.Equal(["wait", "wait", "wait", "backup", "copy"], platform.Events.Take(5));
         Assert.True(result.Succeeded);
         Assert.Equal("the user's own clipboard", platform.CurrentClipboard);
     }

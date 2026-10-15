@@ -13,7 +13,21 @@ public sealed class WindowsCapturePlatform(MessageWindow window, WindowsClipboar
     private const int OpenAttempts = 8;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(10);
 
+    /// <summary>
+    /// 快照与写回和反向输入框回贴是同一套（用户实录 2026-10-15 之前取词只借文字：图片被清空、
+    /// 格式丢掉、密码被去掉「勿记录」标记写回）。写回经 <see cref="WindowsClipboardWriter"/>，拾语是
+    /// owner，剪贴板监听照旧跳过它。它不存状态，用时现做一个。
+    /// </summary>
+    private WindowsReversePasteClipboard Snapshots => new(window, writer);
+
     public uint ClipboardSequenceNumber() => NativeMethods.GetClipboardSequenceNumber();
+
+    public ClipboardBackup? Backup() => Snapshots.Backup();
+
+    public bool Restore(ClipboardBackup backup) => Snapshots.Restore(backup);
+
+    /// <summary>拾语的写入都以这扇消息窗为 owner（<see cref="WindowsClipboardWriter"/>）。</summary>
+    public bool OwnsClipboard() => NativeMethods.GetClipboardOwner() == window.Handle;
 
     /// <summary>
     /// 物理键盘上此刻有没有修饰键按着。只在还没发过任何模拟按键时问才准——模拟的按下与抬起也会
@@ -64,13 +78,9 @@ public sealed class WindowsCapturePlatform(MessageWindow window, WindowsClipboar
     }
 
     /// <summary>
-    /// Null clears the clipboard rather than writing an empty string, so an
-    /// empty clipboard is restored as empty.
-    ///
-    /// Known limitation: only text is preserved. If the user had an image on
-    /// the clipboard, the target application's own copy has already replaced it
-    /// by the time capture reads anything — the technique cannot save what it
-    /// never saw. Worth revisiting when images arrive (issue 09).
+    /// Null clears the clipboard rather than writing an empty string. Capture
+    /// puts the user's clipboard back through <see cref="Restore"/>, which
+    /// keeps more than text; this is for writing Shiyu's own text.
     /// </summary>
     public bool WriteClipboardText(string? text)
         => text is null ? writer.Clear() : writer.SetText(text);

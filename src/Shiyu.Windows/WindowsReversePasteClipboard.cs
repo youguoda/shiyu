@@ -99,7 +99,7 @@ public sealed class WindowsReversePasteClipboard(MessageWindow window, WindowsCl
             && WindowsClipboardMonitor.ReadDword(PreferredDropEffectFormat) is { } effect
             && ClipboardFormats.IsMoveDropEffect(effect))
         {
-            lost.Add("Preferred DropEffect (move)");
+            lost.Add(ClipboardFormats.CutDropEffect);
         }
 
         return new ClipboardBackup(

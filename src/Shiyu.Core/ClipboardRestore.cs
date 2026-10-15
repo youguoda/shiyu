@@ -148,6 +148,9 @@ public static class ClipboardFormats
     /// </summary>
     public static bool IsMoveDropEffect(uint effect) => (effect & 2) != 0;
 
+    /// <summary>剪切文件时记在 <see cref="ClipboardBackup.LostFormats"/> 里的名字（见 <see cref="IsMoveDropEffect"/>）。</summary>
+    public const string CutDropEffect = "Preferred DropEffect (move)";
+
     private static string DisplayName(uint id, string? name) => id switch
     {
         CfBitmap => "CF_BITMAP",
@@ -188,5 +191,30 @@ public static class ClipboardRestore
         return sequenceNow == sequenceAfterWrite
             ? RestoreVerdict.Restore
             : RestoreVerdict.SkipChangedSinceWrite;
+    }
+
+    /// <summary>
+    /// 取词借走剪贴板之后，快照还写不写得回去（用户实录 2026-10-15）。与回贴（<see cref="Decide"/>）
+    /// 不同：回贴不还，剪贴板上留着的是用户刚贴出去的译文；取词不还，留着的是用户没要过的选中文字。
+    /// 所以只要还有写得回去的文字或文件就写回去，附带的写不回去的格式丢掉——Word、Excel 复制出来的
+    /// 文字都附着图元文件、位图（ADR-0003：保文本格式，异类格式接受有损）。只剩写不回去的内容
+    /// （截图、虚拟文件）、剪切的文件（写回去"移动"就成了"复制"）、带排除标记的密码，才不写。
+    /// 不看序列号：取词另有自己的序列号判断（<see cref="SelectionCapture.Restore"/>），拖选取词借之前
+    /// 也拿它先问一声。
+    /// </summary>
+    public static RestoreVerdict CaptureVerdict(ClipboardBackup backup)
+    {
+        if (backup.Excluded)
+        {
+            return RestoreVerdict.SkipExcluded;
+        }
+
+        if (backup.LostFormats.Contains(ClipboardFormats.CutDropEffect)
+            || (!backup.Empty && backup.Text is null && backup.Files.Count == 0))
+        {
+            return RestoreVerdict.SkipUnrestorableFormat;
+        }
+
+        return RestoreVerdict.Restore;
     }
 }

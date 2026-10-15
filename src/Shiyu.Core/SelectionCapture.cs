@@ -18,6 +18,21 @@ public interface ICapturePlatform
     /// <summary>Writes text back, or clears the clipboard when given null.</summary>
     bool WriteClipboardText(string? text);
 
+    /// <summary>
+    /// 借走之前给剪贴板拍的快照：文本、HTML、RTF、文件列表，外加写不回去的格式与排除标记
+    /// （与反向输入框回贴同一份 <see cref="ClipboardBackup"/>）。剪贴板被别的程序占着、读不了
+    /// 时给 null。
+    /// </summary>
+    ClipboardBackup? Backup();
+
+    /// <summary>把快照写回去。剪贴板被别的程序占着、没写上时给 false。</summary>
+    bool Restore(ClipboardBackup backup);
+
+    /// <summary>
+    /// 剪贴板上最后一笔是不是拾语自己写的（owner 是拾语的窗口）。和序列号一样，问它不用打开剪贴板。
+    /// </summary>
+    bool OwnsClipboard();
+
     void SendCopyKeystroke();
 
     void SendPasteKeystroke();
@@ -49,13 +64,17 @@ public enum CaptureOutcome
     ClipboardUnavailable,
 }
 
-/// <param name="ClipboardRestored">
-/// Whether the user's own clipboard survived. False here is the one failure
-/// the user would genuinely resent, so callers must surface it.
-/// </param>
-public sealed record CaptureResult(string? Text, CaptureOutcome Outcome, bool ClipboardRestored)
+/// <param name="Restore">What became of the user's own clipboard (用户实录 2026-10-15).</param>
+public sealed record CaptureResult(string? Text, CaptureOutcome Outcome, CaptureRestore Restore)
 {
     public bool Succeeded => Outcome == CaptureOutcome.Captured;
+
+    /// <summary>
+    /// Whether the user's own clipboard survived — put back, never touched,
+    /// or (a password) deliberately left alone. False here is the one failure
+    /// the user would genuinely resent, so callers must surface it.
+    /// </summary>
+    public bool ClipboardRestored => Restore is not (CaptureRestore.Busy or CaptureRestore.Unrestorable);
 }
 
 public sealed record CaptureTiming(TimeSpan PollInterval, TimeSpan Timeout)
@@ -74,6 +93,48 @@ public sealed record CaptureTiming(TimeSpan PollInterval, TimeSpan Timeout)
     /// 也不能让取词一直悬着——过了这个上限照发（平台借用他按着的 Ctrl，不替他松开）。
     /// </summary>
     public TimeSpan ModifierRelease { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// 还原撞上剪贴板被占着（<see cref="CaptureRestore.Busy"/>）之后，隔多久再试、试几回（用户实录
+    /// 2026-10-15：开着拖选徽标时常弹「取词后未能还原你原本的剪贴板内容」）。取词刚写过剪贴板，
+    /// Windows 剪贴板历史、别的剪贴板工具、还在补写格式的浏览器都会去开它；写入器自己只重试约
+    /// 120 毫秒，撞上就判失败太急。逐次拉长，合计不到两秒。
+    /// </summary>
+    public IReadOnlyList<TimeSpan> RestoreRetryDelays { get; init; } =
+    [
+        TimeSpan.FromMilliseconds(100),
+        TimeSpan.FromMilliseconds(250),
+        TimeSpan.FromMilliseconds(500),
+        TimeSpan.FromMilliseconds(1000),
+    ];
+}
+
+/// <summary>一次还原的结局（用户实录 2026-10-15：开着拖选徽标时常弹「未能还原」）。</summary>
+public enum CaptureRestore
+{
+    /// <summary>用户原来的剪贴板写回去了。</summary>
+    Restored,
+
+    /// <summary>剪贴板从借走起就没动过（Ctrl+C 没取到东西）：什么都不用写。</summary>
+    Untouched,
+
+    /// <summary>借走之后用户自己复制过：不去踩掉更新的内容，这笔债销了。</summary>
+    Superseded,
+
+    /// <summary>
+    /// 原来是带「勿记录」标记的内容（密码管理器复制的密码）：故意不写回——写回时标记会丢，
+    /// Windows 剪贴板历史就会把它记下来。剪贴板上留着取到的文字。
+    /// </summary>
+    Withheld,
+
+    /// <summary>
+    /// 原来的内容写不回去（截图之类，没有一点文字或文件；或剪切的文件）：没写，剪贴板上留着取到的
+    /// 文字。见 <see cref="ClipboardRestore.CaptureVerdict"/>。
+    /// </summary>
+    Unrestorable,
+
+    /// <summary>剪贴板被别的程序占着，这一次没写上：稍后再试（<see cref="CaptureTiming.RestoreRetryDelays"/>）。</summary>
+    Busy,
 }
 
 /// <summary>
@@ -81,11 +142,28 @@ public sealed record CaptureTiming(TimeSpan PollInterval, TimeSpan Timeout)
 /// 被推迟到翻译面板显示之后（采纳 Glossy 的次序细节：还原可以等，被复制
 /// 的应用可能还要用；而点击到出面板这一段不该再添一次剪贴板写）。
 /// 调用方负责在面板显示之后或徽标淡出时调用 <see cref="SelectionCapture.Restore"/>
-/// 把 <see cref="Borrowed"/> 还回去，且只还一次。
+/// 把 <see cref="Backup"/> 还回去，且只还一次。
 /// </summary>
-public sealed record DeferredCapture(string? Text, CaptureOutcome Outcome, string? Borrowed)
+/// <param name="Backup">借走之前的剪贴板快照（多格式，用户实录 2026-10-15 之前只存了文字）。</param>
+/// <param name="SequenceBefore">
+/// 借走时的剪贴板序列号。还原时序列号还是它，说明剪贴板根本没动过，什么都不用写。
+/// </param>
+/// <param name="SequenceSealed">
+/// 取到文字、以拾语名义写回之后的序列号。还原时序列号不是它，说明之后有人（用户）写过
+/// 剪贴板，这笔债就销了。没取到文字、要立刻还的，没有封存，为 null。
+/// 判断全凭序列号：读它不用打开剪贴板，别的程序占着剪贴板时照样判得准。
+/// </param>
+public sealed record DeferredCapture(
+    string? Text,
+    CaptureOutcome Outcome,
+    ClipboardBackup Backup,
+    uint SequenceBefore,
+    uint? SequenceSealed)
 {
     public bool Succeeded => Outcome == CaptureOutcome.Captured;
+
+    /// <summary>借走的那份里的文字（日志与测试辨认用）。</summary>
+    public string? Borrowed => Backup.Text;
 }
 
 /// <summary>
@@ -104,22 +182,27 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     {
         AwaitModifiersReleased();
 
-        if (!TryBorrow(out var borrowed, out var before))
+        // 热键是用户点名要的取词：剪贴板里有写不回去的东西也照取，结局如实报告。
+        if (Borrow(requireRestorable: false) is not { } borrowed)
         {
             // Nothing was borrowed, so there is nothing to put back.
-            return new CaptureResult(null, CaptureOutcome.ClipboardUnavailable, ClipboardRestored: true);
+            return new CaptureResult(null, CaptureOutcome.ClipboardUnavailable, CaptureRestore.Untouched);
         }
 
-        var (captured, outcome) = CopySelection(before);
+        var (captured, outcome) = CopySelection(borrowed.Before);
 
-        // Unconditional, and after every path above — each of them has already
-        // taken the user's clipboard away, including the ones that threw.
-        var restored = WriteBack(borrowed);
-
-        return new CaptureResult(
+        // After every path above — each of them may have taken the user's
+        // clipboard away, including the ones that threw. Not sealed: in these
+        // few milliseconds nothing but the target answering us has written,
+        // so there is no user copy to protect.
+        var restore = RestoreRetrying(new DeferredCapture(
             outcome == CaptureOutcome.Captured ? captured : null,
             outcome,
-            restored);
+            borrowed.Backup,
+            borrowed.Before,
+            SequenceSealed: null));
+
+        return new CaptureResult(outcome == CaptureOutcome.Captured ? captured : null, outcome, restore);
     }
 
     /// <summary>
@@ -132,21 +215,27 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     /// WindowsClipboardMonitor）；用户在徽标期间的真复制不受影响——那些写
     /// 的 owner 是用户自己的应用。
     /// </summary>
+    /// <param name="requireRestorable">
+    /// 拖选这种被动的取词传 true：剪贴板里的东西写不回去——截图、剪切的文件、带「勿记录」
+    /// 标记的密码（<see cref="ClipboardRestore.CaptureVerdict"/>）——就不借、不发按键（用户实录
+    /// 2026-10-15）。被动遭遇不该让用户赔上剪贴板。
+    /// </param>
     /// <returns>
-    /// null 表示借都没借到（读剪贴板就失败了）——没有发过按键，也没有
-    /// 需要还原的东西。
+    /// null 表示没借：剪贴板读不了，或（<paramref name="requireRestorable"/>）里面的东西写不回去
+    /// ——没有发过按键，也没有需要还原的东西。
     /// </returns>
-    public DeferredCapture? CaptureDeferRestore()
+    public DeferredCapture? CaptureDeferRestore(bool requireRestorable = false)
     {
         AwaitModifiersReleased();
 
-        if (!TryBorrow(out var borrowed, out var before))
+        if (Borrow(requireRestorable) is not { } borrowed)
         {
             return null;
         }
 
-        var (captured, outcome) = CopySelection(before);
+        var (captured, outcome) = CopySelection(borrowed.Before);
 
+        uint? sealedAt = null;
         if (outcome == CaptureOutcome.Captured)
         {
             try
@@ -156,57 +245,138 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
             }
             catch (ClipboardUnavailableException)
             {
+                // expected: 别的程序占着剪贴板；取到的文字照样在手里。
             }
+
+            // 写没写上都记下此刻的序列号：之后它再动，就是别人（用户）写了剪贴板。
+            sealedAt = platform.ClipboardSequenceNumber();
         }
 
         return new DeferredCapture(
             outcome == CaptureOutcome.Captured ? captured : null,
             outcome,
-            borrowed);
+            borrowed.Backup,
+            borrowed.Before,
+            sealedAt);
     }
 
     /// <summary>
-    /// 把划词路径借走的剪贴板还回去，且只在剪贴板<b>仍是我们留下的那份选中
-    /// 文字</b>时才还：借出之后用户若自己复制过，还原就会踩掉更新的内容——
-    /// 那比不还更糟。剪贴板已经往前走了，这笔债就销了，原样保留用户的。
-    /// 失败（想还而没还成）如实上报，由调用方转告用户。
+    /// 把借走的剪贴板还回去（用户实录 2026-10-15：开着拖选徽标时常弹「取词后未能还原你原本的
+    /// 剪贴板内容」）。要不要写、写什么全凭序列号与快照判断，判断时<b>不打开剪贴板</b>——原来要先
+    /// 读一遍文字作比较，别的程序正占着剪贴板时这一读就失败，于是报"未能还原"：
+    /// <list type="bullet">
+    /// <item>序列号还是借走时那个：剪贴板根本没动过（Ctrl+C 没取到东西），什么都不写；</item>
+    /// <item>封存之后序列号又动了、最后一笔不是拾语写的：用户自己复制过（哪怕是同一段字），不去
+    /// 踩掉更新的内容，这笔债就销了；</item>
+    /// <item>快照带「勿记录」标记、或里面没有写得回去的东西（<see cref="ClipboardRestore.CaptureVerdict"/>）：
+    /// 不写，结局分别是 Withheld / Unrestorable；</item>
+    /// <item>否则把快照写回去——文本连同 HTML、RTF，或文件列表，原来是空的就清空；附带的图元文件、
+    /// 位图之类写不回去的格式丢掉。</item>
+    /// </list>
+    /// 写不上（剪贴板被占着）给 <see cref="CaptureRestore.Busy"/>：调用方隔一会儿再试
+    /// （<see cref="CaptureTiming.RestoreRetryDelays"/>），再判一次——期间用户复制了别的，下一次就是
+    /// Superseded。
     /// </summary>
-    public bool Restore(DeferredCapture deferred)
+    public CaptureRestore Restore(DeferredCapture deferred)
     {
-        try
+        var now = platform.ClipboardSequenceNumber();
+        if (now == deferred.SequenceBefore)
         {
-            if (deferred.Succeeded && platform.ReadClipboardText() != deferred.Text)
+            return CaptureRestore.Untouched;
+        }
+
+        if (deferred.SequenceSealed is { } sealedAt && now != sealedAt)
+        {
+            // 封存之后有人写过剪贴板。不是拾语写的，就是用户复制了——哪怕复制的正是这段选中文字
+            // （选中之后顺手按 Ctrl+C，再常见不过；原来比文字，一样就还原，把用户这一下复制撤掉了）：
+            // 不去踩它，这笔债销了。
+            if (!platform.OwnsClipboard())
             {
-                // 债已销：剪贴板里已不是我们放的东西，别碰它。
-                return true;
+                return CaptureRestore.Superseded;
             }
 
-            return WriteBack(deferred.Borrowed);
+            // 是拾语写的：多半是后一笔取词借走了我们留下的那段字、又把它还了回来（退出时新债先还、
+            // 旧债压轴）。只有这种少见的情况才打开剪贴板读一读：还是我们留下的那段字就照还；别的
+            // （从历史里重新复制了一条）同样销账。
+            string? current;
+            try
+            {
+                current = platform.ReadClipboardText();
+            }
+            catch (ClipboardUnavailableException)
+            {
+                return CaptureRestore.Busy;
+            }
+
+            if (current != deferred.Text)
+            {
+                return CaptureRestore.Superseded;
+            }
+        }
+
+        switch (ClipboardRestore.CaptureVerdict(deferred.Backup))
+        {
+            case RestoreVerdict.SkipExcluded:
+                return CaptureRestore.Withheld;
+
+            case RestoreVerdict.SkipUnrestorableFormat:
+                return CaptureRestore.Unrestorable;
+        }
+
+        try
+        {
+            return platform.Restore(deferred.Backup) ? CaptureRestore.Restored : CaptureRestore.Busy;
         }
         catch (ClipboardUnavailableException)
         {
-            return false;
+            return CaptureRestore.Busy;
         }
     }
 
     /// <summary>
-    /// 借出前的一读：剪贴板打不开就没借到任何东西——两种取词在这里分道，
-    /// 一个报"不可用"，一个连债都没有。
+    /// 同步的还原：撞上 Busy 就按 <see cref="CaptureTiming.RestoreRetryDelays"/> 等一等再试。热键那条路
+    /// 用它——取词本来就在等，多等这一点点好过把用户的剪贴板丢在半路。
     /// </summary>
-    private bool TryBorrow(out string? borrowed, out uint before)
+    private CaptureRestore RestoreRetrying(DeferredCapture deferred)
     {
+        var result = Restore(deferred);
+        foreach (var delay in _timing.RestoreRetryDelays)
+        {
+            if (result != CaptureRestore.Busy)
+            {
+                break;
+            }
+
+            platform.Wait(delay);
+            result = Restore(deferred);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 借出前的快照：剪贴板打不开就没借到任何东西——两种取词在这里分道，一个报"不可用"，
+    /// 一个连债都没有。<paramref name="requireRestorable"/> 时，写不回去的也不借。
+    /// </summary>
+    private (ClipboardBackup Backup, uint Before)? Borrow(bool requireRestorable)
+    {
+        ClipboardBackup? backup;
         try
         {
-            borrowed = platform.ReadClipboardText();
-            before = platform.ClipboardSequenceNumber();
-            return true;
+            backup = platform.Backup();
         }
         catch (ClipboardUnavailableException)
         {
-            borrowed = null;
-            before = 0;
-            return false;
+            backup = null;
         }
+
+        if (backup is null
+            || (requireRestorable && ClipboardRestore.CaptureVerdict(backup) != RestoreVerdict.Restore))
+        {
+            return null;
+        }
+
+        return (backup, platform.ClipboardSequenceNumber());
     }
 
     /// <summary>
@@ -310,18 +480,6 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
              waited += _timing.PollInterval)
         {
             platform.Wait(_timing.PollInterval);
-        }
-    }
-
-    private bool WriteBack(string? borrowed)
-    {
-        try
-        {
-            return platform.WriteClipboardText(borrowed);
-        }
-        catch (ClipboardUnavailableException)
-        {
-            return false;
         }
     }
 }

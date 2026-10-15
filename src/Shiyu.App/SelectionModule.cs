@@ -1,5 +1,13 @@
+using System.Windows.Threading;
 using Shiyu.Core;
 using Shiyu.Windows;
+#if DEBUG
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+#endif
 
 namespace Shiyu.App;
 
@@ -20,6 +28,16 @@ internal sealed class SelectionModule
     /// <see cref="RestoreDeferred"/> 执行。
     /// </summary>
     private readonly SelectionDebt _selectionDebt = new();
+
+    /// <summary>
+    /// 账本裁定到期的债交给它还（用户实录 2026-10-15：开着拖选徽标时常弹「取词后未能还原你原本的
+    /// 剪贴板内容」）：剪贴板被别的程序占着就排着队、隔一会儿再试，按次序还，试满了还不行才告诉
+    /// 用户。取词平台就位（<see cref="AppShell.AttachCapture"/>）之后、第一笔债到期时才建。
+    /// </summary>
+    private RestoreQueue? _restores;
+
+    /// <summary>还原队列约下的下一回（UI 线程上，第一次要等时才建）。</summary>
+    private DispatcherTimer? _restoreRetry;
 
     /// <summary>"前台在排除名单"的提示是否已经说过一次（O-17）。</summary>
     private bool _captureExcludedNotified;
@@ -102,7 +120,15 @@ internal sealed class SelectionModule
         // 选中文字，不还就永远找不回用户最初的剪贴板。
         FlushPendingSelection();
 
-        var deferred = capture.CaptureDeferRestore();
+        // 还有债排着队等重试（剪贴板正被别的程序占着）：这一回不借。借了，借走的是还没还回去的那段
+        // 选中文字；旧债再还时认不出剪贴板，就当用户复制过而销账，用户的原文就找不回了。
+        if (_restores?.Owing == true)
+        {
+            return;
+        }
+
+        // 剪贴板里是写不回去的东西（截图、剪切的文件、密码）就不借：被动遭遇不该让用户赔上剪贴板。
+        var deferred = capture.CaptureDeferRestore(requireRestorable: true);
         if (deferred is null)
         {
             return;
@@ -150,12 +176,19 @@ internal sealed class SelectionModule
 
         var result = capture.Capture();
 
-        if (!result.ClipboardRestored)
+        if (RestoreFailure(result.Restore) is { } failure)
         {
             // The one failure worth interrupting the user for: their own
             // clipboard is gone and they would otherwise find out by pasting
-            // the wrong thing somewhere that matters.
-            shell.Tray.ShowNotification("拾语", "取词后未能还原你原本的剪贴板内容。");
+            // the wrong thing somewhere that matters. The translation they
+            // asked for still opens — losing it too would help nobody.
+            Log.Event(LogEvent.ClipboardRestoreFailed, ("hotkey", true), ("busy", result.Restore == CaptureRestore.Busy));
+            shell.Tray.ShowNotification("拾语", failure);
+            if (result.Succeeded)
+            {
+                shell.ShowPanel?.Invoke(result.Text!, null);
+            }
+
             return;
         }
 
@@ -232,8 +265,17 @@ internal sealed class SelectionModule
 
     /// <summary>OnExit 的第一件事（O-05 修正）：账本把在册的债一次结清（新债
     /// 先还、旧债压轴，最终留在剪贴板里的是用户取词前的原文）——必须排在
-    /// 任何可能抛出的清理之前。</summary>
-    public void SettleOnExit() => Settle(_selectionDebt.Exit());
+    /// 任何可能抛出的清理之前。退出后没有下一回定时器，排着队的当场还完
+    /// （撞上剪贴板被占着就在这里等一等）。</summary>
+    public void SettleOnExit()
+    {
+        Settle(_selectionDebt.Exit());
+        _restoreRetry?.Stop();
+        if (_restores is { } restores)
+        {
+            Report(restores.Drain(Thread.Sleep));
+        }
+    }
 
     /// <summary>执行账本的裁决：每笔债按序交还原，成败照旧转告用户。</summary>
     private void Settle(SelectionDebtAction action)
@@ -245,19 +287,309 @@ internal sealed class SelectionModule
     }
 
     /// <summary>
-    /// 归还划词借走的剪贴板。还原失败是唯一值得打断用户的失败——他们的
-    /// 剪贴板没了，不说话他们只会从粘贴错东西的那一刻才发现。
+    /// 归还划词借走的剪贴板：交给还原队列。撞上剪贴板被别的程序占着不算失败，隔一会儿再试
+    /// （用户实录 2026-10-15：原来一撞上就报「未能还原」）。
     /// </summary>
     private void RestoreDeferred(DeferredCapture deferred)
     {
-        var shell = _shell!;
-        if (shell.Capture is not null && !shell.Capture.Restore(deferred))
+        if (_shell!.Capture is not { } capture)
         {
-            Log.Event(LogEvent.ClipboardRestoreFailed);
-            shell.TellUser("取词后未能还原你原本的剪贴板内容。");
+            return;
+        }
+
+        _restores ??= new RestoreQueue(capture.Restore, CaptureTiming.Default.RestoreRetryDelays);
+        Apply(_restores.Owe(deferred));
+    }
+
+    /// <summary>还原队列这一回的结果：结清的照实转告，还有没还上的就约下一回。</summary>
+    private void Apply(RestoreProgress progress)
+    {
+        Report(progress.Settled);
+
+        if (progress.RetryAfter is not { } delay)
+        {
+            return;
+        }
+
+        if (_restoreRetry is null)
+        {
+            _restoreRetry = new DispatcherTimer();
+            _restoreRetry.Tick += (_, _) =>
+            {
+                _restoreRetry.Stop();
+                if (_restores is { } restores)
+                {
+                    Apply(restores.Retry());
+                }
+            };
+        }
+
+        _restoreRetry.Stop();
+        _restoreRetry.Interval = delay;
+        _restoreRetry.Start();
+    }
+
+    /// <summary>
+    /// 还不上是唯一值得打断用户的失败——他们的剪贴板没了，不说话他们只会从粘贴错东西的那一刻
+    /// 才发现。
+    /// </summary>
+    private void Report(IEnumerable<SettledRestore> settled)
+    {
+        foreach (var restore in settled)
+        {
+            if (RestoreFailure(restore.Result) is { } failure)
+            {
+                Log.Event(LogEvent.ClipboardRestoreFailed, ("busy", restore.Result == CaptureRestore.Busy));
+                _shell!.TellUser(failure);
+            }
         }
     }
 
+    /// <summary>
+    /// 还不上时对用户说的话。还上了、剪贴板根本没动过、被用户新复制的东西顶掉了、故意不写回的
+    /// 密码，都不打扰（null）。
+    /// </summary>
+    private static string? RestoreFailure(CaptureRestore result) => result switch
+    {
+        CaptureRestore.Busy => "剪贴板一直被别的程序占着，取词后没能放回你原来的内容。通常还能在剪贴板历史里找到。",
+        CaptureRestore.Unrestorable => "剪贴板里原来的截图之类没法原样放回，现在是取到的文字。通常还能在剪贴板历史里找到。",
+        _ => null,
+    };
+
     /// <summary>徽标窗常驻复用；退出时按原样 CloseForGood。</summary>
     public void Shutdown() => _badge?.CloseForGood();
+
+#if DEBUG
+    // --- 实机探针（用户实录 2026-10-15）：tools/probes/probe-capture-restore.ps1 -------------------
+
+    /// <summary>
+    /// 「取词后未能还原你原本的剪贴板内容」的实机验收。脚本先把记事本放到前台、选中全文，在剪贴板上
+    /// 放一段已知的原文；这里依次跑四个场景，把看到的写进 capture-restore.log。"别的程序正读着剪贴板"
+    /// 由本进程另一条线程扮演：它开着剪贴板不放，拾语的消息窗就打不开——和别的进程占着一样。
+    /// </summary>
+    internal async void ProbeCaptureRestore()
+    {
+        var shell = _shell!;
+        var platform = shell.CapturePlatform!;
+        var writer = shell.Writer!;
+        var log = new StringBuilder();
+
+        // 探针的种子设置里徽标关着；拖选路径看的是实时值。
+        shell.TryUpdateSettings(settings => settings with { TranslateBadge = true, SelectionBadge = true });
+        await Task.Delay(800);
+
+        var original = await ReadPatiently(platform);
+        log.AppendLine($"start|original={original is { Length: > 0 }}");
+
+        // 1. 拖选取词；徽标淡出的那一刻，剪贴板正被别的程序占着 700 毫秒。
+        OnDragSelected();
+        var selection = await ReadPatiently(platform);
+        var badge = _badge?.IsVisible == true;
+        var held = await HoldClipboard(TimeSpan.FromMilliseconds(700));
+        FlushPendingSelection();
+        var waiting = _restores?.Owing == true;
+        await Task.Delay(3000);
+        var afterFade = await ReadPatiently(platform);
+        log.AppendLine(
+            $"fade|badge={badge}|captured={selection is { Length: > 0 } && selection != original}|held={held}"
+            + $"|waiting={waiting}|owingAfter={_restores?.Owing == true}|restored={afterFade == original}");
+
+        // 2. 拖选之后自己按 Ctrl+C：淡出时不许把这一下复制撤掉。
+        OnDragSelected();
+        await Task.Delay(300);
+        platform.SendCopyKeystroke();
+        await Task.Delay(600);
+        FlushPendingSelection();
+        await Task.Delay(1500);
+        var afterOwnCopy = await ReadPatiently(platform);
+        log.AppendLine($"own-copy|kept={afterOwnCopy == selection}");
+
+        // 3. 剪贴板里是一张截图：拖选不借它，不发 Ctrl+C，截图原封不动。
+        var picture = BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32, null, new byte[16], 8);
+        var pictured = await Patiently(() =>
+        {
+            System.Windows.Clipboard.SetImage(picture);
+            return true;
+        });
+        await Task.Delay(500);
+        var beforeDrag = platform.ClipboardSequenceNumber();
+        OnDragSelected();
+        await Task.Delay(800);
+        var untouched = platform.ClipboardSequenceNumber() == beforeDrag;
+        var stillPicture = await Patiently(System.Windows.Clipboard.ContainsImage);
+        log.AppendLine($"image|set={pictured}|untouched={untouched}|kept={stillPicture}");
+
+        // 4. 划词热键那条路（取完立刻还），两个模拟的读者在每次变化后抢着开剪贴板。同样的场面
+        //    先不重试跑一组（原来就是只试一回），再按 CaptureTiming 的重试跑一组。
+        using (var contender = new ClipboardContender())
+        {
+            var single = new SelectionCapture(platform, CaptureTiming.Default with { RestoreRetryDelays = [] });
+            foreach (var (name, subject) in new[] { ("single", single), ("retry", shell.Capture!) })
+            {
+                int captured = 0, failed = 0, wrong = 0;
+                for (var round = 0; round < ProbeRounds; round++)
+                {
+                    await Task.Delay(700);
+                    await Patiently(() => writer.SetText(original ?? string.Empty));
+                    await Task.Delay(700);
+
+                    var result = subject.Capture();
+                    captured += result.Succeeded ? 1 : 0;
+                    failed += result.ClipboardRestored ? 0 : 1;
+                    wrong += await ReadPatiently(platform) == original ? 0 : 1;
+                }
+
+                log.AppendLine(
+                    $"hotkey-{name}|rounds={ProbeRounds}|captured={captured}|restoreFailed={failed}|clipboardWrong={wrong}|holds={contender.Holds}");
+            }
+        }
+
+        await Patiently(() => writer.SetText(original ?? string.Empty));
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "capture-restore.log"), log.ToString());
+    }
+
+    private const int ProbeRounds = 8;
+
+    private static async Task<string?> ReadPatiently(ICapturePlatform platform)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return platform.ReadClipboardText();
+            }
+            catch (ClipboardUnavailableException) when (attempt < 60)
+            {
+                // expected: 模拟的读者正占着剪贴板，等它放手再读。
+                await Task.Delay(50);
+            }
+        }
+    }
+
+    private static async Task<bool> Patiently(Func<bool> attempt)
+    {
+        for (var tries = 0; tries < 60; tries++)
+        {
+            try
+            {
+                if (attempt())
+                {
+                    return true;
+                }
+            }
+            catch (COMException)
+            {
+                // expected: WPF 的剪贴板调用在剪贴板被占着时抛 CLIPBRD_E_CANT_OPEN，等一等再试。
+            }
+
+            await Task.Delay(50);
+        }
+
+        return false;
+    }
+
+    /// <summary>另一条线程打开剪贴板、占住 <paramref name="duration"/>；打开了才回来（true）。</summary>
+    private static Task<bool> HoldClipboard(TimeSpan duration)
+    {
+        var opened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(() =>
+        {
+            for (var attempt = 0; attempt < 200; attempt++)
+            {
+                if (ProbeClipboard.OpenClipboard(IntPtr.Zero))
+                {
+                    opened.SetResult(true);
+                    Thread.Sleep(duration);
+                    ProbeClipboard.CloseClipboard();
+                    return;
+                }
+
+                Thread.Sleep(5);
+            }
+
+            opened.SetResult(false);
+        })
+        { IsBackground = true, Name = "probe clipboard holder" }.Start();
+        return opened.Task;
+    }
+
+    /// <summary>
+    /// 抢着读剪贴板的别的程序（Windows 剪贴板历史、输入法、剪贴板工具）：剪贴板一变，隔几毫秒就打开它
+    /// 占一阵，前后两回，像两个各读各的监听者。种子固定，两组撞上的是同一路数的占用。
+    /// </summary>
+    private sealed class ClipboardContender : IDisposable
+    {
+        private readonly CancellationTokenSource _stop = new();
+        private readonly Thread _thread;
+        private int _holds;
+
+        public ClipboardContender()
+        {
+            _thread = new Thread(Run) { IsBackground = true, Name = "probe clipboard contender" };
+            _thread.Start();
+        }
+
+        public int Holds => Volatile.Read(ref _holds);
+
+        public void Dispose()
+        {
+            _stop.Cancel();
+            _thread.Join(TimeSpan.FromSeconds(2));
+            _stop.Dispose();
+        }
+
+        private void Run()
+        {
+            var random = new Random(15);
+            var seen = ProbeClipboard.GetClipboardSequenceNumber();
+            while (!_stop.IsCancellationRequested)
+            {
+                Thread.Sleep(2);
+                var now = ProbeClipboard.GetClipboardSequenceNumber();
+                if (now == seen)
+                {
+                    continue;
+                }
+
+                // 不在占用之后重读序列号：占着的时候又变了，下一圈照样再抢一回，像排队的通知。
+                seen = now;
+                Thread.Sleep(random.Next(0, 30));
+                Hold(random.Next(60, 260));
+                Thread.Sleep(random.Next(20, 60));
+                Hold(random.Next(40, 160));
+            }
+        }
+
+        private void Hold(int milliseconds)
+        {
+            for (var attempt = 0; attempt < 50; attempt++)
+            {
+                if (ProbeClipboard.OpenClipboard(IntPtr.Zero))
+                {
+                    Interlocked.Increment(ref _holds);
+                    Thread.Sleep(milliseconds);
+                    ProbeClipboard.CloseClipboard();
+                    return;
+                }
+
+                Thread.Sleep(2);
+            }
+        }
+    }
+
+    private static class ProbeClipboard
+    {
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool OpenClipboard(IntPtr owner);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CloseClipboard();
+
+        [DllImport("user32.dll")]
+        public static extern uint GetClipboardSequenceNumber();
+    }
+#endif
 }

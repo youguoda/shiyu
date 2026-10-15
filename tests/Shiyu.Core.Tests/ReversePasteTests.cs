@@ -98,6 +98,12 @@ public class ReversePasteTests
 
         public bool WriteClipboardText(string? text) => true;
 
+        public ClipboardBackup? Backup() => null;
+
+        public bool Restore(ClipboardBackup backup) => true;
+
+        public bool OwnsClipboard() => false;
+
         public bool ModifiersHeld() => false;
 
         public void SendCopyKeystroke() { }
