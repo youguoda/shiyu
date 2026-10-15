@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -156,6 +158,10 @@ public partial class PanelWindow : Window
     private readonly ScopedHold _escape;
     private CancellationTokenSource? _inFlight;
     private TranslationSession? _session;
+
+    /// <summary>还在出字、节拍刷新可以碰的那一轮；结算时清空，排着没轮到的刷新就此作废。</summary>
+    private TranslationSession? _streaming;
+
     private string _original = string.Empty;
     private string _target;
     private string? _source;
@@ -454,47 +460,26 @@ public partial class PanelWindow : Window
 
         var session = new TranslationSession(_backend());
         _session = session;
+        _streaming = session;
 
         ArmSkeletonDelay();
 
-        session.Updated += () => Dispatcher.Invoke(() =>
-        {
-            if (!ReferenceEquals(_session, session))
-            {
-                return;
-            }
-
-            // 首字到达（或失败/取消）：骨架再也没必要出现。
-            if (session.Text.Length > 0 || session.State != TranslationState.Streaming)
-            {
-                HideSkeleton();
-            }
-
-            RenderTranslation(session);
-            if (SentenceView)
-            {
-                RenderSentencePairs(session.Text);
-            }
-
-            // The label follows the request actually on the wire: an echo
-            // retry swaps the direction under the user, and the label must
-            // not keep claiming the direction that just failed.
-            UpdateDirectionLabel(session.CurrentRequest);
-
-            FollowStream();
-            UpdateFooterState();
-            UpdateHint();
-
-            UpdateLayout();
-        });
+        // 出字的节拍（用户实录 2026-10-15：LLM 出字时输出一卡一卡、拖滚动条发涩、偶尔"未响应"）。
+        // 原来每到一片就同步、以最高优先级（Send）把整篇重排一遍再强制布局：鼠标、键盘排在它后面，
+        // 片来得一密，界面就被排版占满。现在只按节拍排一回刷新，见 StreamRefresh。
+        var cadence = new RenderCadence(RenderCadence.Default);
+        var clock = Stopwatch.StartNew();
+        session.Updated += () => StreamRefresh.Request(Dispatcher, cadence, clock, () => RenderStream(session));
 
         // 提示词模板（票 42）：模板不生效（免费引擎）时一律按标准构建，这样免费引擎下
         // 回声换向照常工作。单词态也照当前模板走（用户需求 2026-10-13）。
         var template = PanelTemplateState.For(_template, _templatesApply, _wordMode).Template;
+        var request = new TranslationRequest(_original, _target) { SourceLanguage = _source, Template = template };
+        var token = _inFlight.Token;
 
-        await session.RunAsync(
-            new TranslationRequest(_original, _target) { SourceLanguage = _source, Template = template },
-            _inFlight.Token);
+        // 整条流在后台线程上读：后端的 await 不再捕获 UI 线程，网络上成串到达的片（同步读出的那些）
+        // 不会在 UI 线程上连成一整段几秒钟的活。
+        await Task.Run(() => session.RunAsync(request, token));
 
         // 终态统一在 await 之后结算（流式回调只管增量）：失败在此映射成人
         // 话 InfoBar，部分译文保留在上方——三分之二的译文也是答案。
@@ -505,6 +490,8 @@ public partial class PanelWindow : Window
                 return;
             }
 
+            // 结算之后，还排着没轮到的那一回节拍刷新作废：它会把「已复制/已存入」刷回去。
+            _streaming = null;
             HideSkeleton();
             RenderTranslation(session);
             if (session.State == TranslationState.Failed)
@@ -1008,15 +995,55 @@ public partial class PanelWindow : Window
     private void RenderSentencePairs(string translated)
         => SentencePairs.ItemsSource = SentenceAlign.Pair(_original, translated);
 
-    /// <summary>流式像对话：跟随最新一行，除非用户滚上去重读。</summary>
-    private void FollowStream()
+    /// <summary>
+    /// 按节拍刷新一回流式的译文（UI 线程，后台优先级；见 <see cref="StreamRefresh"/>）。读的是此刻
+    /// 会话里完整的一份——两回刷新之间到的片一并带上。不强制布局：原来每一片都 UpdateLayout，布局
+    /// 交还给 WPF 按渲染优先级做。
+    /// </summary>
+    private void RenderStream(TranslationSession session)
     {
-        if (ContentScroll.ScrollableHeight > 0
-            && ContentScroll.VerticalOffset >= ContentScroll.ScrollableHeight - 24)
+        if (!ReferenceEquals(_streaming, session))
+        {
+            return;
+        }
+
+        // 首字到达（或失败/取消）：骨架再也没必要出现。
+        if (session.Text.Length > 0 || session.State != TranslationState.Streaming)
+        {
+            HideSkeleton();
+        }
+
+        // 要不要跟到底，按内容长高之前的位置判断。
+        var follow = ShouldFollowStream();
+
+        RenderTranslation(session);
+        if (SentenceView)
+        {
+            RenderSentencePairs(session.Text);
+        }
+
+        // The label follows the request actually on the wire: an echo
+        // retry swaps the direction under the user, and the label must
+        // not keep claiming the direction that just failed.
+        UpdateDirectionLabel(session.CurrentRequest);
+
+        if (follow)
         {
             ContentScroll.ScrollToEnd();
         }
+
+        UpdateFooterState();
+        UpdateHint();
     }
+
+    /// <summary>
+    /// 流式像对话：跟随最新一行，除非用户滚上去重读——或者正按着滚动条拖（用户实录 2026-10-15：
+    /// 出字时拖滚动条发涩，滑块刚拖到底附近，下一片字一到又被拽回最底下）。
+    /// </summary>
+    private bool ShouldFollowStream()
+        => ContentScroll.ScrollableHeight > 0
+            && ContentScroll.VerticalOffset >= ContentScroll.ScrollableHeight - 24
+            && !(Mouse.Captured is DependencyObject held && ContentScroll.IsAncestorOf(held));
 
     // === footer ==============================================================
 

@@ -980,6 +980,11 @@ public partial class App
                 _modules!.Translation.ShowPanel(text);
                 break;
 
+            // LLM 出字时界面不卡（用户实录 2026-10-15）。配 SHIYU_FAKE_BACKEND=stream。
+            case "stream-jank":
+                _modules!.Translation.ProbeStreamJank(text);
+                break;
+
             // 翻译面板像反向输入框一样挑模板（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。
             case "panel-templates":
                 _modules!.Translation.ProbeTemplatePicker("hello panel templates");

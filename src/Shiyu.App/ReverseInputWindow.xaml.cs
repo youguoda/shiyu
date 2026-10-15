@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -430,14 +431,32 @@ internal partial class ReverseInputWindow : Window
     private async void StartRun(ReverseRun run)
     {
         var cancellation = _inFlight = new CancellationTokenSource();
+        var backend = _backend();
+
+        // 出字的节拍（用户实录 2026-10-15，同翻译框）：流在后台线程上读；中间结果每一份都是到此为止
+        // 的全文，只记下最新的一份，按节拍在 UI 线程上以低于输入的优先级交给会话——原来每一片都同步
+        // 交、当场整篇重排。交付之后才到的那一份，会话自己会丢（不再是跑着的那一轮）。
+        var cadence = new RenderCadence(RenderCadence.Default);
+        var clock = Stopwatch.StartNew();
+        var latest = new LatestPartial();
 
         try
         {
-            var outcome = await ReverseInputRunner.RunAsync(
+            var outcome = await Task.Run(() => ReverseInputRunner.RunAsync(
                 run,
-                _backend(),
-                (seq, text) => Dispatcher.Invoke(() => Apply(_session.Partial(seq, text))),
-                cancellation.Token);
+                backend,
+                (seq, text) =>
+                {
+                    latest.Set(seq, text);
+                    StreamRefresh.Request(Dispatcher, cadence, clock, () =>
+                    {
+                        if (latest.Take() is { } partial)
+                        {
+                            Apply(_session.Partial(partial.Seq, partial.Text));
+                        }
+                    });
+                },
+                cancellation.Token));
 
             Apply(ReverseInputRunner.Deliver(_session, outcome));
         }
@@ -454,6 +473,31 @@ internal partial class ReverseInputWindow : Window
             }
 
             cancellation.Dispose();
+        }
+    }
+
+    /// <summary>后台线程上到的最新一份中间结果；UI 线程取走时清空。</summary>
+    private sealed class LatestPartial
+    {
+        private readonly object _gate = new();
+        private (int Seq, string Text)? _value;
+
+        public void Set(int seq, string text)
+        {
+            lock (_gate)
+            {
+                _value = (seq, text);
+            }
+        }
+
+        public (int Seq, string Text)? Take()
+        {
+            lock (_gate)
+            {
+                var value = _value;
+                _value = null;
+                return value;
+            }
         }
     }
 

@@ -45,6 +45,9 @@ internal sealed class MarkdownBox : RichTextBox
     private bool _bound;
     private bool _boundPending;
 
+    /// <summary>屏幕上每一块对应的块树，一块对一块（末尾可能多一段只挂光标块的空段）。</summary>
+    private IReadOnlyList<MdBlock> _parsed = [];
+
     public MarkdownBox()
     {
         // RichTextBox imposes its own 5,0,5,0 PagePadding on the document it hosts — set
@@ -84,11 +87,22 @@ internal sealed class MarkdownBox : RichTextBox
         _shownStreaming = streaming;
         Document.PagePadding = new Thickness(0);
 
+        // 只重排变了的那几块（用户实录 2026-10-15：LLM 出字时界面卡、"未响应"）。原来每来一片就
+        // 清空整篇、从头排起，字越多每一回越慢。前面没变的块原样留着——用户在里面拖着的选区也跟着
+        // 留下；原来的最后一块总是重排：它的下边距按"最后一块"收掉了，光标块也挂在它身上。
+        var parsed = MarkdownText.Parse(markdown);
+        var keep = Math.Min(MarkdownText.CommonPrefix(_parsed, parsed), Math.Max(0, _parsed.Count - 1));
+        _parsed = parsed;
+
         var blocks = Document.Blocks;
-        blocks.Clear();
-        foreach (var block in MarkdownText.Parse(markdown))
+        while (blocks.Count > keep)
         {
-            blocks.Add(BlockOf(block));
+            blocks.Remove(blocks.LastBlock);
+        }
+
+        for (var index = keep; index < parsed.Count; index++)
+        {
+            blocks.Add(BlockOf(parsed[index]));
         }
 
         // The gap is "between" blocks: the last one does not push the box taller.

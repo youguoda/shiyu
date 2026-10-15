@@ -21,10 +21,21 @@ public enum TranslationState
 /// dies two thirds of the way through has still given the user two thirds of
 /// what they wanted, and throwing that away to show an error box instead would
 /// be a second failure on top of the first.
+///
+/// 可以在后台线程上跑（用户实录 2026-10-15：LLM 出字时界面卡、"未响应"——原来整条流在 UI 线程上
+/// 读、每到一片就当场排版）：片段在锁里追加，<see cref="Text"/> 随时可从别的线程读，读到的是
+/// 某一刻完整的一份。
 /// </summary>
 public sealed class TranslationSession(ITranslationBackend backend)
 {
-    private readonly List<string> _pieces = [];
+    private readonly object _gate = new();
+    private readonly System.Text.StringBuilder _raw = new();
+
+    /// <summary>清洗过的那一份与它对应的原始长度、请求：长度与请求都没变就直接给它，不再拼、不再洗。</summary>
+    private string _cleaned = string.Empty;
+
+    private int _cleanedFrom = -1;
+    private TranslationRequest? _cleanedFor;
 
     public TranslationState State { get; private set; } = TranslationState.Idle;
 
@@ -41,8 +52,25 @@ public sealed class TranslationSession(ITranslationBackend backend)
     /// What has arrived so far, cleaned of any wrapping the model added. 清洗按屏幕上
     /// 那条请求的模板类别走（票 42）：翻译类全量，改写类只剥首尾的 &lt;text&gt;。
     /// </summary>
-    public string Text => TranslationCleanup.Clean(
-        string.Concat(_pieces), CurrentRequest?.Template ?? PromptTemplates.Standard);
+    public string Text
+    {
+        get
+        {
+            lock (_gate)
+            {
+                // 原来每读一次都把所有片段重拼一遍、重洗一遍，界面一次刷新要读好几回，越长越慢。
+                if (_cleanedFrom != _raw.Length || !ReferenceEquals(_cleanedFor, CurrentRequest))
+                {
+                    _cleaned = TranslationCleanup.Clean(
+                        _raw.ToString(), CurrentRequest?.Template ?? PromptTemplates.Standard);
+                    _cleanedFrom = _raw.Length;
+                    _cleanedFor = CurrentRequest;
+                }
+
+                return _cleaned;
+            }
+        }
+    }
 
     /// <summary>
     /// The request behind the text currently on screen. With an echo retry it
@@ -73,10 +101,14 @@ public sealed class TranslationSession(ITranslationBackend backend)
 
     private async Task AttemptAsync(TranslationRequest request, CancellationToken cancellation)
     {
-        _pieces.Clear();
+        lock (_gate)
+        {
+            _raw.Clear();
+            CurrentRequest = request;
+        }
+
         Error = null;
         Failure = null;
-        CurrentRequest = request;
         State = TranslationState.Streaming;
         Updated?.Invoke();
 
@@ -89,7 +121,11 @@ public sealed class TranslationSession(ITranslationBackend backend)
                     continue;
                 }
 
-                _pieces.Add(piece);
+                lock (_gate)
+                {
+                    _raw.Append(piece);
+                }
+
                 Updated?.Invoke();
             }
 

@@ -56,7 +56,14 @@ internal static class DebugOverrides
     /// 可断言的输出。
     /// </summary>
     public static bool FakeBackend =>
-        Environment.GetEnvironmentVariable("SHIYU_FAKE_BACKEND") == "1";
+        Environment.GetEnvironmentVariable("SHIYU_FAKE_BACKEND") is "1" or "stream";
+
+    /// <summary>
+    /// 翻译面板用按真实模型节奏出字的假后端（用户实录 2026-10-15：LLM 出字时输出一卡一卡、拖滚动条
+    /// 发涩、偶尔"未响应"）：<c>SHIYU_FAKE_BACKEND=stream</c>。其余假的照旧（同 <see cref="FakeBackend"/>）。
+    /// </summary>
+    public static bool FakeStream =>
+        Environment.GetEnvironmentVariable("SHIYU_FAKE_BACKEND") == "stream";
 
     /// <summary>
     /// 探针模式下照常监听剪贴板（票 43）。探针默认不监听——用户的复制不能进探针的数据库——但

@@ -95,6 +95,76 @@ public static class MarkdownText
         => string.IsNullOrEmpty(markdown) ? [] : Blocks(Markdown.Parse(markdown, Pipeline));
 
     /// <summary>
+    /// 两份块树从头数起有几块一模一样（用户实录 2026-10-15：LLM 出字时界面卡）。按内容比——每次
+    /// 解析出来的都是新对象，记录自带的相等只比列表的引用。流式出字时新字几乎总落在最后一块，
+    /// 前面的块就原样留在屏幕上，只重排变了的那几块；Markdown 偶尔会回头改前面的块（一行 ===
+    /// 让上一段变成标题、一行 | --- | 让上一段变成表格），那时相同的前缀自然变短。
+    /// </summary>
+    public static int CommonPrefix(IReadOnlyList<MdBlock> before, IReadOnlyList<MdBlock> after)
+    {
+        var count = Math.Min(before.Count, after.Count);
+        var same = 0;
+        while (same < count && SameBlock(before[same], after[same]))
+        {
+            same++;
+        }
+
+        return same;
+    }
+
+    /// <summary>两块内容一模一样（结构、文字、属性都比）。</summary>
+    public static bool SameBlock(MdBlock a, MdBlock b) => (a, b) switch
+    {
+        (MdParagraph x, MdParagraph y) => SameInlines(x.Inlines, y.Inlines),
+        (MdHeading x, MdHeading y) => x.Level == y.Level && SameInlines(x.Inlines, y.Inlines),
+        (MdCodeBlock x, MdCodeBlock y) => x.Code == y.Code && x.Language == y.Language,
+        (MdQuote x, MdQuote y) => SameAll(x.Blocks, y.Blocks, SameBlock),
+        (MdList x, MdList y) => x.Ordered == y.Ordered && x.Start == y.Start && SameAll(x.Items, y.Items, SameItem),
+        (MdRule, MdRule) => true,
+        (MdTable x, MdTable y) => x.Columns.SequenceEqual(y.Columns) && SameAll(x.Rows, y.Rows, SameRow),
+        _ => false,
+    };
+
+    private static bool SameItem(MdListItem a, MdListItem b)
+        => a.Checked == b.Checked && SameAll(a.Blocks, b.Blocks, SameBlock);
+
+    private static bool SameRow(MdTableRow a, MdTableRow b)
+        => a.IsHeader == b.IsHeader && SameAll(a.Cells, b.Cells, SameInlines);
+
+    private static bool SameInlines(IReadOnlyList<MdInline> a, IReadOnlyList<MdInline> b)
+        => SameAll(a, b, SameInline);
+
+    private static bool SameInline(MdInline a, MdInline b) => (a, b) switch
+    {
+        (MdText x, MdText y) => x.Text == y.Text,
+        (MdStrong x, MdStrong y) => SameInlines(x.Inlines, y.Inlines),
+        (MdEmphasis x, MdEmphasis y) => SameInlines(x.Inlines, y.Inlines),
+        (MdStrike x, MdStrike y) => SameInlines(x.Inlines, y.Inlines),
+        (MdCode x, MdCode y) => x.Code == y.Code,
+        (MdLink x, MdLink y) => x.Url == y.Url && SameInlines(x.Inlines, y.Inlines),
+        (MdLineBreak, MdLineBreak) => true,
+        _ => false,
+    };
+
+    private static bool SameAll<T>(IReadOnlyList<T> a, IReadOnlyList<T> b, Func<T, T, bool> same)
+    {
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < a.Count; index++)
+        {
+            if (!same(a[index], b[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// 去掉标记的纯文字：块与块之间一个换行，列表项前加 "• " 或 "1. "，表格一行一行、格间
     /// 用制表符。给只放得下几行的地方用（翻译记录收起时的预览）。
     /// </summary>

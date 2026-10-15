@@ -260,4 +260,94 @@ public class MarkdownTextTests
     {
         Assert.Equal("Just words.\nOn two lines.", MarkdownText.Plain("Just words.\nOn two lines."));
     }
+
+    // --- 增量重排：从头数有几块没变（用户实录 2026-10-15：LLM 出字时界面卡）--------------------
+
+    private const string Rich = """
+        # Title
+
+        A paragraph with **bold**, *emphasis*, ~~strike~~, `code` and a [link](https://example.com).
+
+        > quoted line
+
+        - item one
+        - [x] done item
+
+        1. first
+        2. second
+
+        ```csharp
+        var x = 1;
+        ```
+
+        | a | b |
+        | :-- | --: |
+        | 1 | 2 |
+
+        ---
+        """;
+
+    [Fact]
+    public void Two_parses_of_the_same_text_are_the_same_block_by_block()
+    {
+        // 记录自带的相等只比列表的引用，两次解析永远"不等"；这里按内容比，嵌套的列表、表格、引用都比到底。
+        var first = MarkdownText.Parse(Rich);
+        var second = MarkdownText.Parse(Rich);
+
+        Assert.Equal(first.Count, MarkdownText.CommonPrefix(first, second));
+        Assert.True(first.Count >= 8);
+    }
+
+    [Fact]
+    public void Text_streaming_into_the_last_paragraph_keeps_every_block_before_it()
+    {
+        var before = MarkdownText.Parse("## Heading\n\nFirst paragraph.\n\nSecond paragr");
+        var after = MarkdownText.Parse("## Heading\n\nFirst paragraph.\n\nSecond paragraph grows");
+
+        Assert.Equal(2, MarkdownText.CommonPrefix(before, after));
+    }
+
+    [Fact]
+    public void A_new_block_after_a_finished_one_keeps_them_all()
+    {
+        var before = MarkdownText.Parse("First paragraph.\n\nSecond paragraph.");
+        var after = MarkdownText.Parse("First paragraph.\n\nSecond paragraph.\n\n- a new list");
+
+        Assert.Equal(2, MarkdownText.CommonPrefix(before, after));
+    }
+
+    [Fact]
+    public void A_line_that_turns_the_paragraph_above_into_a_table_counts_it_as_changed()
+    {
+        // Markdown 会回头改前面的块：表头行在下一行的 | --- | 到来之前只是一段字。
+        var before = MarkdownText.Parse("Intro.\n\n| a | b |");
+        var after = MarkdownText.Parse("Intro.\n\n| a | b |\n| --- | --- |");
+
+        Assert.Equal(1, MarkdownText.CommonPrefix(before, after));
+        Assert.IsType<MdTable>(after[1]);
+    }
+
+    [Fact]
+    public void A_list_item_growing_changes_only_the_list()
+    {
+        var before = MarkdownText.Parse("Intro.\n\n- one\n- tw");
+        var after = MarkdownText.Parse("Intro.\n\n- one\n- two");
+
+        Assert.Equal(1, MarkdownText.CommonPrefix(before, after));
+    }
+
+    [Theory]
+    [InlineData("**bold**", "*bold*")]
+    [InlineData("[link](https://a.example)", "[link](https://b.example)")]
+    [InlineData("```js\nx\n```", "```ts\nx\n```")]
+    [InlineData("- [ ] task", "- [x] task")]
+    [InlineData("1. one", "3. one")]
+    [InlineData("# title", "## title")]
+    [InlineData("| a |\n| :-- |\n| 1 |", "| a |\n| --: |\n| 1 |")]
+    public void Blocks_that_differ_in_any_detail_are_not_the_same(string one, string other)
+        => Assert.Equal(0, MarkdownText.CommonPrefix(MarkdownText.Parse(one), MarkdownText.Parse(other)));
+
+    [Fact]
+    public void Nothing_in_common_with_an_empty_parse()
+        => Assert.Equal(0, MarkdownText.CommonPrefix([], MarkdownText.Parse("text")));
 }

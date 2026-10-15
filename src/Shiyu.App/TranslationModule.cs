@@ -182,6 +182,12 @@ internal sealed class TranslationModule
     private ITranslationBackend BuildPanelBackend()
     {
 #if DEBUG
+        // 探针：按真实模型节奏出一篇长 Markdown（SHIYU_FAKE_BACKEND=stream，用户实录 2026-10-15）。
+        if (DebugOverrides.FakeStream)
+        {
+            return new DebugStreamingBackend();
+        }
+
         // 探针：确定性的假后端（"[EN] " + 原文），与反向输入框同一个开关 SHIYU_FAKE_BACKEND=1。
         if (DebugOverrides.FakeBackend)
         {
@@ -217,6 +223,20 @@ internal sealed class TranslationModule
 
     /// <summary>探针命令 translation-log 的面板把手一段（见 PanelWindow.ProbeGrips）。</summary>
     internal string ProbePanelGrips() => _panel?.ProbeGrips() ?? "panelGrip|missing" + Environment.NewLine;
+
+    /// <summary>探针命令 stream-jank 的入口（见 PanelWindow.ProbeStreamJank）。配 SHIYU_FAKE_BACKEND=stream。</summary>
+    internal async void ProbeStreamJank(string text)
+    {
+        ShowPanel(text);
+        for (var waited = 0; waited < 50 && _panel is not { IsVisible: true }; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        var log = _panel is null ? "no-panel" + Environment.NewLine : await _panel.ProbeStreamJank();
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "stream-jank.log"), log + "done" + Environment.NewLine);
+    }
 #endif
 
     /// <summary>
