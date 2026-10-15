@@ -12,6 +12,12 @@ public enum SelectionBadgeVerdict
     /// <summary>前台是桌面/shell——在那里模拟 Ctrl+C 毫无意义。</summary>
     DesktopShell,
 
+    /// <summary>
+    /// 前台是一扇盖住整块屏幕的置顶窗——截图工具框选区域的蒙版、全屏的视频与演示。在截图蒙版里
+    /// 模拟 Ctrl+C，截图工具会把选区复制走、当场收工（用户日志 2026-10-14）。
+    /// </summary>
+    FullScreenOverlay,
+
     /// <summary>短于最小长度——多半是误触或碎片。</summary>
     TooShort,
 
@@ -23,9 +29,9 @@ public enum SelectionBadgeVerdict
 }
 
 /// <summary>
-/// 划词徽章的过滤链：总开关 → 最小长度 → 须含字母 → 拒绝路径形 → 桌面早退。
+/// 划词徽章的过滤链：总开关 → 最小长度 → 须含字母 → 拒绝路径形 → 桌面早退 → 全屏置顶蒙版早退。
 ///
-/// 链在运行时拆成两段：桌面早退必须发生在模拟 Ctrl+C <b>之前</b>（取词是
+/// 链在运行时拆成两段：两个早退必须发生在模拟 Ctrl+C <b>之前</b>（取词是
 /// 有副作用的手续——借剪贴板、向别人的窗口发按键——不值得为注定丢弃的
 /// 结果做一遍）；文字三环只在取到文字之后才有输入。两段各自按链上顺序
 /// 判定，先命中的裁决即最终裁决。
@@ -38,8 +44,9 @@ public static class SelectionBadgeFilter
     /// </summary>
     public const int MinimumLength = 2;
 
-    /// <summary>取词之前的早退判定：总开关 → 桌面早退。</summary>
-    public static SelectionBadgeVerdict JudgeBeforeCapture(bool enabled, bool desktopForeground)
+    /// <summary>取词之前的早退判定：总开关 → 桌面早退 → 全屏置顶蒙版早退。</summary>
+    public static SelectionBadgeVerdict JudgeBeforeCapture(
+        bool enabled, bool desktopForeground, bool overlayForeground)
     {
         if (!enabled)
         {
@@ -50,6 +57,14 @@ public static class SelectionBadgeFilter
         if (desktopForeground)
         {
             return SelectionBadgeVerdict.DesktopShell;
+        }
+
+        // 截图工具的框选蒙版里拖出一个框，是在截图不是在选字：微信、QQ、Snipaste 收到 Ctrl+C 会把
+        // 选区复制走、当场收工，用户还没来得及标注；紧接着的还原又把截图从剪贴板上换掉（用户日志
+        // 2026-10-14：一次还原失败后 78 毫秒，记下的是一张截图）。全屏的视频、演示里也没有字可选。
+        if (overlayForeground)
+        {
+            return SelectionBadgeVerdict.FullScreenOverlay;
         }
 
         return SelectionBadgeVerdict.Offer;

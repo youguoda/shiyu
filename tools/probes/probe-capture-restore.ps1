@@ -33,11 +33,19 @@
 #                                         8 rounds the old way (no read or restore retries) are
 #                                         reported alongside for comparison.
 #   - flow:capture-no-failure-logged      no ClipboardRestoreFailed in the probe's own log
+#   - flow:monitor-survives-busy-clipboard  another program writes the clipboard and holds it
+#                                         700 ms at once: the clipboard monitor reads it later
+#                                         and records it (versions up to 0.16.0 crashed here -
+#                                         user log 2026-10-13, FatalExit)
+#   - flow:capture-skips-overlay          a full-screen, topmost, captionless window in front
+#                                         (a screenshot tool's region picker): the drag sends no
+#                                         Ctrl+C; one sent by hand afterwards does arrive
 #
-# Side effects worth knowing: a running REAL Shiyu instance sees these clipboard
-# writes too (they are ordinary copies to it) and may record the probe sentence, the
-# known text and a 2x2 picture into the real history - delete them by hand. A
-# Windows 11 Notepad may keep the temp file as a restored tab; close it.
+# REFUSES TO RUN while a real Shiyu instance is running (SKIP). The simulated readers
+# hold the clipboard exactly the way that crashes the clipboard monitor of versions up
+# to 0.16.0 - a run on 2026-10-15 crashed the user's live instance that way - and a
+# fixed instance would still record the probe's copies into the real history.
+# A Windows 11 Notepad may keep the temp file as a restored tab; close it.
 #
 # ASCII only (see lib.ps1 header).
 
@@ -53,7 +61,8 @@ Reset-Checks
 
 $CheckNames = @(
     'flow:capture-drag-captures', 'flow:capture-restore-waits-busy', 'flow:capture-keeps-own-copy',
-    'flow:capture-skips-screenshot', 'flow:capture-hotkey-under-contention', 'flow:capture-no-failure-logged')
+    'flow:capture-skips-screenshot', 'flow:capture-hotkey-under-contention', 'flow:capture-no-failure-logged',
+    'flow:monitor-survives-busy-clipboard', 'flow:capture-skips-overlay')
 
 function Skip-All([string]$Reason) {
     foreach ($name in $CheckNames) { Add-Check $name 'SKIP' $Reason }
@@ -71,7 +80,13 @@ public class CaptureProbeWin {
 $KnownClip = 'SHIYU-PROBE capture-restore original clipboard text'
 $Sentence = 'Shiyu probe sentence: the quick brown fox jumps over the lazy dog.'
 
-# --- guards: never run over a human, over their Notepad, or over their clipboard ---
+# --- guards: never run over a human, over their Notepad, their clipboard or their Shiyu ---
+
+$realShiyu = @(Get-Process -Name 'Shiyu.App' -ErrorAction SilentlyContinue)
+if ($realShiyu.Count -gt 0) {
+    Skip-All ('a Shiyu instance is running (pid {0}); the simulated clipboard readers crash versions up to 0.16.0 and pollute any real history - close it first' -f ($realShiyu.Id -join ','))
+    return $script:Checks
+}
 
 if (-not $Force -and (Test-UserPresent)) {
     Skip-All 'user present (cursor moved); this probe drives a real window - rerun with -Force if you mean it'
@@ -241,6 +256,29 @@ if ($failures -eq 0) {
     Add-Check 'flow:capture-no-failure-logged' 'PASS' 'no ClipboardRestoreFailed in the probe log'
 } else {
     Add-Check 'flow:capture-no-failure-logged' 'FAIL' ('{0} ClipboardRestoreFailed line(s) in the probe log' -f $failures)
+}
+
+# Reaching "done" at all already means the probe instance survived the monitor scenario.
+$monitor = $fields['monitor']
+$monitorDetail = 'other program wrote then held 700 ms={0}; recorded after rereading={1}; instance alive=True' -f `
+    $monitor['held'], $monitor['recorded']
+if ($monitor['held'] -ne 'True') {
+    Add-Check 'flow:monitor-survives-busy-clipboard' 'SKIP' $monitorDetail
+} elseif ($monitor['recorded'] -eq 'True') {
+    Add-Check 'flow:monitor-survives-busy-clipboard' 'PASS' $monitorDetail
+} else {
+    Add-Check 'flow:monitor-survives-busy-clipboard' 'FAIL' $monitorDetail
+}
+
+$overlay = $fields['overlay']
+$overlayDetail = 'overlay in front={0}; drag sent Ctrl+C={1}; Ctrl+C sent by hand reached it={2}' -f `
+    $overlay['detected'], $overlay['keystroke'], $overlay['controlReached']
+if ($overlay['detected'] -ne 'True' -or $overlay['controlReached'] -ne 'True') {
+    Add-Check 'flow:capture-skips-overlay' 'SKIP' ('could not stage the overlay: ' + $overlayDetail)
+} elseif ($overlay['keystroke'] -eq 'False') {
+    Add-Check 'flow:capture-skips-overlay' 'PASS' $overlayDetail
+} else {
+    Add-Check 'flow:capture-skips-overlay' 'FAIL' $overlayDetail
 }
 
 return $script:Checks

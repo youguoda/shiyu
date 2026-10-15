@@ -18,7 +18,7 @@ public class SelectionBadgeFilterTests
         // 总开关排在链首：关着的时候连"前台是什么"都不必问。
         Assert.Equal(
             SelectionBadgeVerdict.Disabled,
-            SelectionBadgeFilter.JudgeBeforeCapture(enabled: false, desktopForeground: true));
+            SelectionBadgeFilter.JudgeBeforeCapture(enabled: false, desktopForeground: true, overlayForeground: true));
     }
 
     [Fact]
@@ -28,14 +28,24 @@ public class SelectionBadgeFilterTests
         // 这道闸必须在取词之前拦下，而不是取完词再扔掉。
         Assert.Equal(
             SelectionBadgeVerdict.DesktopShell,
-            SelectionBadgeFilter.JudgeBeforeCapture(enabled: true, desktopForeground: true));
+            SelectionBadgeFilter.JudgeBeforeCapture(enabled: true, desktopForeground: true, overlayForeground: false));
+    }
+
+    [Fact]
+    public void A_full_screen_overlay_in_front_is_an_early_exit()
+    {
+        // 用户日志 2026-10-14：截图工具的框选蒙版里拖出一个框，收到 Ctrl+C 就把选区复制走、当场
+        // 收工——还没标注，紧接着的还原又把截图换掉。不发按键，不借剪贴板。
+        Assert.Equal(
+            SelectionBadgeVerdict.FullScreenOverlay,
+            SelectionBadgeFilter.JudgeBeforeCapture(enabled: true, desktopForeground: false, overlayForeground: true));
     }
 
     [Fact]
     public void An_ordinary_foreground_proceeds_to_capture()
         => Assert.Equal(
             SelectionBadgeVerdict.Offer,
-            SelectionBadgeFilter.JudgeBeforeCapture(enabled: true, desktopForeground: false));
+            SelectionBadgeFilter.JudgeBeforeCapture(enabled: true, desktopForeground: false, overlayForeground: false));
 
     // --- 取词之后：最小长度 → 须含字母 → 拒绝路径形 ---
 

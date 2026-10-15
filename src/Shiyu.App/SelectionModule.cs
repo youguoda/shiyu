@@ -5,6 +5,9 @@ using Shiyu.Windows;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 #endif
@@ -100,8 +103,9 @@ internal sealed class SelectionModule
 
         // 总开关传实时值：装钩与事件抵达之间设置若被关掉，这里也拦得住。
         // 「翻译徽标」与拖选开关两层都算（DragSelectBadge），关掉哪一层都拦。
+        // 截图工具的框选蒙版（全屏置顶）里拖出的框不是选字，不发 Ctrl+C（用户日志 2026-10-14）。
         if (SelectionBadgeFilter.JudgeBeforeCapture(
-                shell.Settings.DragSelectBadge, DesktopShell.IsForeground())
+                shell.Settings.DragSelectBadge, DesktopShell.IsForeground(), FullScreenOverlay.IsForeground())
             != SelectionBadgeVerdict.Offer)
         {
             return;
@@ -445,9 +449,79 @@ internal sealed class SelectionModule
             }
         }
 
+        // 5. 别的程序刚写完剪贴板、紧接着又把它占住 700 毫秒：拾语的剪贴板监听读不到这次变化。原来
+        //    读不到就拿空值往下走，整个程序崩掉（用户日志 2026-10-13 FatalExit）；现在隔一会儿再读。
+        //    UI 线程等那一方写完、重新占上才放手，监听处理通知时剪贴板必定被占着。
+        await Task.Delay(700);
+        var countBefore = shell.Store.Count();
+        var lockedAfterWrite = WriteThenHold($"SHIYU-PROBE monitor {Environment.TickCount64}", TimeSpan.FromMilliseconds(700));
+        await Task.Delay(3000);
+        log.AppendLine($"monitor|held={lockedAfterWrite}|recorded={shell.Store.Count() == countBefore + 1}");
+
+        // 6. 截图工具的框选蒙版：全屏、置顶、没有标题栏的窗在前台（用户日志 2026-10-14）。拖选不许
+        //    发 Ctrl+C。之后亲手发一回，证明真发了它是收得到的。
+        await Patiently(() => writer.SetText(original ?? string.Empty));
+        var overlay = new Window
+        {
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            AllowsTransparency = true,
+            Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+            Topmost = true,
+            ShowInTaskbar = false,
+            Left = -16,
+            Top = -16,
+            Width = SystemParameters.PrimaryScreenWidth + 32,
+            Height = SystemParameters.PrimaryScreenHeight + 32,
+        };
+        var copies = 0;
+        overlay.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                copies++;
+            }
+        };
+        overlay.Show();
+        new ForegroundWindow(new WindowInteropHelper(overlay).Handle).BringToFront();
+        await Task.Delay(500);
+        var detected = FullScreenOverlay.IsForeground();
+        OnDragSelected();
+        await Task.Delay(700);
+        var sentByDrag = copies;
+        platform.SendCopyKeystroke();
+        await Task.Delay(500);
+        var controlReached = copies > sentByDrag;
+        overlay.Close();
+        log.AppendLine($"overlay|detected={detected}|keystroke={sentByDrag > 0}|controlReached={controlReached}");
+
         await Patiently(() => writer.SetText(original ?? string.Empty));
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "capture-restore.log"), log.ToString());
+    }
+
+    /// <summary>
+    /// 扮演另一个程序：在自己的消息窗名下写一段文字，紧接着又把剪贴板占住 <paramref name="hold"/>。
+    /// 等它写完并重新占上才回来（true）——调用方此刻还没把消息交给监听，监听处理这次变化时剪贴板
+    /// 必定被占着。
+    /// </summary>
+    private static bool WriteThenHold(string text, TimeSpan hold)
+    {
+        var locked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(() =>
+        {
+            using var window = new MessageWindow();
+            var held = new WindowsClipboardWriter(window).SetText(text)
+                && ProbeClipboard.OpenClipboard(window.Handle);
+            locked.SetResult(held);
+            if (held)
+            {
+                Thread.Sleep(hold);
+                ProbeClipboard.CloseClipboard();
+            }
+        })
+        { IsBackground = true, Name = "probe other program" }.Start();
+        return locked.Task.Wait(TimeSpan.FromSeconds(3)) && locked.Task.Result;
     }
 
     private const int ProbeRounds = 8;
