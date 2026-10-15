@@ -36,6 +36,9 @@ public sealed class FakeCapturePlatform : ICapturePlatform
     /// <summary>还原撞上"剪贴板被别的程序占着"的次数：前这么多次写回都没写上。</summary>
     public int RestoreBusyTimes { get; set; }
 
+    /// <summary>读文字撞上"剪贴板被别的程序占着"的次数：前这么多次读都抛出。</summary>
+    public int ReadBusyTimes { get; set; }
+
     public List<string?> Writes { get; } = [];
 
     /// <summary>真正写回去的快照，按先后。</summary>
@@ -111,6 +114,12 @@ public sealed class FakeCapturePlatform : ICapturePlatform
     public string? ReadClipboardText()
     {
         Events.Add("read");
+        if (ReadBusyTimes > 0)
+        {
+            ReadBusyTimes--;
+            throw new ClipboardUnavailableException("busy");
+        }
+
         return ReadFails ? throw new ClipboardUnavailableException("read failed") : _clipboard;
     }
 

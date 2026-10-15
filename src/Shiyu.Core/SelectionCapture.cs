@@ -107,6 +107,18 @@ public sealed record CaptureTiming(TimeSpan PollInterval, TimeSpan Timeout)
         TimeSpan.FromMilliseconds(500),
         TimeSpan.FromMilliseconds(1000),
     ];
+
+    /// <summary>
+    /// 目标应用的答案已经在剪贴板上，去读时剪贴板却被别的程序占着——它们也刚收到变化通知，正抢着读：
+    /// 隔多久再读、再读几回（实机探针 2026-10-15：两个模拟的读者每次变化后都占一阵剪贴板时，一半的
+    /// 取词因为读不到答案而作罢）。逐次拉长，合计三百毫秒。
+    /// </summary>
+    public IReadOnlyList<TimeSpan> BusyReadDelays { get; init; } =
+    [
+        TimeSpan.FromMilliseconds(50),
+        TimeSpan.FromMilliseconds(100),
+        TimeSpan.FromMilliseconds(150),
+    ];
 }
 
 /// <summary>一次还原的结局（用户实录 2026-10-15：开着拖选徽标时常弹「未能还原」）。</summary>
@@ -402,7 +414,7 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
                     continue;
                 }
 
-                captured = platform.ReadClipboardText();
+                captured = ReadAnswer();
 
                 // A changed clipboard holding nothing usable is still nothing
                 // captured — never fall back to what was there before, which
@@ -421,6 +433,26 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
         }
 
         return (captured, outcome);
+    }
+
+    /// <summary>
+    /// 读目标应用的答案。剪贴板刚变，别的程序正抢着读它：读不了就按 <see cref="CaptureTiming.BusyReadDelays"/>
+    /// 等一等再读，都读不了才算剪贴板不可用（抛出，由调用方定性）。
+    /// </summary>
+    private string? ReadAnswer()
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return platform.ReadClipboardText();
+            }
+            catch (ClipboardUnavailableException) when (attempt < _timing.BusyReadDelays.Count)
+            {
+                // expected: 别的程序正读着刚变的剪贴板，答案还在那儿，等它放手。
+                platform.Wait(_timing.BusyReadDelays[attempt]);
+            }
+        }
     }
 
     /// <summary>

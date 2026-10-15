@@ -420,10 +420,11 @@ internal sealed class SelectionModule
         log.AppendLine($"image|set={pictured}|untouched={untouched}|kept={stillPicture}");
 
         // 4. 划词热键那条路（取完立刻还），两个模拟的读者在每次变化后抢着开剪贴板。同样的场面
-        //    先不重试跑一组（原来就是只试一回），再按 CaptureTiming 的重试跑一组。
+        //    先照原来的做法跑一组（读答案、写回都只试一回），再按 CaptureTiming 的重试跑一组。
         using (var contender = new ClipboardContender())
         {
-            var single = new SelectionCapture(platform, CaptureTiming.Default with { RestoreRetryDelays = [] });
+            var single = new SelectionCapture(
+                platform, CaptureTiming.Default with { RestoreRetryDelays = [], BusyReadDelays = [] });
             foreach (var (name, subject) in new[] { ("single", single), ("retry", shell.Capture!) })
             {
                 int captured = 0, failed = 0, wrong = 0;

@@ -346,4 +346,57 @@ public class CaptureRestoreTests
         Assert.Equal(delays.OrderBy(d => d), delays);
         Assert.True(delays.Aggregate(TimeSpan.Zero, (sum, d) => sum + d) < TimeSpan.FromSeconds(2));
     }
+
+    // --- 答案到了、剪贴板却正被别的程序读着 ------------------------------------------------------
+    //
+    // 实机探针 2026-10-15：两个模拟的读者每次变化后都占一阵剪贴板时，一半的取词因为读不到答案而作罢
+    // ——热键弹「剪贴板正被其他程序占用」，拖选干脆不出徽标。
+
+    [Fact]
+    public void An_answer_that_is_busy_for_a_moment_is_still_read()
+    {
+        var (platform, capture) = Build(p => p.PutOnClipboard("the user's own"));
+        platform.ReadBusyTimes = 2;
+
+        var deferred = capture.CaptureDeferRestore(requireRestorable: true)!;
+
+        Assert.Equal(CaptureOutcome.Captured, deferred.Outcome);
+        Assert.Equal("the selected words", deferred.Text);
+    }
+
+    [Fact]
+    public void The_hotkey_reads_a_busy_answer_too()
+    {
+        var (platform, capture) = Build(p => p.PutOnClipboard("the user's own"));
+        platform.ReadBusyTimes = Timing.BusyReadDelays.Count;
+
+        var result = capture.Capture();
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(CaptureRestore.Restored, result.Restore);
+        Assert.Equal("the user's own", platform.CurrentClipboard);
+    }
+
+    [Fact]
+    public void An_answer_that_stays_unreadable_is_unavailable_and_the_clipboard_still_comes_back()
+    {
+        var (platform, capture) = Build(p => p.PutOnClipboard("the user's own"));
+        platform.ReadBusyTimes = Timing.BusyReadDelays.Count + 1;
+
+        var result = capture.Capture();
+
+        Assert.Equal(CaptureOutcome.ClipboardUnavailable, result.Outcome);
+        Assert.Equal(CaptureRestore.Restored, result.Restore);
+        Assert.Equal("the user's own", platform.CurrentClipboard);
+        Assert.Equal(1 + Timing.BusyReadDelays.Count, platform.Events.Count(e => e == "read"));
+    }
+
+    [Fact]
+    public void The_busy_read_schedule_is_short()
+    {
+        var delays = CaptureTiming.Default.BusyReadDelays;
+
+        Assert.NotEmpty(delays);
+        Assert.True(delays.Aggregate(TimeSpan.Zero, (sum, d) => sum + d) <= TimeSpan.FromMilliseconds(500));
+    }
 }

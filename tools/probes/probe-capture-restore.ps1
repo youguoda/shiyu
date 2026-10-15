@@ -30,7 +30,7 @@
 #   - flow:capture-hotkey-under-contention  8 hotkey-path captures (capture, then restore at
 #                                         once) while two simulated readers grab the clipboard
 #                                         after every change: none fails to restore. The same
-#                                         8 rounds with no retries - the old behaviour - are
+#                                         8 rounds the old way (no read or restore retries) are
 #                                         reported alongside for comparison.
 #   - flow:capture-no-failure-logged      no ClipboardRestoreFailed in the probe's own log
 #
@@ -224,9 +224,9 @@ if ($image['set'] -ne 'True') {
 
 $single = $fields['hotkey-single']
 $retry = $fields['hotkey-retry']
-$hotkeyDetail = 'with retries: {0}/{1} restore failures, clipboard wrong {2}, captured {3}; no retries (old): {4}/{5} failures, wrong {6}; reader holds {7}' -f `
+$hotkeyDetail = 'with retries: {0}/{1} restore failures, clipboard wrong {2}, captured {3}; old behaviour (no retries): {4}/{5} restore failures, wrong {6}, captured {8}; reader holds {7}' -f `
     $retry['restoreFailed'], $retry['rounds'], $retry['clipboardWrong'], $retry['captured'],
-    $single['restoreFailed'], $single['rounds'], $single['clipboardWrong'], $retry['holds']
+    $single['restoreFailed'], $single['rounds'], $single['clipboardWrong'], $retry['holds'], $single['captured']
 if ($retry['restoreFailed'] -eq '0' -and $retry['clipboardWrong'] -eq '0') {
     Add-Check 'flow:capture-hotkey-under-contention' 'PASS' $hotkeyDetail
 } else {
