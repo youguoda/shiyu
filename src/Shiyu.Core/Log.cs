@@ -12,6 +12,12 @@ public enum LogEvent
     ClipboardImageFailed,
     ClipboardRestoreFailed,
 
+    /// <summary>
+    /// 一次复制没记上：别的程序一直占着剪贴板，隔几回再读也读不到（用户日志 2026-10-13：原来这一下
+    /// 整个程序崩掉）。
+    /// </summary>
+    ClipboardReadMissed,
+
     // 翻译与词典
     TranslationFailed,
     BatchTranslationFailed,

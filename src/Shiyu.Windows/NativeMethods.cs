@@ -30,6 +30,19 @@ internal static class NativeMethods
     internal const uint WmNull = 0x0000;
 
     /// <summary>
+    /// A <see cref="SetTimer"/> timer firing on the window that set it — on the
+    /// window's own thread, like every other message it receives.
+    /// </summary>
+    internal const uint WmTimer = 0x0113;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr SetTimer(IntPtr hWnd, IntPtr id, uint elapse, IntPtr callback);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool KillTimer(IntPtr hWnd, IntPtr id);
+
+    /// <summary>
     /// "A system setting changed" — the broadcast the theme swap rides on
     /// (O-37), with the setting group's name in lParam.
     /// </summary>
@@ -414,8 +427,12 @@ internal static class NativeMethods
 
 
     internal const int GwlExStyle = -20;
+    internal const int GwlStyle = -16;
     internal const uint WsExNoActivate = 0x08000000;
     internal const uint WsExTopmost = 0x00000008;
+
+    /// <summary>WS_CAPTION: a title bar (WS_BORDER | WS_DLGFRAME together).</summary>
+    internal const uint WsCaption = 0x00C00000;
     internal static readonly IntPtr HwndTopmost = new(-1);
 
     /// <summary>HWND_NOTOPMOST: clears the topmost bit and lands the window at the top of the normal band.</summary>
@@ -445,6 +462,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr MonitorFromPoint(Point point, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);

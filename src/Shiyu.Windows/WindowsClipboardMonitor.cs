@@ -40,6 +40,21 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
     private bool _listening;
     private bool _disposed;
 
+    /// <summary>
+    /// 读不了时隔多久再读（用户日志 2026-10-13 FatalExit）。Windows 剪贴板历史、输入法、别的剪贴板
+    /// 工具在每次变化后都抢着读剪贴板，偶尔一占就超过上面 8 回、一百多毫秒的耐心；原来读不了就拿
+    /// 空值往下走，整个程序崩掉。现在隔一会儿再读——剪贴板若在那之前又变了，新的通知自会接手。
+    /// 挂在消息窗的 WM_TIMER 上，回到同一条线程。
+    /// </summary>
+    private static readonly uint[] RereadDelaysMs = [100, 300, 800];
+
+    private static readonly IntPtr RereadTimer = new(0x5359);
+
+    /// <summary>还没读到的那次变化：读到时仍记在当时的前台应用名下。</summary>
+    private PendingRead? _pending;
+
+    private int _rereads;
+
     private static readonly uint HtmlFormat =
         NativeMethods.RegisterClipboardFormatW("HTML Format");
 
@@ -64,6 +79,14 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
 
     private void OnMessage(WindowMessage message)
     {
+        if (message.Id == NativeMethods.WmTimer && message.WParam == RereadTimer)
+        {
+            message.Handle();
+            NativeMethods.KillTimer(_window.Handle, RereadTimer);
+            Reread();
+            return;
+        }
+
         if (message.Id != NativeMethods.WmClipboardUpdate)
         {
             return;
@@ -84,16 +107,29 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
         // The foreground window is read first: opening the clipboard can take
         // several attempts, by which time focus may have moved on.
         var (sourceApp, sourceExe) = ForegroundProcess();
+        _rereads = 0;
+        Publish(sourceApp, sourceExe);
+    }
 
-        var reading = ReadClipboard();
-
-        if (reading is { Text.Length: > 0 })
+    /// <summary>
+    /// 读一回剪贴板，把值得记的那份交出去。读不了（别的程序一直占着）就约下一回，见
+    /// <see cref="RereadDelaysMs"/>。
+    /// </summary>
+    private void Publish(string? sourceApp, string? sourceExe)
+    {
+        if (ReadClipboard() is not { } reading)
         {
-            Changed?.Invoke(new ClipboardSnapshot(reading.Value.Text, sourceApp, reading.Value.Excluded)
+            ScheduleReread(sourceApp, sourceExe);
+            return;
+        }
+
+        if (reading.Text.Length > 0)
+        {
+            Changed?.Invoke(new ClipboardSnapshot(reading.Text, sourceApp, reading.Excluded)
             {
                 SourceExePath = sourceExe,
-                Html = reading.Value.Html,
-                Rtf = reading.Value.Rtf,
+                Html = reading.Html,
+                Rtf = reading.Rtf,
             });
             return;
         }
@@ -102,9 +138,9 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
         // Explorer publishes CF_HDROP and nothing else. They were read inside
         // the same clipboard open as the text — GetClipboardData answers null
         // on a clipboard that is already closed again.
-        if (reading.Value.Files is { Count: > 0 } files)
+        if (reading.Files is { Count: > 0 } files)
         {
-            Changed?.Invoke(new ClipboardSnapshot(string.Empty, sourceApp, reading.Value.Excluded)
+            Changed?.Invoke(new ClipboardSnapshot(string.Empty, sourceApp, reading.Excluded)
             {
                 Files = files,
                 SourceExePath = sourceExe,
@@ -117,16 +153,52 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
         // and there is no second chance at it. Only the raw bytes were taken,
         // inside the same open — decoding and the repeat-collapsing fingerprint
         // happen on the pipeline's thread (O-36); the duplicate publications
-        // of one copy are collapsed there.
-        if (reading.Value.Image is { } image)
+        // of one copy are collapsed there. The marker applies to the whole
+        // clipboard, images included: an image copied from a password manager
+        // must not be recorded either.
+        if (reading.Image is { } image)
         {
-            Changed?.Invoke(new ClipboardSnapshot(string.Empty, sourceApp, IsExcluded(reading))
+            Changed?.Invoke(new ClipboardSnapshot(string.Empty, sourceApp, reading.Excluded)
             {
                 Image = image,
                 SourceExePath = sourceExe,
             });
         }
     }
+
+    private void ScheduleReread(string? sourceApp, string? sourceExe)
+    {
+        if (_rereads >= RereadDelaysMs.Length)
+        {
+            // 试满了：这一次复制没记上。不值得打扰用户，更不是崩溃的理由——下一次复制照常记。
+            _pending = null;
+            Log.Event(LogEvent.ClipboardReadMissed, ("rereads", _rereads));
+            return;
+        }
+
+        _pending = new PendingRead(sourceApp, sourceExe, NativeMethods.GetClipboardSequenceNumber());
+        NativeMethods.SetTimer(_window.Handle, RereadTimer, RereadDelaysMs[_rereads++], IntPtr.Zero);
+    }
+
+    private void Reread()
+    {
+        if (_pending is not { } pending)
+        {
+            return;
+        }
+
+        _pending = null;
+
+        // 剪贴板在这期间又变了：那次变化有它自己的通知，这一份已经过时。
+        if (NativeMethods.GetClipboardSequenceNumber() != pending.Sequence)
+        {
+            return;
+        }
+
+        Publish(pending.SourceApp, pending.SourceExe);
+    }
+
+    private readonly record struct PendingRead(string? SourceApp, string? SourceExe, uint Sequence);
 
     private readonly record struct Reading(
         string Text,
@@ -192,9 +264,6 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
             NativeMethods.GlobalUnlock(handle);
         }
     }
-
-    /// <summary>An exclusion marker applies to the whole clipboard, images included.</summary>
-    private static bool IsExcluded(Reading? reading) => reading?.Excluded ?? false;
 
     /// <summary>
     /// Reads the text and the exclusion markers in a single open, retrying
@@ -381,6 +450,8 @@ public sealed class WindowsClipboardMonitor : IClipboardMonitor, IDisposable
 
         _disposed = true;
         _window.MessageReceived -= OnMessage;
+        NativeMethods.KillTimer(_window.Handle, RereadTimer);
+        _pending = null;
 
         if (_listening)
         {
