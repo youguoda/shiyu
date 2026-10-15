@@ -17,7 +17,7 @@ public class RestoreQueueTests
     ];
 
     private static DeferredCapture Debt(string text)
-        => new(text, CaptureOutcome.Captured, TextBackup("原文"), SequenceBefore: 0, SequenceSealed: 1);
+        => new(text, CaptureOutcome.Captured, TextBackup("原文"), SequenceBefore: 0, SequenceAfter: 1);
 
     private static ClipboardBackup TextBackup(string text)
         => new(text, null, null, [], Excluded: false, LostFormats: [], Empty: false);

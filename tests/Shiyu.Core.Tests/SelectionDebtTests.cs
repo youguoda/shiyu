@@ -6,7 +6,7 @@ namespace Shiyu.Core.Tests;
 public class SelectionDebtTests
 {
     private static DeferredCapture Debt(string text = "选中文字", string borrowed = "用户原文")
-        => new(text, CaptureOutcome.Captured, TextBackup(borrowed), SequenceBefore: 0, SequenceSealed: 1);
+        => new(text, CaptureOutcome.Captured, TextBackup(borrowed), SequenceBefore: 0, SequenceAfter: 1);
 
     /// <summary>只有文字的一份快照（用户剪贴板里是一段普通文字时的样子）。</summary>
     private static ClipboardBackup TextBackup(string text)

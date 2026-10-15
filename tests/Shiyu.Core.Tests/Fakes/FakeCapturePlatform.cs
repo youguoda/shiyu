@@ -234,5 +234,13 @@ public sealed class FakeCapturePlatform : ICapturePlatform
         {
             Put(Answer);
         }
+
+        if (UserCopy is { } copy && _waits == copy.AtWait)
+        {
+            Put(copy.Text);
+        }
     }
+
+    /// <summary>用户在第几回等待时，在别的窗口里复制了什么（例如热键路径同步重试的间隙）。</summary>
+    public (int AtWait, string Text)? UserCopy { get; set; }
 }

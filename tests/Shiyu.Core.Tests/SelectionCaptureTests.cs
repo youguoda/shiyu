@@ -73,9 +73,10 @@ public class SelectionCaptureTests
 
         capture.Capture();
 
-        // 100 ms of deadline at 10 ms a poll. A loop that ran away would show
-        // up here long before it hung a real machine.
-        Assert.True(platform.Polls <= 12, $"polled {platform.Polls} times");
+        // 100 ms of deadline at 10 ms a poll, plus the three bookkeeping reads
+        // (at the borrow, where the capture ended, at the restore). A loop that
+        // ran away would show up here long before it hung a real machine.
+        Assert.True(platform.Polls <= 13, $"polled {platform.Polls} times");
     }
 
     [Fact]

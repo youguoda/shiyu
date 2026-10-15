@@ -185,9 +185,52 @@ public class CaptureRestoreTests
         var deferred = capture.CaptureDeferRestore(requireRestorable: true)!;
 
         Assert.Equal(CaptureOutcome.NothingCaptured, deferred.Outcome);
-        Assert.Null(deferred.SequenceSealed);
+        Assert.NotEqual(deferred.SequenceBefore, deferred.SequenceAfter);
         Assert.Equal(CaptureRestore.Restored, capture.Restore(deferred));
         Assert.Equal("the user's own", platform.CurrentClipboard);
+    }
+
+    [Fact]
+    public void A_user_copy_made_while_an_unanswered_borrow_waits_for_its_retry_is_kept()
+    {
+        // 没取到文字的那笔要立刻还，撞上被占着就排队重试。重试之前用户复制了别的：不许踩掉它。
+        var (platform, capture) = Build(p => p.PutOnClipboard("the user's own"), answer: null);
+        var deferred = capture.CaptureDeferRestore(requireRestorable: true)!;
+        platform.RestoreBusyTimes = 1;
+
+        Assert.Equal(CaptureRestore.Busy, capture.Restore(deferred));
+        platform.PutOnClipboard("copied while we waited");
+
+        Assert.Equal(CaptureRestore.Superseded, capture.Restore(deferred));
+        Assert.Equal("copied while we waited", platform.CurrentClipboard);
+    }
+
+    [Fact]
+    public void A_copy_made_in_another_window_during_the_hotkeys_retries_is_kept()
+    {
+        // 热键路径同步重试，前后可达两秒；这期间用户在别的窗口里复制了东西。
+        var (platform, capture) = Build(p => p.PutOnClipboard("the user's own"));
+        platform.RestoreBusyTimes = 1;
+        platform.UserCopy = (AtWait: 2, Text: "copied in another window");
+
+        var result = capture.Capture();
+
+        Assert.Equal(CaptureRestore.Superseded, result.Restore);
+        Assert.True(result.ClipboardRestored);
+        Assert.Equal("copied in another window", platform.CurrentClipboard);
+    }
+
+    [Fact]
+    public void A_capture_that_never_moved_the_clipboard_has_nothing_to_give_back_even_later()
+    {
+        // 取词时剪贴板没动过，之后用户复制了别的：也没什么可还的，更不该把旧内容盖回去。
+        var (platform, capture) = Build(p => p.PutOnClipboard("the user's own"), answersAfterPolls: null);
+        var deferred = capture.CaptureDeferRestore(requireRestorable: true)!;
+
+        platform.PutOnClipboard("copied later");
+
+        Assert.Equal(CaptureRestore.Untouched, capture.Restore(deferred));
+        Assert.Equal("copied later", platform.CurrentClipboard);
     }
 
     [Fact]

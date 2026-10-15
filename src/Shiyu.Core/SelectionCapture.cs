@@ -160,17 +160,18 @@ public enum CaptureRestore
 /// <param name="SequenceBefore">
 /// 借走时的剪贴板序列号。还原时序列号还是它，说明剪贴板根本没动过，什么都不用写。
 /// </param>
-/// <param name="SequenceSealed">
-/// 取到文字、以拾语名义写回之后的序列号。还原时序列号不是它，说明之后有人（用户）写过
-/// 剪贴板，这笔债就销了。没取到文字、要立刻还的，没有封存，为 null。
-/// 判断全凭序列号：读它不用打开剪贴板，别的程序占着剪贴板时照样判得准。
+/// <param name="SequenceAfter">
+/// 取词结束时的序列号（取到文字的，是以拾语名义写回之后）。还原时序列号不是它，说明之后有人
+/// 写过剪贴板：不是拾语写的，就是用户复制了，这笔债就销了。每一种结局都记——没取到文字、
+/// 等着重试的那笔，也不能在重试时踩掉用户这期间的复制。和借走时一样，说明取词根本没动过剪贴板。
+/// 判断全凭序列号与 owner：问它们不用打开剪贴板，别的程序占着剪贴板时照样判得准。
 /// </param>
 public sealed record DeferredCapture(
     string? Text,
     CaptureOutcome Outcome,
     ClipboardBackup Backup,
     uint SequenceBefore,
-    uint? SequenceSealed)
+    uint SequenceAfter)
 {
     public bool Succeeded => Outcome == CaptureOutcome.Captured;
 
@@ -204,15 +205,16 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
         var (captured, outcome) = CopySelection(borrowed.Before);
 
         // After every path above — each of them may have taken the user's
-        // clipboard away, including the ones that threw. Not sealed: in these
-        // few milliseconds nothing but the target answering us has written,
-        // so there is no user copy to protect.
+        // clipboard away, including the ones that threw. Where the capture
+        // left the sequence is noted first: the retries below can take a
+        // couple of seconds, and a copy the user makes meanwhile in another
+        // window must win over the old clipboard.
         var restore = RestoreRetrying(new DeferredCapture(
             outcome == CaptureOutcome.Captured ? captured : null,
             outcome,
             borrowed.Backup,
             borrowed.Before,
-            SequenceSealed: null));
+            platform.ClipboardSequenceNumber()));
 
         return new CaptureResult(outcome == CaptureOutcome.Captured ? captured : null, outcome, restore);
     }
@@ -247,7 +249,6 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
 
         var (captured, outcome) = CopySelection(borrowed.Before);
 
-        uint? sealedAt = null;
         if (outcome == CaptureOutcome.Captured)
         {
             try
@@ -259,17 +260,15 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
             {
                 // expected: 别的程序占着剪贴板；取到的文字照样在手里。
             }
-
-            // 写没写上都记下此刻的序列号：之后它再动，就是别人（用户）写了剪贴板。
-            sealedAt = platform.ClipboardSequenceNumber();
         }
 
+        // 写没写上、取没取到都记下此刻的序列号：之后它再动，就是别人（用户）写了剪贴板。
         return new DeferredCapture(
             outcome == CaptureOutcome.Captured ? captured : null,
             outcome,
             borrowed.Backup,
             borrowed.Before,
-            sealedAt);
+            platform.ClipboardSequenceNumber());
     }
 
     /// <summary>
@@ -277,9 +276,9 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     /// 剪贴板内容」）。要不要写、写什么全凭序列号与快照判断，判断时<b>不打开剪贴板</b>——原来要先
     /// 读一遍文字作比较，别的程序正占着剪贴板时这一读就失败，于是报"未能还原"：
     /// <list type="bullet">
-    /// <item>序列号还是借走时那个：剪贴板根本没动过（Ctrl+C 没取到东西），什么都不写；</item>
-    /// <item>封存之后序列号又动了、最后一笔不是拾语写的：用户自己复制过（哪怕是同一段字），不去
-    /// 踩掉更新的内容，这笔债就销了；</item>
+    /// <item>取词根本没动过剪贴板（Ctrl+C 没取到东西），或此刻序列号又回到借走时那个：什么都不写；</item>
+    /// <item>取词结束之后序列号又动了、最后一笔不是拾语写的：用户自己复制过（哪怕是同一段字），
+    /// 不去踩掉更新的内容，这笔债就销了；</item>
     /// <item>快照带「勿记录」标记、或里面没有写得回去的东西（<see cref="ClipboardRestore.CaptureVerdict"/>）：
     /// 不写，结局分别是 Withheld / Unrestorable；</item>
     /// <item>否则把快照写回去——文本连同 HTML、RTF，或文件列表，原来是空的就清空；附带的图元文件、
@@ -292,16 +291,16 @@ public sealed class SelectionCapture(ICapturePlatform platform, CaptureTiming? t
     public CaptureRestore Restore(DeferredCapture deferred)
     {
         var now = platform.ClipboardSequenceNumber();
-        if (now == deferred.SequenceBefore)
+        if (deferred.SequenceAfter == deferred.SequenceBefore || now == deferred.SequenceBefore)
         {
             return CaptureRestore.Untouched;
         }
 
-        if (deferred.SequenceSealed is { } sealedAt && now != sealedAt)
+        if (now != deferred.SequenceAfter)
         {
-            // 封存之后有人写过剪贴板。不是拾语写的，就是用户复制了——哪怕复制的正是这段选中文字
-            // （选中之后顺手按 Ctrl+C，再常见不过；原来比文字，一样就还原，把用户这一下复制撤掉了）：
-            // 不去踩它，这笔债销了。
+            // 取词结束之后有人写过剪贴板。不是拾语写的，就是用户复制了——哪怕复制的正是这段选中
+            // 文字（选中之后顺手按 Ctrl+C，再常见不过；原来比文字，一样就还原，把用户这一下复制撤掉
+            // 了）：不去踩它，这笔债销了。
             if (!platform.OwnsClipboard())
             {
                 return CaptureRestore.Superseded;
