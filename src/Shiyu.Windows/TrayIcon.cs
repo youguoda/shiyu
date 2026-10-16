@@ -43,6 +43,12 @@ public sealed class TrayIcon : IDisposable
     /// <summary>The icon this instance loaded and must destroy; zero when it fell back to the shared system icon.</summary>
     private IntPtr _ownedIcon;
 
+    /// <summary>The icon shown while recording runs.</summary>
+    private IntPtr _normalIcon;
+
+    /// <summary>Its gray twin for a paused recording (评审 2026-10-16 F-06), made on first use; ours to destroy.</summary>
+    private IntPtr _grayIcon;
+
     /// <summary>
     /// Supplies the whole menu: action rows with their accelerator column and
     /// separators (Label null), top to bottom, in the shape the UI report
@@ -77,6 +83,7 @@ public sealed class TrayIcon : IDisposable
             szInfo = string.Empty,
             szInfoTitle = string.Empty,
         };
+        _normalIcon = _data.hIcon;
 
         _added = NativeMethods.Shell_NotifyIconW(NativeMethods.NimAdd, ref _data);
         if (!_added)
@@ -195,6 +202,29 @@ public sealed class TrayIcon : IDisposable
         NativeMethods.Shell_NotifyIconW(NativeMethods.NimModify, ref notification);
     }
 
+    /// <summary>
+    /// 暂停记录时换灰色图标、改提示文字；恢复时换回（评审 2026-10-16 F-06）。灰色版做不出来就只改文字。
+    /// 存进 <c>_data</c>，资源管理器重启后重新添加的图标也是这个样子。
+    /// </summary>
+    public void ShowPaused(bool paused, string tooltip)
+    {
+        if (paused && _grayIcon == IntPtr.Zero)
+        {
+            _grayIcon = TrayIconImages.Grayscale(_normalIcon);
+        }
+
+        _data.hIcon = paused && _grayIcon != IntPtr.Zero ? _grayIcon : _normalIcon;
+        _data.szTip = Truncate(tooltip, 127);
+        if (!_added)
+        {
+            return;
+        }
+
+        var update = _data;
+        update.uFlags = NativeMethods.NifIcon | NativeMethods.NifTip;
+        NativeMethods.Shell_NotifyIconW(NativeMethods.NimModify, ref update);
+    }
+
     /// <summary>Ampersands would otherwise be read as keyboard accelerators.</summary>
     private static string Escape(string text) => text.Replace("&", "&&");
 
@@ -221,6 +251,12 @@ public sealed class TrayIcon : IDisposable
         {
             NativeMethods.DestroyIcon(_ownedIcon);
             _ownedIcon = IntPtr.Zero;
+        }
+
+        if (_grayIcon != IntPtr.Zero)
+        {
+            NativeMethods.DestroyIcon(_grayIcon);
+            _grayIcon = IntPtr.Zero;
         }
     }
 

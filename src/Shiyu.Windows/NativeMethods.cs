@@ -550,6 +550,75 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool DestroyIcon(IntPtr hIcon);
 
+    // --- 托盘图标的灰色版（评审 2026-10-16 F-06，TrayIconImages）---
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct IconInfo
+    {
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool fIcon;
+        public int xHotspot;
+        public int yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct BitmapHeader
+    {
+        public int bmType;
+        public int bmWidth;
+        public int bmHeight;
+        public int bmWidthBytes;
+        public ushort bmPlanes;
+        public ushort bmBitsPixel;
+        public IntPtr bmBits;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct BitmapInfoHeader
+    {
+        public uint biSize;
+        public int biWidth;
+        public int biHeight;
+        public ushort biPlanes;
+        public ushort biBitCount;
+        public uint biCompression;
+        public uint biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public uint biClrUsed;
+        public uint biClrImportant;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetIconInfo(IntPtr icon, out IconInfo info);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr CreateIconIndirect(ref IconInfo info);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern int ReleaseDC(IntPtr hWnd, IntPtr dc);
+
+    [DllImport("gdi32.dll", EntryPoint = "GetObjectW")]
+    internal static extern int GetObject(IntPtr handle, int size, out BitmapHeader bitmap);
+
+    [DllImport("gdi32.dll")]
+    internal static extern int GetDIBits(
+        IntPtr dc, IntPtr bitmap, uint start, uint lines, byte[]? bits, ref BitmapInfoHeader info, uint usage);
+
+    [DllImport("gdi32.dll")]
+    internal static extern IntPtr CreateDIBSection(
+        IntPtr dc, ref BitmapInfoHeader info, uint usage, out IntPtr bits, IntPtr section, uint offset);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DeleteObject(IntPtr handle);
+
     // --- 低级钩子（WH_KEYBOARD_LL=13 见 WinVHook；WH_MOUSE_LL=14 见 MouseDragHook）---
 
     [DllImport("user32.dll", SetLastError = true)]

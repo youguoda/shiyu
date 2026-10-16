@@ -127,6 +127,12 @@ internal sealed class SelectionModule
             return;
         }
 
+        // 暂停记录期间（评审 2026-10-16 F-06）不弹任何徽标——共享屏幕、演示时最不想要的就是它。
+        if (shell.RecordingPause.IsPaused(DateTimeOffset.UtcNow))
+        {
+            return;
+        }
+
         // 新一次取词前先还上一笔——两次快速拖选时，第二笔会借走第一笔的
         // 选中文字，不还就永远找不回用户最初的剪贴板。
         FlushPendingSelection();

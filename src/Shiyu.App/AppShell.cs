@@ -51,6 +51,11 @@ internal sealed class AppShell
 
     public ClipboardPipeline? Pipeline { get; set; }
 
+    /// <summary>
+    /// 暂停记录（评审 2026-10-16 F-06）：托盘里开关，流水线与拖选徽标照它办。只在内存里——重启即恢复记录。
+    /// </summary>
+    public RecordingPause RecordingPause { get; } = new();
+
     /// <summary>生效设置，永远是 store 的最新值。</summary>
     public AppSettings Settings => SettingsStore.Current;
 
@@ -245,6 +250,7 @@ internal sealed class AppShell
             RecordImages = Settings.RecordImages,
             RecordFiles = Settings.RecordFiles,
             OfferBadges = Settings.TranslateBadge,
+            Pause = RecordingPause,
         };
 
         pipeline.ImageFailed += reason => TellUser($"复制的图片没能保存：{reason}");

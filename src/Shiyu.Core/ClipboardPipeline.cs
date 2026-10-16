@@ -74,6 +74,12 @@ public sealed partial class ClipboardPipeline : IDisposable
     public bool OfferBadges { get; set; } = true;
 
     /// <summary>
+    /// 暂停记录（评审 2026-10-16 F-06）：暂停期间到的复制既不落库、也不弹徽标。按复制那一刻的时间判定，
+    /// 到点即恢复，不等任何定时器。
+    /// </summary>
+    public RecordingPause? Pause { get; set; }
+
+    /// <summary>
     /// The fingerprint of the last recorded image, with the clipboard arrival
     /// it was taken at. The same copy arrives more than once — an application
     /// publishes its bitmap in several clipboard formats in turn, and each
@@ -99,6 +105,12 @@ public sealed partial class ClipboardPipeline : IDisposable
 
     private void OnClipboardChanged(ClipboardSnapshot snapshot)
     {
+        // 暂停记录：照收通知，不留痕迹（评审 2026-10-16 F-06）。
+        if (Pause?.IsPaused(_clock.GetUtcNow()) == true)
+        {
+            return;
+        }
+
         // Checked first, and before anything is written or even read back:
         // excluded content must leave no trace at all, not a trace that is
         // later filtered out of view.
