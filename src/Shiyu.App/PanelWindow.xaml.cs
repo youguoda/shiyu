@@ -1196,7 +1196,7 @@ public partial class PanelWindow : Window
 
     private void ShowStar(bool starred)
     {
-        WordStarGlyph.Text = starred ? "" : "";
+        WordStarGlyph.Text = starred ? "\uE735" : "\uE734";
         WordStarButton.ToolTip = starred ? "已在生词本里 · 再点移出" : "收进生词本";
         System.Windows.Automation.AutomationProperties.SetName(WordStarButton, starred ? "移出生词本" : "收进生词本");
     }

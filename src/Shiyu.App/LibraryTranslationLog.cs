@@ -196,7 +196,7 @@ public partial class LibraryWindow
     private void OnLogVocabularyToggle(object sender, RoutedEventArgs e)
     {
         _vocabularyOnly = !_vocabularyOnly;
-        LogVocabularyGlyph.Text = _vocabularyOnly ? "" : "";
+        LogVocabularyGlyph.Text = _vocabularyOnly ? "\uE735" : "\uE734";
         LogVocabularyButton.ToolTip = _vocabularyOnly ? "正在只看生词 · 再点看全部" : "只看收进生词本的词";
         ReloadLog();
     }
