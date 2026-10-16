@@ -73,7 +73,7 @@ internal sealed class SettingsModule
             // history, not to log out of their translation service. The key
             // stays together with its origin (票 29): the backup may point at
             // another service, and then the old key simply goes unused.
-            restored = restored.KeepingKeyOf(_shell!.Settings);
+            restored = restored.KeepingKeyOf(_shell!.Settings).KeepingAutoBackupOf(_shell!.Settings);
 
             try
             {

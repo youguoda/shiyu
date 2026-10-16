@@ -150,12 +150,23 @@ public sealed class BackupUi(
     private sealed record PasswordAnswer(bool Cancelled, byte[]? Bytes, bool IncludeKey = false);
 
     /// <summary>
+    /// 定期备份的口令（评审 2026-10-16 F-20）：问两遍，字节交给调用方保护后存起来、随即抹掉。
+    /// Cancelled = 用户走开了；Bytes 为 null = 选了不加密。不问要不要带 API 密钥：定期备份一律不带。
+    /// </summary>
+    public static (bool Cancelled, byte[]? Bytes) AskAutoBackupPassword(Window owner)
+    {
+        var answer = AskPassword(owner, "定期备份的口令", withConfirm: true,
+            accept: "加密备份", skip: "不加密", offerKey: false);
+        return (answer.Cancelled, answer.Bytes);
+    }
+
+    /// <summary>
     /// The password ask. Bytes are lifted straight out of the SecureString as
     /// UTF-16; skip returns null bytes for an unsealed backup, and the confirm
     /// copy is cleared the moment it has been compared.
     /// </summary>
     private static PasswordAnswer AskPassword(
-        Window owner, string title, bool withConfirm, string accept, string skip)
+        Window owner, string title, bool withConfirm, string accept, string skip, bool? offerKey = null)
     {
         var window = new Window
         {
@@ -189,7 +200,7 @@ public sealed class BackupUi(
         // 只有加密导出才问（ADR-0011）：不加密的备份带密钥等于明文外带，
         // 没有勾选可言。
         CheckBox? includeKey = null;
-        if (withConfirm)
+        if (offerKey ?? withConfirm)
         {
             includeKey = new CheckBox
             {

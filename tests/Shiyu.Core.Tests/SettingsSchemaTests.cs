@@ -31,6 +31,9 @@ public class SettingsSchemaTests
             ["store.directory"] = "general",
             ["store.usage"] = "general",
             ["store.backup"] = "general",
+            ["store.auto-backup"] = "general",
+            ["store.auto-backup-target"] = "general",
+            ["store.auto-backup-keep"] = "general",
 
             // 窄条：原“动作”页并入；密度随行。常驻钉住（用户需求 2026-10-10）
             // 接替了「光标旁呼出」与「保持在最前」。

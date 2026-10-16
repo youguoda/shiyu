@@ -242,6 +242,71 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 auto-backup（评审 2026-10-16 F-20）：在探针自己的目录下摆一个备份文件夹——5 份旧的自动备份、
+    /// 1 份手动导出的、1 个别的文件——设好口令，按「立即备份一次」：该多出一份新的、是加密的；自动备份只剩
+    /// 4 份；手动导出的和别的文件原样在。再把口令换成本机打不开的，应当报出人话、不多出文件。日志一行一事。
+    /// </summary>
+    private async void ProbeAutoBackup(AppShell shell)
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var folder = Path.Combine(directory, "auto-backup");
+            Directory.CreateDirectory(folder);
+            var now = DateTime.Now;
+            for (var week = 1; week <= 5; week++)
+            {
+                File.WriteAllText(Path.Combine(folder, Shiyu.Core.AutoBackupSchedule.FileName(now.AddDays(-7 * week))), "old");
+            }
+
+            File.WriteAllText(Path.Combine(folder, "拾语备份 2026-01-01.shiyubk"), "manual");
+            File.WriteAllText(Path.Combine(folder, "notes.txt"), "keep me");
+
+            var password = Encoding.Unicode.GetBytes("probe password");
+            var sealedPassword = Shiyu.Windows.BackupPasswordVault.Protect(password) ?? string.Empty;
+            Array.Clear(password);
+            shell.TryUpdateSettings(settings => settings with
+            {
+                AutoBackupEnabled = true,
+                AutoBackupFolder = folder,
+                AutoBackupKeep = 4,
+                AutoBackupPassword = sealedPassword,
+            });
+
+            var outcome = await shell.AutoBackup!.RunAsync(manual: true);
+            var names = Directory.EnumerateFiles(folder).Select(Path.GetFileName).OfType<string>().ToList();
+            var ours = names.Where(name => Shiyu.Core.AutoBackupSchedule.TryReadStamp(name, out _)).ToList();
+            var newest = Shiyu.Core.AutoBackupSchedule.Newest(ours);
+            var fresh = newest is { } stamp && now - stamp < TimeSpan.FromMinutes(5);
+            var head = new byte[8];
+            if (newest is { } latest)
+            {
+                using var stream = File.OpenRead(Path.Combine(folder, Shiyu.Core.AutoBackupSchedule.FileName(latest)));
+                _ = stream.Read(head, 0, head.Length);
+            }
+
+            log.AppendLine(FormattableString.Invariant(
+                $"run|ok={outcome.StartsWith("已备份", StringComparison.Ordinal)}|fresh={fresh}|ours={ours.Count}|sealed={Encoding.ASCII.GetString(head) == "SHIYUBK1"}|manual={names.Contains("拾语备份 2026-01-01.shiyubk")}|other={names.Contains("notes.txt")}"));
+
+            // 本机打不开的口令（另一台电脑保护的）：不写文件，说人话。
+            shell.TryUpdateSettings(settings => settings with { AutoBackupPassword = Shiyu.Core.AppSettings.SecretMarker + "AAAA" });
+            var before = Directory.EnumerateFiles(folder).Count();
+            var refused = await shell.AutoBackup!.RunAsync(manual: true);
+            log.AppendLine(FormattableString.Invariant(
+                $"locked|said={refused.Contains("口令", StringComparison.Ordinal)}|unchanged={Directory.EnumerateFiles(folder).Count() == before}"));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把异常写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "auto-backup.log"), log.ToString());
+    }
+
+    /// <summary>
     /// 探针命令 translation-log（用户需求 2026-10-09：两个框都能拖、翻译记下来、按周期清空）。
     /// 面板译一句；反向输入框译一句、挪到远处让它长高、再按 Esc 关掉——两条都该进记录，来处与
     /// 模板记对。然后管理窗开在「翻译记录」页、设置窗落到「翻译记录」一节，各渲一张 PNG。
@@ -988,6 +1053,11 @@ public partial class App
             // 翻译面板像反向输入框一样挑模板（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。
             case "panel-templates":
                 _modules!.Translation.ProbeTemplatePicker("hello panel templates");
+                break;
+
+            // 定期备份：备份、修剪、打不开的口令（评审 2026-10-16 F-20）。
+            case "auto-backup":
+                ProbeAutoBackup(shell);
                 break;
 
             // 两个框都能拖、翻译记下来（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。

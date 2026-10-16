@@ -111,6 +111,9 @@ internal sealed class AppShell
     /// <summary>呼出历史窗口并指明「粘贴全部」贴回哪扇窗（窄条的品牌钮用：前台此刻是窄条自己）。</summary>
     public Action<ForegroundWindow>? ShowLibraryFor { get; set; }
 
+    /// <summary>定期备份（评审 2026-10-16 F-20）：设置页那一行的「立即备份一次」与状态从这里来。</summary>
+    public AutoBackupModule? AutoBackup { get; set; }
+
     /// <summary>管理窗打开在「翻译记录」页（设置里的「查看翻译记录」用）。</summary>
     public Action? ShowTranslationLog { get; set; }
 

@@ -40,6 +40,8 @@ public enum LogEvent
     SettingsSaved,
     SettingsSaveFailed,
     BackupOperationFailed,
+    AutoBackupSaved,
+    AutoBackupFailed,
 
     // 进程级（三个全局处理器的落点）
     StartupFailed,

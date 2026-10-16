@@ -16,6 +16,7 @@ internal sealed class AppModules
     public required LibraryModule Library { get; init; }
     public required UpdateModule Update { get; init; }
     public required RetentionModule Retention { get; init; }
+    public required AutoBackupModule AutoBackup { get; init; }
 
     /// <summary>
     /// The one apply path (O-20), 拆到各模块的 Apply：订阅序即原单体里的
@@ -36,6 +37,7 @@ internal sealed class AppModules
             Library = new LibraryModule(),
             Update = new UpdateModule(),
             Retention = new RetentionModule(),
+            AutoBackup = new AutoBackupModule(),
         };
 
         modules.Selection.Attach(shell);
@@ -61,6 +63,7 @@ internal sealed class AppModules
         shell.OpenSettingsAt = modules.Settings.ShowAt;
         shell.ShowLibrary = modules.Library.Show;
         shell.ShowLibraryFor = modules.Library.ShowFor;
+        shell.AutoBackup = modules.AutoBackup;
         shell.ShowTranslationLog = modules.Library.ShowTranslationLog;
         shell.ShowSettings = modules.Settings.Show;
         shell.ShowUpdateWindow = modules.Update.ShowWindow;

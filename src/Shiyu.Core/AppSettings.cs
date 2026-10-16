@@ -134,6 +134,23 @@ public sealed record AppSettings
     public int HistoryRetentionDays { get; init; }
 
     /// <summary>
+    /// 定期备份（评审 2026-10-16 F-20）：每周一份写进 <see cref="AutoBackupFolder"/>，保留最近
+    /// <see cref="AutoBackupKeep"/> 份。默认关；开着但没选文件夹时什么都不做。
+    /// </summary>
+    public bool AutoBackupEnabled { get; init; }
+
+    public string AutoBackupFolder { get; init; } = string.Empty;
+
+    public int AutoBackupKeep { get; init; } = AutoBackupSchedule.DefaultKeep;
+
+    /// <summary>
+    /// 定期备份的口令，<b>受保护的形式</b>（本机这个用户的 DPAPI，标记打头）；空串是不加密。与 API 密钥不同，
+    /// 内存里也只放受保护的形式：用到时才直接解成字节交给备份、用完即抹，从不成为一个明文字符串。
+    /// 不随备份走（<see cref="ToBackupJson"/>），恢复备份时也保留本机的（<see cref="KeepingAutoBackupOf"/>）。
+    /// </summary>
+    public string AutoBackupPassword { get; init; } = string.Empty;
+
+    /// <summary>
     /// The master switch of delete protection — children name who is spared.
     /// Off means protection is entirely off, whichever child stays checked.
     /// </summary>
@@ -649,8 +666,10 @@ public sealed record AppSettings
     /// </summary>
     public string ToBackupJson(bool includeKey)
         => includeKey
-            ? JsonSerializer.Serialize(this, Format)
-            : JsonSerializer.Serialize(this with { SavedProviders = [], BackendApiKey = string.Empty }, Format);
+            ? JsonSerializer.Serialize(this with { AutoBackupPassword = string.Empty }, Format)
+            : JsonSerializer.Serialize(
+                this with { SavedProviders = [], BackendApiKey = string.Empty, AutoBackupPassword = string.Empty },
+                Format);
 
     // --- 每家各存一份，凭据只发给它所属的服务商（票 29，用户需求 2026-10-10） ---------------
 
@@ -775,6 +794,19 @@ public sealed record AppSettings
     /// </summary>
     public AppSettings KeepingKeyOf(AppSettings local)
         => SavedProviders.Count > 0 ? this : this with { SavedProviders = local.SavedProviders };
+
+    /// <summary>
+    /// 备份恢复落地时，定期备份整套用本机的（评审 2026-10-16 F-20）：备份里不带口令，照搬备份里的
+    /// 开关与文件夹会让本机的定期备份悄悄变成不加密、或指向另一台电脑上的路径。
+    /// </summary>
+    public AppSettings KeepingAutoBackupOf(AppSettings local)
+        => this with
+        {
+            AutoBackupEnabled = local.AutoBackupEnabled,
+            AutoBackupFolder = local.AutoBackupFolder,
+            AutoBackupKeep = local.AutoBackupKeep,
+            AutoBackupPassword = local.AutoBackupPassword,
+        };
 
     /// <summary>
     /// 读进来的一份：受保护的凭据还原成明文，来源规整；凭据打不开、或认不出来源的，整份不留。

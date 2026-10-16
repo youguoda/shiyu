@@ -142,7 +142,28 @@ public static class SettingsSchema
                     "store.backup", "备份", SettingsControl.Custom,
                     Hint: "导出全部历史、图片原图与设置；可加密。导入可合并或覆盖。",
                     Keywords: ["备份", "导出", "导入", "加密"],
-                    Icon: "E74E"))),
+                    Icon: "E74E"),
+
+                // 评审 2026-10-16 F-20：历史越久越值钱，手动备份总有忘的时候。
+                new SettingsItem(
+                    "store.auto-backup", "定期备份", SettingsControl.Toggle,
+                    Hint: "每周一次，把历史、图片原图与设置备份到你选的文件夹（与手动备份同一种文件），保留最近几份。失败只记日志、托盘提示一次。",
+                    Keywords: ["备份", "定期", "自动", "每周", "加密", "文件夹", "网盘", "丢失"],
+                    Icon: "E777"),
+                new SettingsItem(
+                    "store.auto-backup-target", "备份到", SettingsControl.Custom,
+                    Parent: "store.auto-backup",
+                    Hint: "选一个文件夹（可以是同步盘里的）；可设口令加密。口令只存在本机，换电脑后恢复备份要用它。",
+                    Keywords: ["文件夹", "位置", "口令", "密码", "加密", "立即备份"],
+                    Icon: "E8B7"),
+                new SettingsItem(
+                    "store.auto-backup-keep", "保留份数", SettingsControl.Number,
+                    Min: 1, Max: AutoBackupSchedule.MaxKeep,
+                    Parent: "store.auto-backup",
+                    Hint: "文件夹里只留最近这么多份自动备份，更早的删掉；手动导出的备份不受影响。",
+                    Keywords: ["保留", "份数", "几份", "旧备份", "删除"],
+                    Unit: "份",
+                    Icon: "E81C"))),
 
         new SettingsPage("bar", "快速粘贴", "E77F", "按快速粘贴键在光标旁呼出的那条取用面板（窄条）：去留、密度与悬停动作。",
             new SettingsSection("bar.behaviour", "呼出与钉住",
