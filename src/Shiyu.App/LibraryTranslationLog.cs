@@ -298,6 +298,23 @@ public partial class LibraryWindow
 
     private void OnLogDelete(object sender, RoutedEventArgs e) => DeleteLogSelection();
 
+    /// <summary>导出（评审 2026-10-16 F-19）：选中的按列表顺序，全部就是整份记录（保留期决定它有多长）。</summary>
+    private void OnLogExport(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedLogItems()
+            .Select(item => item.Record)
+            .OrderByDescending(record => record.CreatedAt)
+            .ToList();
+        ExportUi.Run(
+            this,
+            "翻译记录",
+            selected.Count,
+            () => selected,
+            () => _store.TranslationLog(query: null, limit: int.MaxValue),
+            (writer, records, format) => TranslationLogExport.Write(writer, records, format),
+            ShowLightFeedback);
+    }
+
     /// <summary>删除所选：可撤销级（§6.5）不弹框，直接删 + 撤销条，与历史页同一个手感。</summary>
     private void DeleteLogSelection()
     {

@@ -558,6 +558,8 @@ public partial class LibraryWindow
         body.Children.Add(aiRow);
 
         body.Children.Add(MenuRow("全选", "\uE8FD", () => EntryList.SelectAll(), keyHint: Key("select-all")));
+        // 评审 2026-10-16 F-19：选中的或全部，CSV 或 Markdown。
+        body.Children.Add(MenuRow("导出…", "\uEDE1", ExportHistory, toolTip: "导出为 CSV 或 Markdown；有选中时可以只导出选中的"));
         body.Children.Add(MenuRow("键位速查", "\uE8FD", ShowCheatSheet, keyHint: Key("cheatsheet")));
 
         // 危险组（§6.4）：距离 + Danger 色 + 对话框，三重警告的第一重。

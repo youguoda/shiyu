@@ -638,6 +638,27 @@ public partial class LibraryWindow : Window
     private List<EntryItem> SelectedItems() => [.. EntryList.SelectedItems.OfType<EntryItem>()];
 
     /// <summary>
+    /// 导出（评审 2026-10-16 F-19）：选中的按列表顺序（置顶在前、新的在前），全部就是整个历史；
+    /// 条目在后台一条条读，全选上万条也不卡界面。
+    /// </summary>
+    private void ExportHistory()
+    {
+        var order = _items.Select((item, index) => (item.Id, index)).ToDictionary(pair => pair.Id, pair => pair.index);
+        var ids = SelectedItems()
+            .Select(item => item.Id)
+            .OrderBy(id => order.GetValueOrDefault(id, int.MaxValue))
+            .ToList();
+        ExportUi.Run(
+            this,
+            "剪贴板历史",
+            ids.Count,
+            () => ids.Select(id => _store.Get(id)).OfType<Entry>(),
+            () => EntryExport.All(_store),
+            (writer, entries, format) => EntryExport.Write(writer, entries, format),
+            ShowLightFeedback);
+    }
+
+    /// <summary>
     /// 「粘贴全部」（评审 2026-10-16 F-12）：选中的条目按选中先后、一条一行，贴回打开历史窗口之前所在的
     /// 窗口。回不去（不知道是哪扇、它以管理员身份运行、抢不回前台）就只复制，说清楚让人自己按 Ctrl+V。
     /// </summary>

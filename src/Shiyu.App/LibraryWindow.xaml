@@ -354,6 +354,16 @@
                     <TextBlock Text="清空全部" Margin="6,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
+
+            <!-- 导出（评审 2026-10-16 F-19）：选中的或全部，CSV 或 Markdown。靠右、排在「清空全部」左边。 -->
+            <Button x:Name="LogExportButton" DockPanel.Dock="Right" Style="{StaticResource CommandButton}"
+                    Margin="0,0,6,0" Click="OnLogExport" ToolTip="导出翻译记录（CSV 或 Markdown）">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xEDE1;" FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}" VerticalAlignment="Center"/>
+                    <TextBlock Text="导出…" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
         </DockPanel>
 
         <!-- 翻译记录页的内容：列表与空态；撤销条在切页时搬过来（同一个 ToastHost）。 -->
