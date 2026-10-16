@@ -152,6 +152,24 @@ internal sealed class SettingsModule
         System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "credentials.log"), log + "done" + Environment.NewLine);
     }
 
+    /// <summary>探针命令 settings-more 的入口（评审 2026-10-16 F-15，见 SettingsWindow.ProbeMore）。</summary>
+    internal async void ProbeMore()
+    {
+        Show();
+        for (var waited = 0; waited < 50 && _window is not { IsLoaded: true }; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = _window is null
+            ? "window|missing" + Environment.NewLine
+            : await _window.ProbeMore(
+                System.IO.Path.Combine(directory, "settings-more-closed.png"),
+                System.IO.Path.Combine(directory, "settings-more-open.png"));
+        System.IO.File.WriteAllText(System.IO.Path.Combine(directory, "settings-more.log"), log + "done" + Environment.NewLine);
+    }
+
     /// <summary>
     /// 探针命令 settings-front（用户实录 2026-10-13：点托盘图标，设置窗有时不在最前）。托盘左键走的
     /// 就是 <see cref="Show"/>：开一次；最小化后再开；最大化再最小化后再开（应回到最大化）；被本进程的

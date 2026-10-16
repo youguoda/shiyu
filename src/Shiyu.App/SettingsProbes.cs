@@ -118,6 +118,40 @@ public partial class SettingsWindow
         return log.ToString();
     }
 
+    /// <summary>
+    /// 探针命令 settings-more（评审 2026-10-16 F-15）：「快速粘贴」页首屏有常驻钉住、没有文本行数（折在「更多」里），
+    /// 深链到文本行数时那一折自己打开、它露出来。前后各渲一张图。判断在这里做完，日志只有真假。
+    /// </summary>
+    internal async Task<string> ProbeMore(string closedPicture, string openPicture)
+    {
+        async Task Settle()
+        {
+            for (var round = 0; round < 4; round++)
+            {
+                await Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+            }
+        }
+
+        SelectPage("bar");
+        await Settle();
+        var common = _rows["bar.pinned"].IsVisible;
+        var folded = !_rows["bar.text-lines"].IsVisible;
+        if (Content is FrameworkElement closedRoot)
+        {
+            App.RenderToPng(closedRoot, closedPicture);
+        }
+
+        JumpToItem("bar.text-lines");
+        await Settle();
+        var unfolded = _rows["bar.text-lines"].IsVisible;
+        if (Content is FrameworkElement openRoot)
+        {
+            App.RenderToPng(openRoot, openPicture);
+        }
+
+        return FormattableString.Invariant($"more|common={common}|folded={folded}|unfolded={unfolded}{Environment.NewLine}");
+    }
+
     /// <summary>「显示 / 收起」钮此刻的字，写成 ASCII 给探针脚本（脚本只认 ASCII）。</summary>
     private static string ButtonWord(Button reveal) => Equals(reveal.Content, "显示") ? "show" : "hide";
 

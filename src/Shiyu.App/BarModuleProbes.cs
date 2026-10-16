@@ -197,5 +197,45 @@ internal sealed partial class BarModule
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(directory, "bar-pin.log"), log.ToString());
     }
+
+    /// <summary>
+    /// 探针命令 summon-timing（评审 2026-10-16 F-21：复测热路径——ADR-0006 定义的真正指标）：进程常驻时，按下快速
+    /// 粘贴到窄条可见、列表排好（界面线程闲下来）要多久。轻量模式开（隐藏即清卡片、收紧内存，下一次重建）与关
+    /// 各量 20 次（先空跑一次），每次之间收起并停 400 ms，让轻量化做完。写下 P50 / P95 / 最大值（毫秒）。
+    /// </summary>
+    internal async void ProbeSummonTiming()
+    {
+        var shell = _shell!;
+        var log = new StringBuilder();
+        foreach (var lightweight in new[] { true, false })
+        {
+            shell.TryUpdateSettings(settings => settings with { LightweightWhenHidden = lightweight, BarPinned = false });
+            await Task.Delay(300);
+
+            var times = new List<double>();
+            for (var run = 0; run <= 20; run++)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                ShowQuickPaste();
+                await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+                var elapsed = watch.Elapsed.TotalMilliseconds;
+                if (run > 0)
+                {
+                    times.Add(elapsed);
+                }
+
+                _bar?.Dismiss();
+                await Task.Delay(400);
+            }
+
+            times.Sort();
+            double At(double share) => times[Math.Min(times.Count - 1, (int)Math.Ceiling(share * times.Count) - 1)];
+            log.AppendLine(FormattableString.Invariant(
+                $"{(lightweight ? "lightweight" : "steady")}|runs={times.Count}|p50={At(0.5):F0}|p95={At(0.95):F0}|max={times[^1]:F0}"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "summon-timing.log"), log.ToString());
+    }
 }
 #endif

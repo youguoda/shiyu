@@ -57,7 +57,8 @@ public sealed record SettingsItem(
     string[]? Keywords = null,
     string? Unit = null,
     string? Icon = null,
-    bool FullBleed = false)
+    bool FullBleed = false,
+    bool More = false)
 {
     public string[] ChoiceList => Choices ?? [];
     public string[] KeywordList => Keywords ?? [];
@@ -120,7 +121,8 @@ public static class SettingsSchema
                     "look.source-icons", "来源图标", SettingsControl.Toggle,
                     Hint: "窄条卡片和历史列表里，用图标标出内容是从哪个应用复制来的。关掉后不显示；取不到图标的应用，那一格空着。历史窗口的说明行仍会写出来源应用的名字。",
                     Keywords: ["图标", "来源", "应用", "程序", "隐藏", "显示", "卡片", "窄条", "历史", "管理窗", "复制来源"],
-                    Icon: "E71D")),
+                    Icon: "E71D",
+                    More: true)),
             new SettingsSection("general.performance", "性能",
                 new SettingsItem(
                     "look.lightweight", "轻量模式", SettingsControl.Toggle,
@@ -178,19 +180,22 @@ public static class SettingsSchema
                     Hint: "窄条里每张文本卡最多显示的行数。",
                     Keywords: ["行数", "密度", "文本"],
                     Unit: "行",
-                    Icon: "E8D2"),
+                    Icon: "E8D2",
+                    More: true),
                 new SettingsItem(
                     "bar.image-height", "图片高度", SettingsControl.Number, Min: 40, Max: 400,
                     Hint: "窄条里图片卡的显示高度。",
                     Keywords: ["图片", "高度", "密度"],
                     Unit: "px",
-                    Icon: "E8B9"),
+                    Icon: "E8B9",
+                    More: true),
                 new SettingsItem(
                     "bar.file-count", "文件条数", SettingsControl.Number, Min: 1, Max: 10,
                     Hint: "文件卡里最多列出的文件行数。",
                     Keywords: ["文件", "条数", "密度"],
                     Unit: "条",
-                    Icon: "E8B7"),
+                    Icon: "E8B7",
+                    More: true),
                 new SettingsItem(
                     "look.preview-on-hover", "悬停自动预览", SettingsControl.Toggle,
                     Hint: "鼠标在卡片上停一会儿就弹出完整预览；关闭后只在按住空格时预览。",
@@ -202,12 +207,14 @@ public static class SettingsSchema
                     Parent: "look.preview-on-hover",
                     Keywords: ["预览", "悬停", "停留", "完整", "延迟"],
                     Unit: "毫秒",
-                    Icon: "E823"),
+                    Icon: "E823",
+                    More: true),
                 new SettingsItem(
                     "bar.card-tooltips", "悬停教学提示", SettingsControl.Toggle,
                     Hint: "预览面板底部的一行操作提示：双击、Enter 粘贴，拖出到哪里；关闭后预览不再显示这一行。",
                     Keywords: ["提示", "悬停", "教学", "拖放", "拖出", "预览", "双击"],
-                    Icon: "E823")),
+                    Icon: "E823",
+                    More: true)),
             new SettingsSection("bar.actions", "悬停动作",
                 new SettingsItem(
                     "bar.actions", "动作清单", SettingsControl.Actions,
@@ -219,7 +226,8 @@ public static class SettingsSchema
                     "action.sound", "完成提示音", SettingsControl.Toggle,
                     Hint: "动作完成后播放一声提示；默认只显示对勾。",
                     Keywords: ["声音", "提示音", "反馈", "音效"],
-                    Icon: "E767"))),
+                    Icon: "E767",
+                    More: true))),
 
         new SettingsPage("privacy", "记录与隐私", "E72E", "什么被记录、什么绝不记录、留多久。",
             new SettingsSection("privacy.record", "记录什么",
@@ -257,7 +265,8 @@ public static class SettingsSchema
                     Hint: "天后清理原图，缩略图留着；整条什么时候删看「历史保留」。",
                     Keywords: ["保留", "清理", "图片", "原图", "多久删", "过期", "几天", "占用"],
                     Unit: "天",
-                    Icon: "E823"),
+                    Icon: "E823",
+                    More: true),
                 new SettingsItem(
                     "store.protect", "删除保护", SettingsControl.Toggle,
                     Hint: "受收藏/置顶保护的条目不参与自动清理与批量删除，也不显示删除入口；取消标记即可删除。",

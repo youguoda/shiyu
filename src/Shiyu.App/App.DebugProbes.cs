@@ -1037,6 +1037,10 @@ public partial class App
                 break;
 
             // 点托盘图标，设置窗要到最前（用户实录 2026-10-13）：最小化、最大化后最小化、被盖住，再开。
+            case "settings-more":
+                _modules!.Settings.ProbeMore();
+                break;
+
             case "settings-front":
                 _modules!.Settings.ProbeBringToFront();
                 break;
@@ -1053,6 +1057,11 @@ public partial class App
             // 翻译面板像反向输入框一样挑模板（用户需求 2026-10-09）。配 SHIYU_FAKE_BACKEND=1。
             case "panel-templates":
                 _modules!.Translation.ProbeTemplatePicker("hello panel templates");
+                break;
+
+            // 热路径复测（评审 2026-10-16 F-21）：常驻进程里反复呼出窄条，轻量模式开与关各量一遍。
+            case "summon-timing":
+                _modules!.Bar.ProbeSummonTiming();
                 break;
 
             // 离线词典的卡（评审 2026-10-16 F-08）。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1。

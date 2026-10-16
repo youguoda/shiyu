@@ -394,14 +394,79 @@ public partial class SettingsWindow : Window
                 body.Children.Add(heading);
                 firstSection = false;
 
-                foreach (var item in section.Items.Where(item => item.Parent is null))
+                foreach (var item in section.Items.Where(item => item.Parent is null && !item.More))
                 {
                     body.Children.Add(RowFor(item, section));
+                }
+
+                // 低频项收进「更多」（评审 2026-10-16 F-15）：首屏只放常用的，一项也不删。
+                if (section.Items.Where(item => item.More).ToList() is { Count: > 0 } folded)
+                {
+                    body.Children.Add(FoldFor(section, folded));
                 }
             }
 
             _pageBodies[page.Id] = body;
         }
+    }
+
+    /// <summary>折进「更多」的项 → 展开它们那一折（搜索、深链落到它们时先展开再滚过去）。</summary>
+    private readonly Dictionary<string, Action> _unfold = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 一节的「更多」（评审 2026-10-16 F-15）：点开露出这一节的低频项，再点收起。折起来的子项单独成卡，
+    /// 照旧随父项露面或收起（<see cref="ApplyParentVisibility"/> 按 <see cref="_rows"/> 找它）。
+    /// </summary>
+    private FrameworkElement FoldFor(SettingsSection section, IReadOnlyList<SettingsItem> folded)
+    {
+        var panel = new StackPanel { Visibility = Visibility.Collapsed };
+        foreach (var item in folded)
+        {
+            if (item.Parent is null)
+            {
+                panel.Children.Add(RowFor(item, section));
+                continue;
+            }
+
+            var card = SettingsCardView.Create(item, EditorFor(item));
+            _rows[item.Id] = card.Root;
+            _cards[item.Id] = card;
+            panel.Children.Add(card.Root);
+        }
+
+        // 不写条数：折起来的子项随父项露面，数出来的与看得见的会对不上。
+        const string closedLabel = "更多 ▾";
+        var toggle = new Button
+        {
+            Content = closedLabel,
+            Padding = new Thickness(10, 3, 10, 3),
+            Margin = new Thickness(0, 2, 0, 4),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Cursor = Cursors.Hand,
+            ToolTip = "这一节不常用的设置：" + string.Join("、", folded.Select(item => item.Label)),
+        };
+        toggle.SetResourceReference(StyleProperty, "FlyoutButton");
+        System.Windows.Automation.AutomationProperties.SetName(toggle, $"{section.Title}：更多");
+
+        void Show(bool open)
+        {
+            panel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            toggle.Content = open ? "收起 ▴" : closedLabel;
+        }
+
+        toggle.Click += (_, _) => Show(panel.Visibility != Visibility.Visible);
+
+        // 折起来的项、以及折起来的项的子项，深链到它们都先展开。
+        var ids = folded.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var item in section.Items.Where(item => ids.Contains(item.Id) || item.Parent is { } parent && ids.Contains(parent)))
+        {
+            _unfold[item.Id] = () => Show(true);
+        }
+
+        var host = new StackPanel();
+        host.Children.Add(toggle);
+        host.Children.Add(panel);
+        return host;
     }
 
     /// <summary>
@@ -411,7 +476,8 @@ public partial class SettingsWindow : Window
     /// </summary>
     private FrameworkElement RowFor(SettingsItem item, SettingsSection section)
     {
-        var children = section.Items.Where(child => child.Parent == item.Id).ToList();
+        // 折进「更多」的子项不在组卡里（评审 2026-10-16 F-15），由 FoldFor 单独成卡。
+        var children = section.Items.Where(child => child.Parent == item.Id && !child.More).ToList();
         if (children.Count == 0)
         {
             var card = SettingsCardView.Create(item, EditorFor(item));
@@ -2346,6 +2412,12 @@ public partial class SettingsWindow : Window
         }
 
         SelectPage(pageId);
+
+        // 落在「更多」里的项（评审 2026-10-16 F-15）：先把那一折打开，再滚过去。
+        if (_unfold.TryGetValue(itemId, out var unfold))
+        {
+            unfold();
+        }
 
         // A child under a collapsed parent cannot be shown without flipping
         // the parent's value — not ours to do — so the pulse lands on the

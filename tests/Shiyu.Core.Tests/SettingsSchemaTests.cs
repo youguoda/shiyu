@@ -465,4 +465,31 @@ public class SettingsSchemaTests
     {
         Assert.Contains(SettingsSearch.Find("输入框默认"), hit => hit.Item.Id == "translate.templates");
     }
+
+    // ── 「更多」（评审 2026-10-16 F-15）：低频项收起来，一项不删，搜得到 ──
+
+    [Fact]
+    public void The_low_frequency_items_are_folded_and_nothing_else()
+    {
+        Assert.Equal(
+            ["look.source-icons", "bar.text-lines", "bar.image-height", "bar.file-count", "look.preview-hover",
+             "bar.card-tooltips", "action.sound", "store.retention-days"],
+            Items().Where(item => item.More).Select(item => item.Id));
+    }
+
+    [Fact]
+    public void Every_section_still_opens_with_something_on_its_first_screen()
+    {
+        foreach (var section in SettingsSchema.Tree.SelectMany(page => page.Sections))
+        {
+            Assert.Contains(section.Items, item => item.Parent is null && !item.More);
+        }
+    }
+
+    [Theory]
+    [InlineData("提示音", "action.sound")]
+    [InlineData("文本行数", "bar.text-lines")]
+    [InlineData("预览延迟", "look.preview-hover")]
+    public void A_folded_item_is_still_found_by_search(string words, string id)
+        => Assert.Contains(SettingsSearch.Find(words), hit => hit.Item.Id == id);
 }
