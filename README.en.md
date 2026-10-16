@@ -4,7 +4,7 @@
 
 [简体中文](README.md) | **English**
 
-A clipboard history and translation tool that lives in the Windows 11 tray.
+A clipboard history and translation tool that lives in the Windows 11 tray. **Its interface is in Chinese only for now**; this README gives each Chinese label next to its English name so you can find your way around.
 
 > A fish trap is for catching fish; once you have the fish, you can forget the trap. Words are for catching meaning; once you have the meaning, you can forget the words.
 >
