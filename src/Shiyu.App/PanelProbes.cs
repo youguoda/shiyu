@@ -67,6 +67,33 @@ public partial class PanelWindow
     }
 
     /// <summary>
+    /// 探针命令 panel-speech（评审 2026-10-16 F-10）：点底栏的「朗读」，朗读中按钮换成「停止」，读完换回来；用的是
+    /// 哪条路、哪个音色由语音服务报。语音服务已静音（探针不在用户机器上出声）。判断在这里做完，日志只有真假与音色名。
+    /// </summary>
+    internal async Task<string> ProbeSpeech()
+    {
+        await Settled();
+        SpeakButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+        var shown = false;
+        for (var waited = 0; waited < 100 && !shown; waited++)
+        {
+            await Task.Delay(50);
+            shown = SpeakLabel.Text == "停止";
+        }
+
+        var back = false;
+        for (var waited = 0; waited < 300 && !back; waited++)
+        {
+            await Task.Delay(50);
+            back = SpeakLabel.Text == "朗读";
+        }
+
+        return FormattableString.Invariant(
+            $"speech|voice={_speech?.LastVoice}|stopShown={shown}|backAfter={back}{Environment.NewLine}");
+    }
+
+    /// <summary>
     /// 探针命令 panel-dictionary（评审 2026-10-16 F-08）：单词态的卡来自离线词典——音标、中文释义、考试标签
     /// 都在；查变形（went）说是 go 的变形。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1，不碰网络。
     /// 判断在这里做完，日志里只有真假（探针脚本只认 ASCII）；音标传 null 时只看有没有。

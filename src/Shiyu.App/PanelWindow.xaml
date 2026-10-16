@@ -120,7 +120,7 @@
                         Margin="4,0,0,0" VerticalAlignment="Center" Cursor="Hand"
                         Click="OnSpeakWord" ToolTip="朗读这个词"
                         AutomationProperties.Name="朗读这个词">
-                    <TextBlock Text="&#xE767;" FontFamily="{DynamicResource Font.Icon}"
+                    <TextBlock x:Name="WordSpeakGlyph" Text="&#xE767;" FontFamily="{DynamicResource Font.Icon}"
                                FontSize="{DynamicResource Size.IconS}"/>
                 </Button>
                 <!-- 生词本（评审 2026-10-16 F-09）：卡到了才露面；空心 = 没收，实心 = 已在生词本里。 -->
@@ -351,10 +351,10 @@
                         ToolTip="朗读译文；朗读中再点一次即停"
                         AutomationProperties.Name="朗读">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE767;" FontFamily="{DynamicResource Font.Icon}"
+                        <TextBlock x:Name="SpeakGlyph" Text="&#xE767;" FontFamily="{DynamicResource Font.Icon}"
                                    FontSize="{DynamicResource Size.IconS}"
                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
-                        <TextBlock Text="朗读" Margin="6,0,0,0"/>
+                        <TextBlock x:Name="SpeakLabel" Text="朗读" Margin="6,0,0,0"/>
                     </StackPanel>
                 </Button>
                 <Button x:Name="CopyButton" DockPanel.Dock="Right" Style="{DynamicResource FlyoutButton}"

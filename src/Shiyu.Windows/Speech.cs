@@ -4,9 +4,10 @@ using System.Windows.Threading;
 namespace Shiyu.Windows;
 
 /// <summary>
-/// SAPI 朗读服务（System.Speech）。
+/// 朗读服务。先走 WinRT（评审 2026-10-16 F-10：看得见 OneCore 与自然音色，见 <see cref="WinRtSpeech"/>），
+/// 这种语言 WinRT 没有音色、或 WinRT 出错时，回落 SAPI（System.Speech）。
 ///
-/// SpeechSynthesizer 是 COM 对象：诞生、选音色、说话、取消、释放都必须
+/// SAPI 的 SpeechSynthesizer 是 COM 对象：诞生、选音色、说话、取消、释放都必须
 /// 发生在同一条 STA 线程上。这里用一条专用线程持有它整个生命周期，UI
 /// 线程只投递动作、绝不触碰对象本身——与 WinVHook 同一条纪律：回调只
 /// 上报，工作在 owning 线程。合成器在第一次朗读时才创建：不朗读的用户
@@ -17,10 +18,35 @@ public sealed class SpeechSynthesis : IDisposable
     private readonly Thread _thread;
     private readonly ManualResetEvent _ready = new(false);
     private readonly Dictionary<string, string?> _voiceByPrefix = [];
+    private readonly Dictionary<string, global::Windows.Media.SpeechSynthesis.VoiceInformation?> _winRtVoiceByPrefix = [];
+    private readonly WinRtSpeech _winRt = new();
 
     private Dispatcher? _dispatcher;
     private SpeechSynthesizer? _synthesizer;
+    private volatile bool _sapiSpeaking;
     private bool _disposed;
+
+    /// <summary>
+    /// 开始读 / 读完、停下（评审 2026-10-16 F-10：朗读中按钮显示「停止」）。可能在任何线程上触发，订阅方自己回
+    /// 界面线程。
+    /// </summary>
+    public event Action<bool>? SpeakingChanged;
+
+    /// <summary>此刻有没有在读（两条路任一）。</summary>
+    public bool IsSpeaking => _winRt.IsSpeaking || _sapiSpeaking;
+
+    /// <summary>
+    /// 探针用（评审 2026-10-16 F-10）：两条路都照常走、照常报事件，只是音量为 0——核对"朗读中显示停止"时不在
+    /// 用户机器上出声。
+    /// </summary>
+    public bool Muted
+    {
+        get => _winRt.Muted;
+        set => _winRt.Muted = value;
+    }
+
+    /// <summary>上一次朗读用的是哪条路、哪个音色（「winrt:Microsoft Huihui」/「sapi:…」），给探针看。</summary>
+    public string? LastVoice { get; private set; }
 
     public SpeechSynthesis()
     {
@@ -35,11 +61,12 @@ public sealed class SpeechSynthesis : IDisposable
         // Run 在拿到 Dispatcher 之后才放行；WaitOne 的内存屏障让构造
         // 返回后 _dispatcher 一定可见。
         _ready.WaitOne();
+
+        _winRt.SpeakingChanged += speaking => SpeakingChanged?.Invoke(speaking);
     }
 
     /// <summary>
-    /// 朗读；已在朗读则这次点击就是停止。判定在语音线程上原子完成，
-    /// 调用方无需也无法可靠地跟踪朗读状态。
+    /// 朗读；已在朗读则这次点击就是停止。
     /// </summary>
     /// <param name="text">要读的译文。</param>
     /// <param name="culturePrefix">
@@ -53,6 +80,58 @@ public sealed class SpeechSynthesis : IDisposable
             return;
         }
 
+        if (IsSpeaking)
+        {
+            Stop();
+            return;
+        }
+
+        // WinRT 有这种语言的音色就走它（评审 2026-10-16 F-10）；它出错了再回落 SAPI。
+        if (WinRtVoiceFor(culturePrefix) is { } voice)
+        {
+            LastVoice = "winrt:" + voice.DisplayName;
+            _ = SpeakWinRtAsync(text, voice, culturePrefix);
+            return;
+        }
+
+        SpeakSapi(text, culturePrefix);
+    }
+
+    private global::Windows.Media.SpeechSynthesis.VoiceInformation? WinRtVoiceFor(string? culturePrefix)
+    {
+        if (culturePrefix is null)
+        {
+            return null;
+        }
+
+        lock (_winRtVoiceByPrefix)
+        {
+            if (!_winRtVoiceByPrefix.TryGetValue(culturePrefix, out var voice))
+            {
+                voice = WinRtSpeech.VoiceFor(culturePrefix);
+                _winRtVoiceByPrefix[culturePrefix] = voice;
+            }
+
+            return voice;
+        }
+    }
+
+    private async Task SpeakWinRtAsync(
+        string text, global::Windows.Media.SpeechSynthesis.VoiceInformation voice, string? culturePrefix)
+    {
+        try
+        {
+            await _winRt.SpeakAsync(text, voice);
+        }
+        catch (Exception)
+        {
+            // expected: 合成或播放失败（音频设备、语音包被拔）——回落 SAPI，朗读仍是锦上添花。
+            SpeakSapi(text, culturePrefix);
+        }
+    }
+
+    private void SpeakSapi(string text, string? culturePrefix)
+    {
         Post(() =>
         {
             var synthesizer = EnsureSynthesizer();
@@ -70,6 +149,8 @@ public sealed class SpeechSynthesis : IDisposable
                 }
 
                 SelectVoice(synthesizer, culturePrefix);
+                synthesizer.Volume = Muted ? 0 : 100;
+                LastVoice = "sapi:" + synthesizer.Voice?.Name;
                 synthesizer.SpeakAsync(text);
             }
             catch (Exception)
@@ -81,17 +162,21 @@ public sealed class SpeechSynthesis : IDisposable
     }
 
     /// <summary>停止当前朗读（面板关闭时叫停，不留一个读完了没人听的语音）。</summary>
-    public void Stop() => Post(() =>
+    public void Stop()
     {
-        try
+        _winRt.Stop();
+        Post(() =>
         {
-            _synthesizer?.SpeakAsyncCancelAll();
-        }
-        catch (Exception)
-        {
-            // expected: 停不下来的朗读随线程关停一起消失。
-        }
-    });
+            try
+            {
+                _synthesizer?.SpeakAsyncCancelAll();
+            }
+            catch (Exception)
+            {
+                // expected: 停不下来的朗读随线程关停一起消失。
+            }
+        });
+    }
 
     private void Run()
     {
@@ -111,6 +196,18 @@ public sealed class SpeechSynthesis : IDisposable
         {
             _synthesizer = new SpeechSynthesizer();
             _synthesizer.SetOutputToDefaultAudioDevice();
+
+            // 读着 / 读完，同 WinRT 那条路一样报出去（评审 2026-10-16 F-10）。
+            _synthesizer.SpeakStarted += (_, _) =>
+            {
+                _sapiSpeaking = true;
+                SpeakingChanged?.Invoke(true);
+            };
+            _synthesizer.SpeakCompleted += (_, _) =>
+            {
+                _sapiSpeaking = false;
+                SpeakingChanged?.Invoke(false);
+            };
         }
         catch (Exception)
         {
@@ -211,6 +308,7 @@ public sealed class SpeechSynthesis : IDisposable
         }
 
         _disposed = true;
+        _winRt.Dispose();
 
         try
         {

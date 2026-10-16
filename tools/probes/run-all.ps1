@@ -74,7 +74,7 @@ if (-not $SkipCoexistence) {
 
 # --- window probes ------------------------------------------------------------
 
-foreach ($name in @('bar', 'bar-newest', 'bar-sharp', 'panel', 'settings', 'library', 'quickbar', 'preview', 'tray', 'caret', 'tooltip', 'reverse-select', 'reverse-enter', 'settings-front', 'source-icons', 'content-size', 'panel-templates', 'translation-log', 'preview-image', 'credentials', 'badge', 'bar-pin', 'scroll-lane', 'markdown', 'stream-jank', 'auto-backup', 'panel-dictionary', 'settings-more')) {
+foreach ($name in @('bar', 'bar-newest', 'bar-sharp', 'panel', 'settings', 'library', 'quickbar', 'preview', 'tray', 'caret', 'tooltip', 'reverse-select', 'reverse-enter', 'settings-front', 'source-icons', 'content-size', 'panel-templates', 'translation-log', 'preview-image', 'credentials', 'badge', 'bar-pin', 'scroll-lane', 'markdown', 'stream-jank', 'auto-backup', 'panel-dictionary', 'settings-more', 'panel-speech')) {
     Write-Host "== probe-$name =="
     $script = Join-Path $PSScriptRoot "probe-$name.ps1"
     $checks = & $script -Exe $Exe

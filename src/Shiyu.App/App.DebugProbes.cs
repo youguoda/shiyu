@@ -1064,6 +1064,11 @@ public partial class App
                 _modules!.Bar.ProbeSummonTiming();
                 break;
 
+            // 朗读用 OneCore 音色、朗读中按钮显示停止（评审 2026-10-16 F-10）。配 SHIYU_FAKE_BACKEND=1；语音已静音。
+            case "panel-speech":
+                _modules!.Translation.ProbeSpeech();
+                break;
+
             // 离线词典的卡（评审 2026-10-16 F-08）。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1。
             case "panel-dictionary":
                 _modules!.Translation.ProbeDictionaryCard();

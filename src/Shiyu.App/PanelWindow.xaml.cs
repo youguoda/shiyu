@@ -257,6 +257,13 @@ public partial class PanelWindow : Window
         _logTranslation = logTranslation;
         _dictionary = dictionary;
         _speech = speech;
+
+        // 朗读中按钮显示「停止」（评审 2026-10-16 F-10）；面板关掉时退订，语音服务比面板活得久。
+        if (_speech is not null)
+        {
+            _speech.SpeakingChanged += OnSpeakingChanged;
+            Closed += (_, _) => _speech.SpeakingChanged -= OnSpeakingChanged;
+        }
         _backendReady = backendReady;
         _openSettings = openSettings;
         _enableFreeEngine = enableFreeEngine;
@@ -1164,6 +1171,23 @@ public partial class PanelWindow : Window
         var language = _session.CurrentRequest?.TargetLanguage ?? _target;
         _speech.SpeakOrStop(text, SpeechLanguage.CulturePrefix(language));
     }
+
+
+    /// <summary>
+    /// 朗读中按钮显示「停止」（评审 2026-10-16 F-10）：两枚朗读钮（底栏读译文、词头读原词）一起换成停止的样子，
+    /// 读完、停下就换回来。事件可能来自语音线程，回界面线程再改。
+    /// </summary>
+    private void OnSpeakingChanged(bool speaking) => Dispatcher.BeginInvoke(() =>
+    {
+        var glyph = speaking ? "\uE71A" : "\uE767";
+        SpeakGlyph.Text = glyph;
+        WordSpeakGlyph.Text = glyph;
+        SpeakLabel.Text = speaking ? "停止" : "朗读";
+        SpeakButton.ToolTip = speaking ? "停止朗读" : "朗读译文；朗读中再点一次即停";
+        WordSpeakButton.ToolTip = speaking ? "停止朗读" : "朗读这个词";
+        System.Windows.Automation.AutomationProperties.SetName(SpeakButton, speaking ? "停止朗读" : "朗读");
+        System.Windows.Automation.AutomationProperties.SetName(WordSpeakButton, speaking ? "停止朗读" : "朗读这个词");
+    });
 
     /// <summary>
     /// 词典卡上的星标（评审 2026-10-16 F-09）：空心点下去收进生词本，实心点下去移出。收的是此刻卡上的那一张，

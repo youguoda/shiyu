@@ -294,6 +294,27 @@ internal sealed class TranslationModule
         System.IO.File.WriteAllText(
             System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-dictionary.log"), log + "done" + Environment.NewLine);
     }
+
+    /// <summary>
+    /// 探针命令 panel-speech 的入口（评审 2026-10-16 F-10，见 PanelWindow.ProbeSpeech）：语音服务先静音，面板开在一段
+    /// 英文上（译文语言是中文，挑中文音色），点朗读。配 SHIYU_FAKE_BACKEND=1。
+    /// </summary>
+    internal async void ProbeSpeech()
+    {
+        // 先把语音服务建出来再静音：它平时在第一次开面板时才建，晚一步就会出声。
+        _speech ??= new SpeechSynthesis();
+        _speech.Muted = true;
+
+        ShowPanel("Read this sentence aloud for the probe.");
+        for (var waited = 0; waited < 50 && _panel is not { IsVisible: true }; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        var log = _panel is null ? "speech|missing" + Environment.NewLine : await _panel.ProbeSpeech();
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-speech.log"), log + "done" + Environment.NewLine);
+    }
 #endif
 
     /// <summary>
