@@ -513,8 +513,12 @@ internal partial class ReverseInputWindow : Window
     {
         var target = _returnTo;
 
-        // 翻译记录：贴回的就是这一次的结果，贴不贴得成都记（用户要的是这段文字）。
+        // 翻译记录：贴回的就是这一次的结果，贴不贴得成都记（用户要的是这段文字）。记模型给的原文。
         _logTranslation?.Invoke(_session.Text, text, _session.Template.Name);
+
+        // 贴回的是框里看到的样子（评审 2026-10-16 F-02：原文的 `**`、`#` 贴进微信就原样留在聊天框里，
+        // 已知问题挂了四个版本）。留在剪贴板上、存进历史的也是这一份——用户粘贴出来的就是它。
+        text = MarkdownText.PasteText(text);
         HideNow();
 
         // 上一次的还原还没轮到（400ms 内又贴了一次）：先结清，让这次的快照是用户真正的剪贴板，

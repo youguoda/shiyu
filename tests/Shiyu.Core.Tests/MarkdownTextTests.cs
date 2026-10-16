@@ -350,4 +350,66 @@ public class MarkdownTextTests
     [Fact]
     public void Nothing_in_common_with_an_empty_parse()
         => Assert.Equal(0, MarkdownText.CommonPrefix([], MarkdownText.Parse("text")));
+
+    // --- 贴进别处的纯文字（评审 2026-10-16 F-02：反向输入框贴进微信，** 和 # 原样留在聊天框里）--------
+
+    [Fact]
+    public void A_prompt_optimisation_result_pastes_without_any_markdown_symbols()
+    {
+        const string optimised = """
+            ## 角色
+
+            你是一位**资深**的前端工程师。
+
+            ### 要求
+
+            1. 用 *TypeScript* 写
+            2. 代码放在代码块里：
+
+            ```ts
+            const answer = 42;
+            ```
+
+            - 不要用 `any`
+            - 参考 [文档](https://example.com/docs)
+            """;
+
+        var pasted = MarkdownText.PasteText(optimised);
+
+        Assert.DoesNotContain("*", pasted);
+        Assert.DoesNotContain("#", pasted);
+        Assert.DoesNotContain("```", pasted);
+        Assert.DoesNotContain("`", pasted);
+        Assert.Equal(
+            "角色\n\n你是一位资深的前端工程师。\n\n要求\n\n1. 用 TypeScript 写\n2. 代码放在代码块里：\n\n"
+            + "const answer = 42;\n\n- 不要用 any\n- 参考 文档 (https://example.com/docs)",
+            pasted);
+    }
+
+    [Fact]
+    public void Plain_prose_pastes_as_it_is_line_breaks_and_all()
+        => Assert.Equal("第一行\n第二行\n\n第二段", MarkdownText.PasteText("第一行\n第二行\n\n第二段"));
+
+    [Fact]
+    public void A_table_pastes_row_by_row_with_tabs()
+        => Assert.Equal("a\tb\n1\t2", MarkdownText.PasteText("| a | b |\n| --- | --- |\n| 1 | 2 |"));
+
+    [Fact]
+    public void A_bare_web_or_mail_address_is_not_written_twice()
+    {
+        Assert.Equal("见 https://example.com", MarkdownText.PasteText("见 https://example.com"));
+        Assert.Equal("写信给 someone@example.com", MarkdownText.PasteText("写信给 someone@example.com"));
+    }
+
+    [Fact]
+    public void Escaped_symbols_paste_as_the_symbols_themselves()
+        => Assert.Equal("2*3*4 与 #号", MarkdownText.PasteText(@"2\*3\*4 与 \#号"));
+
+    [Fact]
+    public void A_rule_leaves_no_trace_and_tasks_keep_their_boxes()
+        => Assert.Equal("上\n\n下\n\n☑ 完成\n☐ 待办", MarkdownText.PasteText("上\n\n---\n\n下\n\n- [x] 完成\n- [ ] 待办"));
+
+    [Fact]
+    public void The_preview_keeps_its_compact_bullets_and_drops_urls()
+        => Assert.Equal("• 参考 文档", MarkdownText.Plain("- 参考 [文档](https://example.com/docs)"));
 }

@@ -171,8 +171,34 @@ public static class MarkdownText
     public static string Plain(string markdown)
     {
         var text = new StringBuilder();
-        AppendPlain(text, Parse(markdown), indent: string.Empty);
+        AppendPlain(text, Parse(markdown), indent: string.Empty, PlainStyle.Preview);
         return text.ToString().TrimEnd('\n');
+    }
+
+    /// <summary>
+    /// 贴进别处的纯文字（评审 2026-10-16 F-02：反向输入框贴进微信，`**`、`#` 原样留在聊天框里，
+    /// 已知问题挂了四个版本）。贴出去的就是框里看到的样子：标题去井号、强调去星号、代码块去掉围栏
+    /// 照原样、表格一行一行格间制表符、列表 "- " / "1. "，段与段之间空一行；链接的字与网址不同时
+    /// 两样都留——网址不能在粘贴里丢掉。
+    /// </summary>
+    public static string PasteText(string markdown)
+        => string.Join(
+            "\n\n",
+            Parse(markdown)
+                .Select(block =>
+                {
+                    var text = new StringBuilder();
+                    AppendPlain(text, [block], indent: string.Empty, PlainStyle.Paste);
+                    return text.ToString().TrimEnd('\n');
+                })
+                .Where(block => block.Length > 0));
+
+    /// <summary>纯文字的两种写法：预览挤在几行里；粘贴的列表用 "- "，链接留网址。</summary>
+    private sealed record PlainStyle(string Bullet, bool KeepLinkUrls)
+    {
+        public static PlainStyle Preview { get; } = new("• ", KeepLinkUrls: false);
+
+        public static PlainStyle Paste { get; } = new("- ", KeepLinkUrls: true);
     }
 
     /// <summary>界面上能点开的链接只有网页与邮件；别的（file:、javascript: 之类）只显示不打开。</summary>
@@ -385,17 +411,17 @@ public static class MarkdownText
 
     // --- 块树 → 纯文字 -------------------------------------------------------------------
 
-    private static void AppendPlain(StringBuilder text, IReadOnlyList<MdBlock> blocks, string indent)
+    private static void AppendPlain(StringBuilder text, IReadOnlyList<MdBlock> blocks, string indent, PlainStyle style)
     {
         foreach (var block in blocks)
         {
             switch (block)
             {
                 case MdParagraph paragraph:
-                    text.Append(indent).Append(PlainInlines(paragraph.Inlines)).Append('\n');
+                    text.Append(indent).Append(PlainInlines(paragraph.Inlines, style)).Append('\n');
                     break;
                 case MdHeading heading:
-                    text.Append(indent).Append(PlainInlines(heading.Inlines)).Append('\n');
+                    text.Append(indent).Append(PlainInlines(heading.Inlines, style)).Append('\n');
                     break;
                 case MdCodeBlock code:
                     foreach (var line in code.Code.Split('\n'))
@@ -405,7 +431,7 @@ public static class MarkdownText
 
                     break;
                 case MdQuote quote:
-                    AppendPlain(text, quote.Blocks, indent);
+                    AppendPlain(text, quote.Blocks, indent, style);
                     break;
                 case MdList list:
                     var number = list.Start;
@@ -415,13 +441,13 @@ public static class MarkdownText
                         {
                             true => "☑ ",
                             false => "☐ ",
-                            null => list.Ordered ? $"{number}. " : "• ",
+                            null => list.Ordered ? $"{number}. " : style.Bullet,
                         };
                         number++;
 
                         // The marker rides on the item's first line; the rest indent under it.
                         var itemText = new StringBuilder();
-                        AppendPlain(itemText, item.Blocks, string.Empty);
+                        AppendPlain(itemText, item.Blocks, string.Empty, style);
                         var lines = itemText.ToString().TrimEnd('\n').Split('\n');
                         text.Append(indent).Append(marker).Append(lines[0]).Append('\n');
                         foreach (var line in lines.Skip(1))
@@ -434,7 +460,7 @@ public static class MarkdownText
                 case MdTable table:
                     foreach (var row in table.Rows)
                     {
-                        text.Append(indent).Append(string.Join('\t', row.Cells.Select(PlainInlines))).Append('\n');
+                        text.Append(indent).Append(string.Join('\t', row.Cells.Select(cell => PlainInlines(cell, style)))).Append('\n');
                     }
 
                     break;
@@ -444,7 +470,7 @@ public static class MarkdownText
         }
     }
 
-    private static string PlainInlines(IReadOnlyList<MdInline> inlines)
+    private static string PlainInlines(IReadOnlyList<MdInline> inlines, PlainStyle style)
     {
         var text = new StringBuilder();
         foreach (var inline in inlines)
@@ -454,14 +480,24 @@ public static class MarkdownText
                 MdText plain => plain.Text,
                 MdCode code => code.Code,
                 MdLineBreak => "\n",
-                MdStrong strong => PlainInlines(strong.Inlines),
-                MdEmphasis emphasis => PlainInlines(emphasis.Inlines),
-                MdStrike strike => PlainInlines(strike.Inlines),
-                MdLink link => PlainInlines(link.Inlines),
+                MdStrong strong => PlainInlines(strong.Inlines, style),
+                MdEmphasis emphasis => PlainInlines(emphasis.Inlines, style),
+                MdStrike strike => PlainInlines(strike.Inlines, style),
+                MdLink link => LinkText(link, style),
                 _ => string.Empty,
             });
         }
 
         return text.ToString();
+    }
+
+    /// <summary>链接的字；粘贴时字与网址不同，网址跟在后面——贴出去的人点不了链接，网址不能丢。</summary>
+    private static string LinkText(MdLink link, PlainStyle style)
+    {
+        var label = PlainInlines(link.Inlines, style);
+        var address = link.Url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ? link.Url[7..] : link.Url;
+        return style.KeepLinkUrls && address.Length > 0 && label.Trim() != address
+            ? $"{label} ({link.Url})"
+            : label;
     }
 }

@@ -344,7 +344,7 @@
                 </Button>
                 <Button x:Name="CopyButton" DockPanel.Dock="Right" Style="{DynamicResource FlyoutButton}"
                         IsEnabled="False" Cursor="Hand" Click="OnCopy"
-                        ToolTip="复制译文"
+                        ToolTip="复制译文（按住 Shift 复制纯文本，不带 Markdown 符号）"
                         AutomationProperties.Name="复制">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE8C8;" FontFamily="{DynamicResource Font.Icon}"

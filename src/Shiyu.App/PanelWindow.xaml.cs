@@ -1128,18 +1128,24 @@ public partial class PanelWindow : Window
         AutomationProperties.SetLiveSetting(SaveButton, AutomationLiveSetting.Polite);
     }
 
-    private void OnCopy(object sender, RoutedEventArgs e) => CopyTranslation();
+    /// <summary>
+    /// 按住 Shift 点「复制」，复制的是框里看到的纯文字（评审 2026-10-16 F-02：贴进微信这类不认
+    /// Markdown 的地方，`**`、`#` 原样留在那里）。不按 Shift 仍是模型给的原文——贴进 Markdown 文档的
+    /// 人要的是它。
+    /// </summary>
+    private void OnCopy(object sender, RoutedEventArgs e)
+        => CopyTranslation(plain: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
 
     /// <summary>复制当前译文并让复制钮说一会儿真话：手动点与自动复制译文共用。</summary>
-    private void CopyTranslation()
+    private void CopyTranslation(bool plain = false)
     {
         if (_session is null || _session.Text.Length == 0)
         {
             return;
         }
 
-        var copied = _clipboard.SetText(_session.Text);
-        CopyLabel.Text = copied ? "已复制" : "复制失败";
+        var copied = _clipboard.SetText(plain ? MarkdownText.PasteText(_session.Text) : _session.Text);
+        CopyLabel.Text = copied ? (plain ? "已复制纯文本" : "已复制") : "复制失败";
 
         // 票 27 / U-29：状态变化同步给屏幕阅读器——名字跟着按钮走（内容是
         // 面板，UIA 派生不出名字），轻反馈 Polite、失败 Assertive。
