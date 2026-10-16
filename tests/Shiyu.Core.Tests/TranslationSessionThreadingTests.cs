@@ -34,13 +34,19 @@ public class TranslationSessionThreadingTests
         var reads = new List<string>();
         using var stop = new CancellationTokenSource();
 
+        // 读的线程真跑起来了才开流，且至少读一次：线程池忙（并行跑的别的测试类）时，Task.Run 可能拖到
+        // 流结束之后才轮上，那样一次都没读到，测的就不是"边流边读"了（2026-10-16 偶发红一次）。
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reader = Task.Run(() =>
         {
-            while (!stop.IsCancellationRequested)
+            started.SetResult();
+            do
             {
                 reads.Add(session.Text);
             }
+            while (!stop.IsCancellationRequested);
         });
+        await started.Task;
 
         await Task.Run(() => session.RunAsync(new TranslationRequest("原文", "en")));
         stop.Cancel();

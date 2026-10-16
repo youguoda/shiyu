@@ -331,6 +331,9 @@ public partial class PanelWindow : Window
         _senseGroups = [];
         CardSenses.ItemsSource = null;
         CardPhonetic.Text = string.Empty;
+        CardMeta.Text = string.Empty;
+        CardMeta.Visibility = Visibility.Collapsed;
+        _cardLater = null;
         SetupCard.Visibility = Visibility.Collapsed;
         ContentScroll.Visibility = Visibility.Visible;
         SaveLabel.Text = "存入历史";
@@ -583,7 +586,14 @@ public partial class PanelWindow : Window
 
         try
         {
-            return await api.LookupAsync(DictionaryWord.LookupKey(word), CancellationToken.None);
+            var card = await api.LookupAsync(DictionaryWord.LookupKey(word), CancellationToken.None);
+
+            // 本地词典的卡先上屏，例句随后补（评审 2026-10-16 F-08）：补的那一趟自己管连接，
+            // 这里放掉查卡的端口不碍它。
+            _cardLater = card is not null && api is IDictionaryEnricher enricher
+                ? enricher.EnrichAsync(card, CancellationToken.None)
+                : null;
+            return card;
         }
         catch (Exception)
         {
@@ -595,6 +605,9 @@ public partial class PanelWindow : Window
             (api as IDisposable)?.Dispose();
         }
     }
+
+    /// <summary>这一张卡后补的样子（例句），没有为 null。只在查卡那一刻设，渲染时取走。</summary>
+    private Task<DictionaryCard?>? _cardLater;
 
     /// <summary>
     /// 翻译之后补卡：迟到的换代检查保证只有最新一次翻译的卡会上屏——
@@ -614,6 +627,38 @@ public partial class PanelWindow : Window
         }
 
         if (card is null || run != _cardRun)
+        {
+            return;
+        }
+
+        var later = _cardLater;
+        _cardLater = null;
+        RenderIfCurrent(card, run);
+        if (later is null)
+        {
+            return;
+        }
+
+        DictionaryCard? richer;
+        try
+        {
+            richer = await later;
+        }
+        catch (Exception)
+        {
+            // expected: 补例句与查卡同一个契约——补不上就是没有例句。
+            richer = null;
+        }
+
+        if (richer is not null)
+        {
+            RenderIfCurrent(richer, run);
+        }
+    }
+
+    private void RenderIfCurrent(DictionaryCard card, int run)
+    {
+        if (run != _cardRun)
         {
             return;
         }
@@ -640,6 +685,17 @@ public partial class PanelWindow : Window
     private void RenderCard(DictionaryCard card)
     {
         CardPhonetic.Text = card.Phonetic ?? string.Empty;
+
+        // 本地词典（评审 2026-10-16 F-08）：查的是变形就说一声是谁的变形，再列考试标签。
+        var meta = new List<string>();
+        if (card.InflectionOf is { Length: > 0 })
+        {
+            meta.Add($"{card.Word} 的变形");
+        }
+
+        meta.AddRange(card.Tags);
+        CardMeta.Text = string.Join(" · ", meta);
+        CardMeta.Visibility = meta.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _senseGroups = card.Senses.Select(sense =>
         {
             var group = new SenseGroupView(sense);

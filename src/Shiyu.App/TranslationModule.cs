@@ -1,3 +1,4 @@
+using System.IO;
 using Shiyu.Core;
 using Shiyu.Windows;
 
@@ -100,12 +101,11 @@ internal sealed class TranslationModule
     }
 
     /// <summary>
-    /// 单词词典的路（票 35 + 2026-09-27 回退修正）：英文单词先走免费词典
-    /// （600ms 预算），不可达或没查到时**回退 LLM 词典化**（8s 预算，秒级
-    /// 迟到也照常上屏）——实测 dictionaryapi.dev 在本机网络完全不可达，无
-    /// 回退等于没有卡。中文单词直接 LLM 词典化；其余文本不吃词典卡。
-    /// 回退只认自备密钥——公共通道只有 /translate 一张脸；没有自己的后端
-    /// 时慢路缺席，行为退回票 35 原状。
+    /// 单词词典的路（票 35 + 2026-09-27 回退修正 + 评审 2026-10-16 F-08）：英文单词**先查本地词典**——
+    /// 随程序发布的 ECDICT 常用词子集，中文释义、音标、考试标签，零延迟、断网可用；本地卡的例句由免费词典
+    /// 后补（3s 预算，补不上就没有）。本地没有的词照旧：免费词典（600ms 预算），不可达或没查到时回退
+    /// LLM 词典化（8s 预算）——实测 dictionaryapi.dev 在本机网络完全不可达。中文单词直接 LLM 词典化；
+    /// 其余文本不吃词典卡。回退只认自备密钥；没有自己的后端时慢路缺席。
     /// </summary>
     private IDictionaryApi? BuildDictionary(string word)
     {
@@ -113,18 +113,28 @@ internal sealed class TranslationModule
         // 探针：假后端配假词典（SHIYU_FAKE_BACKEND=1），单词态的探针同样不碰网络。
         if (DebugOverrides.FakeBackend)
         {
-            return new DebugFakeDictionary();
+            // SHIYU_LOCAL_DICTIONARY=1：离线词典照真的查，查不到的交给假词典（评审 2026-10-16 F-08 的探针）。
+            return DebugOverrides.LocalDictionary
+                ? new LocalFirstDictionary(LocalWords, new DebugFakeDictionary(), null)
+                : new DebugFakeDictionary();
         }
 #endif
 
         return DictionaryWord.IsEnglishWord(word)
-            ? new FallbackDictionary(
-                new BudgetedDictionary(new FreeDictionaryApi(HttpClients.Shared)),
-                OwnKeyDictionary())
+            ? new LocalFirstDictionary(
+                LocalWords,
+                new FallbackDictionary(
+                    new BudgetedDictionary(new FreeDictionaryApi(HttpClients.Shared)),
+                    OwnKeyDictionary()),
+                () => new BudgetedDictionary(new FreeDictionaryApi(HttpClients.Shared), TimeSpan.FromSeconds(3)))
             : DictionaryWord.IsChineseWord(word)
                 ? OwnKeyDictionary()
                 : null;
     }
+
+    /// <summary>随程序发布的离线词典（评审 2026-10-16 F-08）：安装目录的 Assets\dictionary.db，只读。</summary>
+    internal static LocalDictionary LocalWords { get; } =
+        new(Path.Combine(AppContext.BaseDirectory, "Assets", "dictionary.db"));
 
     /// <summary>
     /// 自备密钥后端的唯一组装点（票 08）：预设解析出的附加字段与温度规则
@@ -236,6 +246,42 @@ internal sealed class TranslationModule
         var log = _panel is null ? "no-panel" + Environment.NewLine : await _panel.ProbeStreamJank();
         System.IO.File.WriteAllText(
             System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "stream-jank.log"), log + "done" + Environment.NewLine);
+    }
+
+    /// <summary>
+    /// 探针命令 panel-dictionary 的入口（评审 2026-10-16 F-08，见 PanelWindow.ProbeDictionaryCard）：先量离线查词
+    /// 本身（第一次要开文件，第二次是热的），再让面板开在 example 与 went 上看卡。配 SHIYU_FAKE_BACKEND=1 与
+    /// SHIYU_LOCAL_DICTIONARY=1。
+    /// </summary>
+    internal async void ProbeDictionaryCard()
+    {
+        var log = new System.Text.StringBuilder();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var cold = LocalWords.Lookup("example") is not null;
+        var coldMs = watch.Elapsed.TotalMilliseconds;
+        watch.Restart();
+        var warm = LocalWords.Lookup("ubiquitous") is not null;
+        var warmMs = watch.Elapsed.TotalMilliseconds;
+        log.AppendLine(FormattableString.Invariant(
+            $"lookup|cold={cold}|coldMs={coldMs:F1}|warm={warm}|warmMs={warmMs:F1}"));
+
+        foreach (var (word, phonetic, meaning, meta) in new (string, string?, string, string)[]
+                 {
+                     ("example", "/igˈzæmpl/", "例子", "高考"),
+                     ("went", null, "去", "go 的变形"),
+                 })
+        {
+            ShowPanel(word);
+            for (var waited = 0; waited < 50 && _panel is not { IsVisible: true }; waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            log.Append(_panel is null ? $"{word}|missing{Environment.NewLine}" : await _panel.ProbeDictionaryCard(word, phonetic, meaning, meta));
+        }
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-dictionary.log"), log + "done" + Environment.NewLine);
     }
 #endif
 

@@ -123,6 +123,10 @@
                     <TextBlock Text="&#xE767;" FontFamily="{DynamicResource Font.Icon}"
                                FontSize="{DynamicResource Size.IconS}"/>
                 </Button>
+                <!-- 本地词典（评审 2026-10-16 F-08）：「go 的变形 · 中考 · 四级」。没有就收起。 -->
+                <TextBlock x:Name="CardMeta" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"
+                           FontSize="{DynamicResource Type.Caption}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"/>
             </StackPanel>
 
             <!-- 滚动条常驻占道（Visible，见 Controls.xaml 滚动条注释）：译文越流越长、
@@ -237,15 +241,18 @@
                                         <ItemsControl ItemsSource="{Binding Visible}" Margin="0,2,0,0">
                                             <ItemsControl.Resources>
                                                 <DataTemplate DataType="{x:Type local:SenseEntry}">
-                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                        <TextBlock Text="{Binding Number}" Width="16"
+                                                    <!-- DockPanel 而非横向 StackPanel：横向 StackPanel 给子项无限宽，
+                                                         释义永远不折行、在右边被裁掉（离线词典的长释义露出来的，
+                                                         评审 2026-10-16 F-08）。 -->
+                                                    <DockPanel Margin="0,2,0,0">
+                                                        <TextBlock Text="{Binding Number}" Width="16" DockPanel.Dock="Left"
                                                                    Foreground="{DynamicResource Brush.TextTertiary}"
                                                                    VerticalAlignment="Top"/>
                                                         <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
                                                                    FontSize="{DynamicResource Type.Body}"
                                                                    LineHeight="{DynamicResource Line.BodyMulti}"
                                                                    LineStackingStrategy="BlockLineHeight"/>
-                                                    </StackPanel>
+                                                    </DockPanel>
                                                 </DataTemplate>
                                                 <DataTemplate DataType="{x:Type local:SenseExample}">
                                                     <!-- 例句：次级色（三级色在卡面上 4.33:1，票 18）；

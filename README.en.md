@@ -84,7 +84,7 @@ Three roads lead to the translation panel, each for its own moment:
 The translation panel:
 
 - the translation appears as it streams in; the panel **never takes focus**, so whatever you selected in the other app stays selected;
-- a single English word comes with a **dictionary card**: phonetic transcription, part of speech, definitions and examples, and you can hear the word read aloud;
+- a single English word comes with a **dictionary card**: Chinese definitions, phonetic transcription and exam tags (from 中考 to the GRE), and you can hear the word read aloud. About 42,000 common words are built in, so they come up instantly even offline, and looking up "went" gives you "go"; when online, English example sentences are added. Rarer words are still looked up online;
 - switch to a sentence-by-sentence view (「逐句」), have the translation read aloud, or flip the direction with one click;
 - if you select Chinese while your target language is also Chinese, Shiyu recognizes the "echo" and translates it into English instead;
 - keep a useful translation with Save to history (「存入历史」): it goes into your clipboard history, linked to the original;
@@ -131,7 +131,7 @@ You learn a tool's character when no one is watching.
 
 - **Your clipboard history stays on your machine** (`%LOCALAPPDATA%\Shiyu`): never uploaded, never synced. If you move the data folder into a synced folder such as OneDrive, Shiyu warns you plainly: the history database itself is not encrypted, and its safety rests on Windows account isolation (the trade-off is explained in [ADR-0007](docs/adr/0007-history-entry-and-data-safety.md), in Chinese).
 - **Only the text you choose to translate leaves your computer**, sent to the translation method you chose. The free engine sends it to Microsoft Bing Translator's web endpoint, falling back to Tencent TranSmart when Bing is unavailable (no account needed; these are web endpoints rather than official APIs, and may change or be rate-limited at any time). With your own key, it goes straight to the provider you configured.
-- **No telemetry**, and no usage statistics of any kind. Besides translation, only two things go online: Check for updates (「检查更新」) calls the GitHub API (`api.github.com`; automatic checks can be turned off), and dictionary cards for English words call `dictionaryapi.dev`.
+- **No telemetry**, and no usage statistics of any kind. Besides translation, only two things go online: Check for updates (「检查更新」) calls the GitHub API (`api.github.com`; automatic checks can be turned off), and dictionary cards for English words call `dictionaryapi.dev` (only for example sentences when the built-in dictionary has the word, for definitions when it does not).
 - **Each credential stays with its owner**: own-key credentials are stored per provider and sent only to the provider they belong to. They are encrypted by Windows in the settings file, and left out of backups by default.
 - **Backups** can be encrypted with a passphrase; on import, you choose to merge or overwrite.
 - **Updates are signed**: each package is checked against a built-in public key before it installs; if it doesn't match, it isn't installed.

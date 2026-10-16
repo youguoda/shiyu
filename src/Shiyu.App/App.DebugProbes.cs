@@ -1055,6 +1055,11 @@ public partial class App
                 _modules!.Translation.ProbeTemplatePicker("hello panel templates");
                 break;
 
+            // 离线词典的卡（评审 2026-10-16 F-08）。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1。
+            case "panel-dictionary":
+                _modules!.Translation.ProbeDictionaryCard();
+                break;
+
             // 定期备份：备份、修剪、打不开的口令（评审 2026-10-16 F-20）。
             case "auto-backup":
                 ProbeAutoBackup(shell);

@@ -11,6 +11,13 @@
     <Resource Include="Assets\*.png" />
   </ItemGroup>
 
+  <!-- 离线英汉词典（评审 2026-10-16 F-08）：ECDICT 常用词子集，约 4.2 万词，只读，随程序发布到
+       安装目录的 Assets 下。来源、许可与重新生成见 tools/dictionary/README.md；第三方声明一起带上。 -->
+  <ItemGroup>
+    <None Include="Assets\dictionary.db" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>

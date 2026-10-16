@@ -67,6 +67,32 @@ public partial class PanelWindow
     }
 
     /// <summary>
+    /// 探针命令 panel-dictionary（评审 2026-10-16 F-08）：单词态的卡来自离线词典——音标、中文释义、考试标签
+    /// 都在；查变形（went）说是 go 的变形。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1，不碰网络。
+    /// 判断在这里做完，日志里只有真假（探针脚本只认 ASCII）；音标传 null 时只看有没有。
+    /// </summary>
+    internal async Task<string> ProbeDictionaryCard(string word, string? phonetic, string meaning, string meta)
+    {
+        for (var waited = 0; waited < 50 && !DictionaryArea.IsVisible; waited++)
+        {
+            await Task.Delay(100);
+        }
+
+        await Settled();
+        var definitions = _senseGroups
+            .SelectMany(group => group.Visible.OfType<SenseEntry>())
+            .Select(entry => entry.Text)
+            .ToList();
+        if (Content is FrameworkElement root)
+        {
+            App.RenderToPng(root, System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, $"panel-dictionary-{word}.png"));
+        }
+
+        return FormattableString.Invariant(
+            $"{word}|card={DictionaryArea.IsVisible}|phonetic={(phonetic is null ? CardPhonetic.Text.Length > 0 : CardPhonetic.Text == phonetic)}|meaning={definitions.Any(text => text.Contains(meaning, StringComparison.Ordinal))}|meta={CardMeta.Text.Contains(meta, StringComparison.Ordinal)}{Environment.NewLine}");
+    }
+
+    /// <summary>
     /// 探针命令 panel-templates 的单词一段（用户需求 2026-10-13：翻译单词时也能换模板）。面板已
     /// 开在一个词上：chip 在、词典布局在；换到改写类，词头与卡让位、原文回来；切回翻译类，卡原样
     /// 回来、不重查。再在改写类下开一个新词：不查卡；切回翻译类才补查一次。

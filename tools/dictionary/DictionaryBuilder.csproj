@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 离线词典生成器：把 ECDICT 的 ecdict.csv 裁成一个常用词的 SQLite 文件。
+       用法见 Program.cs 顶部的注释。独立工具，不被 App 引用。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DictionaryBuilder</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 与 Shiyu.Core 用同一个版本，生成出来的库 App 一定打得开。 -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

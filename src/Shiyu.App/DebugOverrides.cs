@@ -66,6 +66,13 @@ internal static class DebugOverrides
         Environment.GetEnvironmentVariable("SHIYU_FAKE_BACKEND") == "stream";
 
     /// <summary>
+    /// 假后端下仍用真的离线词典（评审 2026-10-16 F-08 的探针 panel-dictionary）：<c>SHIYU_LOCAL_DICTIONARY=1</c>。
+    /// 查不到的词交给假词典，不碰网络；不设时假后端配假词典，别的探针的查词计数不受影响。
+    /// </summary>
+    public static bool LocalDictionary =>
+        Environment.GetEnvironmentVariable("SHIYU_LOCAL_DICTIONARY") == "1";
+
+    /// <summary>
     /// 探针模式下照常监听剪贴板（票 43）。探针默认不监听——用户的复制不能进探针的数据库——但
     /// "回贴的写入与还原不产生历史条目"要在端到端里核对，就得让监听在场；这只在探针自己的目录里
     /// 记录探针自己放上去的合成文字。
