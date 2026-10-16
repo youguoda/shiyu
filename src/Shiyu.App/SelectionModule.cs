@@ -120,6 +120,13 @@ internal sealed class SelectionModule
             return;
         }
 
+        // 前台以管理员身份运行（v3 票 30 / 评审 F-03）：发去的 Ctrl+C 会被 Windows 静默吞掉，借了剪贴板
+        // 也白借。被动遭遇，安静地不动手。
+        if (ForegroundWindow.Current().RunsElevated)
+        {
+            return;
+        }
+
         // 新一次取词前先还上一笔——两次快速拖选时，第二笔会借走第一笔的
         // 选中文字，不还就永远找不回用户最初的剪贴板。
         FlushPendingSelection();
@@ -175,6 +182,15 @@ internal sealed class SelectionModule
                 shell.Tray.ShowNotification("拾语", "前台应用在排除名单里，已跳过取词。");
             }
 
+            return;
+        }
+
+        // 前台以管理员身份运行（v3 票 30 / 评审 F-03）：发去的 Ctrl+C 会被 Windows 静默吞掉。原来要等满
+        // 超时、再报一句"三种原因之一"；现在先认出来，直说该怎么办。
+        if (ForegroundWindow.Current().RunsElevated)
+        {
+            shell.Tray.ShowNotification(
+                "拾语", "前台程序以管理员身份运行，拾语取不到它选中的文字。可以先复制，再按翻译剪贴板的快捷键。");
             return;
         }
 

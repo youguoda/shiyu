@@ -2,7 +2,7 @@
 
 **来源：** 票 43 实现记录里的已知局限；CHANGELOG「[未发布] · 已知问题」
 **Blocked by:** —（43 已合入）
-**Status:** ready-for-agent（修复票，不受 WIP 上限约束，见 issue-tracker.md）
+**Status:** ready-for-human（2026-10-16 随评审票 review-1016/03 实现）
 
 **问题：** Windows 的用户界面特权隔离（UIPI）会静默丢弃低完整性级别进程发往高完整性级别
 窗口的模拟输入。拾语以普通权限运行，对以管理员身份运行的窗口发 Ctrl+V 时，`SendInput`

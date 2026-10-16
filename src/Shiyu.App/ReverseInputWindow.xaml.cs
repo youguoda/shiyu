@@ -534,6 +534,18 @@ internal partial class ReverseInputWindow : Window
             _keepTranslation?.Invoke(_session.Text, text);
         }
 
+        // 目标窗口以管理员身份运行（v3 票 30 / 评审 2026-10-16 F-03）：拾语发的 Ctrl+V 会被 Windows 静默
+        // 吞掉，约 0.4 秒后剪贴板又被还原——译文既没贴上、也不在剪贴板里。那就不发、不还原：前台还给它，
+        // 译文留在剪贴板上，说一声；用户自己按的 Ctrl+V 不受这个限制。
+        if (target.IsSomething && target.RunsElevated)
+        {
+            target.Restore();
+            _tell(_paste.Leave(text)
+                ? "目标程序以管理员身份运行，拾语无法直接粘贴；译文已放在剪贴板，请按 Ctrl+V。"
+                : "目标程序以管理员身份运行，拾语无法直接粘贴；译文也没能放进剪贴板。");
+            return;
+        }
+
         if (target.IsSomething && !target.Restore())
         {
             _tell(_paste.Leave(text)

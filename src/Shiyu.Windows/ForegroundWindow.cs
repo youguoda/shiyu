@@ -32,6 +32,12 @@ public readonly record struct ForegroundWindow(IntPtr Handle)
             && process == (uint)Environment.ProcessId;
 
     /// <summary>
+    /// 这扇窗以更高的权限运行（多半是"以管理员身份运行"）：拾语发给它的 Ctrl+C / Ctrl+V 会被 Windows
+    /// 静默吞掉（v3 票 30 / 评审 F-03）。判定见 <see cref="ProcessIntegrity.BlocksInput"/>。
+    /// </summary>
+    public bool RunsElevated => IsSomething && ProcessIntegrity.BlocksInput(Handle);
+
+    /// <summary>
     /// Brings the remembered window back to the front. Windows only allows
     /// this from a process that currently owns the foreground — which, having
     /// just shown the quick bar, Shiyu does.

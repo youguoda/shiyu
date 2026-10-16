@@ -811,6 +811,28 @@ internal partial class BarWindow
             Dismiss(BarHideReason.Pasted);
         }
 
+        // 要贴进的窗口以管理员身份运行（v3 票 30 / 评审 2026-10-16 F-03）：拾语发的 Ctrl+V 会被 Windows
+        // 静默吞掉，什么都没贴上。照「复制」办，说一声——用户自己按的 Ctrl+V 不受这个限制。钉住的窄条
+        // 还在眼前，就在条上说；收起了就由托盘说。
+        if (_returnTo.RunsElevated)
+        {
+            SelfWrite(() => _store.BumpUse(card.Id));
+            if (CopyCard(card))
+            {
+                const string notice = "目标程序以管理员身份运行，拾语无法直接粘贴；已复制到剪贴板，请按 Ctrl+V。";
+                if (_settings.BarPinned)
+                {
+                    ShowFeedback(notice);
+                }
+                else
+                {
+                    DeadDragNotice?.Invoke(notice);
+                }
+            }
+
+            return;
+        }
+
         Pasted?.Invoke();
 
         if (card.Files.Count > 0)

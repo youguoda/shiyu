@@ -214,6 +214,37 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
+    // --- 完整性级别（v3 票 30 / 评审 F-03，ProcessIntegrity）---
+
+    internal const uint ProcessQueryLimitedInformation = 0x1000;
+    internal const uint TokenQuery = 0x0008;
+    internal const int TokenIntegrityLevel = 25;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
+
+    [DllImport("kernel32.dll")]
+    internal static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetTokenInformation(
+        IntPtr token, int informationClass, IntPtr buffer, int length, out int returnLength);
+
+    [DllImport("advapi32.dll")]
+    internal static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
+
+    [DllImport("advapi32.dll")]
+    internal static extern IntPtr GetSidSubAuthority(IntPtr sid, uint index);
+
     // --- 前台兜底（票 43，ForegroundReclaim 的 Win32 一一对应）---
 
     /// <summary>ASFW_ANY：允许任何进程调用 SetForegroundWindow。</summary>
