@@ -150,7 +150,7 @@ public class KeyMapTests
     public void A_menu_row_without_a_hotkey_has_no_accelerator_column()
     {
         // 打开管理窗默认不设：行文里连 \t 都不出现，空列比没列诚实。
-        Assert.Equal("管理历史…", KeyMap.TrayMenuLine(HotkeyAction.Library, new AppSettings()));
+        Assert.Equal("历史…", KeyMap.TrayMenuLine(HotkeyAction.Library, new AppSettings()));
     }
 
     [Fact]
@@ -204,27 +204,27 @@ public class KeyMapTests
             "搜索：窄条 Ctrl+F · 设置 Ctrl+F",
             "粘贴（主动作）：窄条 Enter（对选中的卡片）",
             "打开搜索结果（主动作）：设置 Enter（搜索有结果时）",
-            "复制：窄条 C · 管理 C / Enter",
+            "复制：窄条 C · 历史 C / Enter",
             "打开：窄条 O",
             "置顶：窄条 P",
             "收藏：窄条 S",
             "备注：窄条 N",
             "归组：窄条 G",
-            "删除：窄条 D · 管理 D / Delete",
-            "撤销：窄条 Z · 管理 Z / Ctrl+Z（删除后的片刻内）",
+            "删除：窄条 D · 历史 D / Delete",
+            "撤销：窄条 Z · 历史 Z / Ctrl+Z（删除后的片刻内）",
             "预览全文：窄条 按住 Space",
             "编号直达：窄条 1–9、0（列表前 10 行）",
             "切换类型：窄条 ←→",
             "只看收藏：窄条 Alt+S",
-            "标签：窄条 Tab · 管理 T",
-            "移动选择：管理 ↑ ↓",
-            "连选：管理 Shift+↑ ↓",
-            "全选：管理 Ctrl+A",
-            "区域循环：管理 F6",
-            "关闭窗口：管理 Ctrl+W",
-            "切换页签：管理 Ctrl+Tab（剪贴板历史 / 翻译记录）",
+            "标签：窄条 Tab · 历史 T",
+            "移动选择：历史 ↑ ↓",
+            "连选：历史 Shift+↑ ↓",
+            "全选：历史 Ctrl+A",
+            "区域循环：历史 F6",
+            "关闭窗口：历史 Ctrl+W",
+            "切换页签：历史 Ctrl+Tab（剪贴板历史 / 翻译记录）",
             "显示键帽：窄条 按住 Ctrl · 设置 按住 Ctrl",
-            "键位速查：设置 ? 或 F1 · 管理 F1 / ?",
+            "键位速查：设置 ? 或 F1 · 历史 F1 / ?",
             "切换设置页：设置 Ctrl+1–6",
             "分层退出：窄条 Esc",
         ],

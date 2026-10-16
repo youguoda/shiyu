@@ -47,7 +47,7 @@ public static class HotkeyPlan
             [HotkeyAction.CaptureSelection] = "划词翻译",
             [HotkeyAction.QuickBar] = "快速粘贴",
             [HotkeyAction.ClipboardTranslate] = "翻译剪贴板",
-            [HotkeyAction.Library] = "打开管理窗",
+            [HotkeyAction.Library] = "打开历史",
             [HotkeyAction.ReverseInput] = "反向输入",
         };
 

@@ -189,7 +189,7 @@ public class SettingsSchemaTests
 
         // §5.1 五页 + 关于固定底部：页名用用户要找的东西命名。
         Assert.Equal(
-            ["常规", "窄条", "记录与隐私", "翻译", "快捷键", "关于"],
+            ["常规", "快速粘贴", "记录与隐私", "翻译", "快捷键", "关于"],
             titles);
         Assert.DoesNotContain("服务", titles);
         Assert.DoesNotContain("高级", titles);

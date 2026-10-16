@@ -559,8 +559,8 @@
                     <Button x:Name="BrandButton" Grid.Column="0" Padding="0" Margin="0,0,8,0"
                             Style="{DynamicResource IconButton}" Cursor="SizeAll"
                             PreviewMouseLeftButtonDown="OnBrandPressed"
-                            AutomationProperties.Name="拖动窄条 / 打开管理窗"
-                            ToolTip="按住拖动窄条；单击打开管理窗（剪贴板历史与整理）">
+                            AutomationProperties.Name="拖动窄条 / 打开历史"
+                            ToolTip="按住拖动窄条；单击打开历史（全部记录，筛选与整理）">
                         <Border Width="24" Height="24"
                                 CornerRadius="{DynamicResource Radius.Control}" ClipToBounds="True">
                             <Image Source="{DynamicResource Brand.Mark}" Stretch="UniformToFill"

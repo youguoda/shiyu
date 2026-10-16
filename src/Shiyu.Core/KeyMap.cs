@@ -130,7 +130,7 @@ public static class KeyMap
     {
         HotkeyAction.QuickBar => "快速粘贴",
         HotkeyAction.ClipboardTranslate => "翻译剪贴板",
-        HotkeyAction.Library => "管理历史…",
+        HotkeyAction.Library => "历史…",
         _ => HotkeyPlan.ActionNames[action],
     };
 
@@ -192,11 +192,11 @@ public static class KeyMap
             surfaces.Add($"设置 {row.Settings}");
         }
 
-        // 管理窗与窄条同键的行走回落（EffectiveKey），速查行不重复印一遍
+        // 历史窗口与窄条同键的行走回落（EffectiveKey），速查行不重复印一遍
         // 相同的键；只有 Library 列真正写了不同键的行才多一段。
         if (row.Library is { Length: > 0 } && row.Library != row.Bar)
         {
-            surfaces.Add($"管理 {row.Library}");
+            surfaces.Add($"历史 {row.Library}");
         }
 
         var line = $"{row.Name}：{string.Join(" · ", surfaces)}";

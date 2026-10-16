@@ -260,7 +260,7 @@
         <DockPanel x:Name="HistoryCommands" Grid.Row="1" Margin="16,6,16,0" LastChildFill="False">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                 <Button x:Name="CopyButton" Style="{StaticResource CommandButton}" Click="OnCopySelected"
-                        ToolTip="复制到剪贴板 · Enter&#10;管理窗没有粘贴目标，Enter 是复制">
+                        ToolTip="复制到剪贴板 · Enter&#10;历史窗口没有粘贴目标，Enter 是复制">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE8C8;" FontFamily="{DynamicResource Font.Icon}"
                                    FontSize="{DynamicResource Size.IconS}" VerticalAlignment="Center"/>

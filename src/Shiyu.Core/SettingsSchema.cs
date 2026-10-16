@@ -118,8 +118,8 @@ public static class SettingsSchema
                 // 那一格留空——不再拿拾语的标志顶上（用户选定「什么都不放」）。
                 new SettingsItem(
                     "look.source-icons", "来源图标", SettingsControl.Toggle,
-                    Hint: "窄条卡片和管理窗列表里，用图标标出内容是从哪个应用复制来的。关掉后不显示；取不到图标的应用，那一格空着。管理窗的说明行仍会写出来源应用的名字。",
-                    Keywords: ["图标", "来源", "应用", "程序", "隐藏", "显示", "卡片", "窄条", "管理窗", "复制来源"],
+                    Hint: "窄条卡片和历史列表里，用图标标出内容是从哪个应用复制来的。关掉后不显示；取不到图标的应用，那一格空着。历史窗口的说明行仍会写出来源应用的名字。",
+                    Keywords: ["图标", "来源", "应用", "程序", "隐藏", "显示", "卡片", "窄条", "历史", "管理窗", "复制来源"],
                     Icon: "E71D")),
             new SettingsSection("general.performance", "性能",
                 new SettingsItem(
@@ -144,7 +144,7 @@ public static class SettingsSchema
                     Keywords: ["备份", "导出", "导入", "加密"],
                     Icon: "E74E"))),
 
-        new SettingsPage("bar", "窄条", "E77F", "快速粘贴呼出的取用面板：去留、密度与悬停动作。",
+        new SettingsPage("bar", "快速粘贴", "E77F", "按快速粘贴键在光标旁呼出的那条取用面板（窄条）：去留、密度与悬停动作。",
             new SettingsSection("bar.behaviour", "呼出与钉住",
                 new SettingsItem(
                     "bar.pinned", "常驻钉住", SettingsControl.Toggle,
@@ -333,7 +333,7 @@ public static class SettingsSchema
             new SettingsSection("translate.log", "翻译记录",
                 new SettingsItem(
                     "translate.log", "保存翻译记录", SettingsControl.Toggle,
-                    Hint: "翻译框与反向输入框的每一次翻译都记下原文、译文、时间、来自哪个框和所用模板，在管理窗口的「翻译记录」页查找、复制、删除。只存在本机，与剪贴板历史分开，不进窄条。",
+                    Hint: "翻译框与反向输入框的每一次翻译都记下原文、译文、时间、来自哪个框和所用模板，在历史窗口的「翻译记录」页查找、复制、删除。只存在本机，与剪贴板历史分开，不进窄条。",
                     Keywords: ["翻译记录", "翻译历史", "历史", "记录", "保存", "原文", "译文", "反向输入", "翻译框", "找回"],
                     Icon: "E81C"),
                 new SettingsItem(
@@ -371,7 +371,7 @@ public static class SettingsSchema
             new SettingsSection("hotkeys.all", "全局",
                 new SettingsItem(
                     "hotkey.quickbar", "快速粘贴", SettingsControl.Hotkey,
-                    Hint: "呼出窄条：在输入光标旁出现（取不到就在鼠标处），打字过滤，Enter 或编号键贴回原处。贴完、点别处即收起；想让它一直留着，点窄条右上角的图钉，或在「窄条」页打开「常驻钉住」。",
+                    Hint: "呼出窄条：在输入光标旁出现（取不到就在鼠标处），打字过滤，Enter 或编号键贴回原处。贴完、点别处即收起；想让它一直留着，点窄条右上角的图钉，或在「快速粘贴」页打开「常驻钉住」。",
                     Keywords: ["快速粘贴", "粘贴", "窄条", "呼出", "快捷键"],
                     Icon: "E8C8"),
                 new SettingsItem(
@@ -391,8 +391,8 @@ public static class SettingsSchema
                     Keywords: ["剪贴板", "翻译", "快捷键"],
                     Icon: "E8D2"),
                 new SettingsItem(
-                    "hotkey.library", "打开管理窗", SettingsControl.Hotkey,
-                    Hint: "打开历史管理窗口；默认不设。",
+                    "hotkey.library", "打开历史", SettingsControl.Hotkey,
+                    Hint: "打开历史窗口；默认不设。",
                     Keywords: ["管理", "管理窗", "历史", "快捷键"],
                     Icon: "E8B7"),
                 new SettingsItem(

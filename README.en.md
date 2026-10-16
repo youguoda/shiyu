@@ -54,7 +54,7 @@ What it does not record matters just as much:
 
 Light while resident: turn on Lightweight mode (「轻量模式」) and Shiyu releases UI resources and trims its memory while the bar is hidden; recording continues.
 
-### Layer 2 · Retrieve: the quick bar and the full library
+### Layer 2 · Retrieve: the quick bar and the full history
 
 Recording is for getting things back. Shiyu has two ways in, one quick and one complete, each with its own job.
 
@@ -67,7 +67,7 @@ Recording is for getting things back. Shiyu has two ways in, one quick and one c
 - `Esc` backs out one layer at a time; the bar closes after you paste, or stays put if you click the pin in its top-right corner (pinned bar, 「常驻钉住」);
 - if your hands are used to `Win+V`, you can let `Win+V` open it too (off by default; Windows gets the key back when Shiyu exits).
 
-**The library** (from the tray menu, the brand button on the bar, or a hotkey you assign) is the complete collection, for browsing at leisure: full search, filters by type, date and subtype, favorites, pins, tags, groups, notes, use counts, and bulk actions. Favorite and pinned items are **protected from deletion**: automatic cleanup skips them, and bulk deletes leave them alone.
+**The History window** (「历史」; from the tray menu, the brand button on the bar, or a hotkey you assign) is the complete collection, for browsing at leisure: full search, filters by type, date and subtype, favorites, pins, tags, groups, notes, use counts, and bulk actions. Favorite and pinned items are **protected from deletion**: automatic cleanup skips them, and bulk deletes leave them alone.
 
 ### Layer 3 · Understand: foreign text into your own words
 
@@ -88,7 +88,7 @@ The translation panel:
 - switch to a sentence-by-sentence view (「逐句」), have the translation read aloud, or flip the direction with one click;
 - if you select Chinese while your target language is also Chinese, Shiyu recognizes the "echo" and translates it into English instead;
 - keep a useful translation with Save to history (「存入历史」): it goes into your clipboard history, linked to the original;
-- every translation goes into the translation log (「翻译记录」), which you can search on the library's 翻译记录 page (cleared automatically after 30 days by default).
+- every translation goes into the translation log (「翻译记录」), which you can search on the History window's 翻译记录 page (cleared automatically after 30 days by default).
 
 ### Layer 4 · Speak: send your words out
 
@@ -112,7 +112,7 @@ Switch templates with a click in the box, or cycle through them with `Ctrl+E`. R
 
 > Learning without thought is labour lost; thought without learning is perilous. — Confucius, *Analects* (tr. James Legge)
 
-Connect your own large language model, and the items you select in the library can be:
+Connect your own large language model, and the items you select in the History window can be:
 
 - **summarized** or **rewritten**;
 - **merged into a note**: select several, and you have a collection basket;
@@ -144,7 +144,7 @@ Laozi wrote: "Being and non-being give rise to each other; the difficult and the
 | --- | --- | --- |
 | **Greedy ↔ Restrained** | Record every copy; interrupt as little as possible: the badge is off by default, the panel never takes focus, the bar closes once you paste | You never have to decide whether something is worth keeping, and it never breaks your flow |
 | **Passive ↔ Active** | What you can't read (foreign → Chinese) goes through selection and the badge; what you want to write (Chinese → foreign) goes through the reverse input box | Reading and writing each get their shortest path |
-| **Quick ↔ Complete** | The bar: a column of cards, a few keystrokes away; the library: filters, tags, bulk actions | The quick one stays light; the complete one is never rushed |
+| **Quick ↔ Complete** | The bar: a column of cards, a few keystrokes away; the History window: filters, tags, bulk actions | The quick one stays light; the complete one is never rushed |
 | **Deterministic ↔ Generative** | Whether a copy deserves the badge is judged by rules, not a model; the free engine needs no setup; a model appears only when you connect one and click | Simple things get certain methods; only complex things call in a model |
 | **Present ↔ Absent** | The bar needs the keyboard, so it takes focus and hands it back the moment you paste; the panel is only for reading, so it never takes focus | It shows up with exactly what's needed and leaves no trace |
 | **Remembering ↔ Forgetting** | Thumbnails forever, full-size images until they expire; the translation log clears on a schedule; some things are never recorded at all | Remember what's worth remembering; forget what should be forgotten |
@@ -166,8 +166,8 @@ A single feature is a move; chain a few together and you have a routine.
 
 ### Organize
 
-- **Collection basket**: copy freely during the day; in the evening, select the related items in the library → Merge into note (「合并成笔记」) → copy the result and put it to use; then Suggest tags (「建议标签」) and file them with a click (own key).
-- **Finding last week's translation**: library → the 翻译记录 page → search the original or the translation, and click an entry to expand it in place.
+- **Collection basket**: copy freely during the day; in the evening, select the related items in the History window → Merge into note (「合并成笔记」) → copy the result and put it to use; then Suggest tags (「建议标签」) and file them with a click (own key).
+- **Finding last week's translation**: History window → the 翻译记录 page → search the original or the translation, and click an entry to expand it in place.
 
 ### Everyday
 
@@ -191,7 +191,7 @@ There is also a portable `shiyu-win-x64.zip`: after verifying it, extract it to 
 
 - Both include the .NET runtime; there's nothing else to install.
 - Shiyu starts with Windows by default, and the autostart entry points at wherever you actually run it: if you move it, run it once from the new location and autostart follows.
-- The tray icon: a left click opens Settings; a right click opens the menu (library, check for updates, exit and more). Starting Shiyu again while it's already running also opens Settings.
+- The tray icon: a left click opens Settings; a right click opens the menu (History (「历史…」), Pause recording (「暂停记录」), check for updates, exit and more). Starting Shiyu again while it's already running also opens Settings.
 - Settings → About (「关于」) → Check for updates (「检查更新」) looks for a new version; both the installed and the portable versions update in place.
 
 ### Setting up translation
@@ -213,7 +213,7 @@ Global hotkeys (all of them can be changed in Settings → Hotkeys, 「快捷键
 | `Win+Alt+Z` | Translate selection: translate the text currently selected |
 | `Win+Alt+X` | Translate clipboard: the escape hatch when the filter judges wrong |
 | `Win+Alt+Q` | Reverse input box: type Chinese beside the current text box and get English |
-| (none by default) | Open the library |
+| (none by default) | Open History |
 | `Win+V` (optional) | Also open the bar with Win+V; off by default, and Windows gets it back when you turn it off or Shiyu exits |
 
 While Shiyu runs, these combinations belong to it and override the same shortcut in other apps. The default set starts with `Win+Alt`, clear of the common shortcuts in editors, browsers, chat apps and Office; settings warn you on the spot when you record a known clash. Installs from 0.16.1 or earlier keep their original keys — `Ctrl+Shift+Z` ("redo" in many apps), `Ctrl+Shift+V` ("paste as plain text"), `Ctrl+Shift+X` and `Alt+Q` (Microsoft 365's "jump to search"); to switch to the new set, use Settings → Hotkeys → Restore all defaults.
@@ -255,7 +255,7 @@ In the translation panel: `Esc` closes it; the top lets you flip the direction a
 ```
 src/Shiyu.Core          # pure logic (including SQLite storage); the target of all unit tests
 src/Shiyu.Windows       # platform layer: Win32 / WPF interop (clipboard, hotkeys, tray, hooks, speech)
-src/Shiyu.App           # WPF UI (bar, library, settings, onboarding, updates, backups)
+src/Shiyu.App           # WPF UI (bar, history window, settings, onboarding, updates, backups)
 tests/Shiyu.Core.Tests  # xUnit unit tests
 server/                 # public translation relay: Cloudflare Worker (TypeScript + vitest; no longer offered in the UI, code frozen)
 docs/                   # ADRs, reviews, manual acceptance checklists
@@ -286,7 +286,7 @@ Where to read more (these documents are in Chinese):
 - [`.scratch/`](.scratch/) — every ticket and acceptance criterion for both milestones.
 - [`server/README.md`](server/README.md) — the relay Worker's contract, quotas and deployment.
 
-For the intended direction of the UI, see the target mockups in [`docs/review/mockups/`](docs/review/mockups/) (bar / translation panel / settings / library). **They are design targets filled with placeholder data, not the current interface.**
+For the intended direction of the UI, see the target mockups in [`docs/review/mockups/`](docs/review/mockups/) (bar / translation panel / settings / history window). **They are design targets filled with placeholder data, not the current interface.**
 
 ### License
 

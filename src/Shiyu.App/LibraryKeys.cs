@@ -37,7 +37,7 @@ public partial class LibraryWindow
     {
         var sheet = new Window
         {
-            Title = "键位速查 · 管理窗",
+            Title = "键位速查 · 历史",
             Width = 360,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -78,7 +78,7 @@ public partial class LibraryWindow
 
         var footnote = new TextBlock
         {
-            Text = "管理窗没有粘贴目标，Enter 是复制；Esc 剥到最后一层为止，不关窗。",
+            Text = "历史窗口没有粘贴目标，Enter 是复制；Esc 剥到最后一层为止，不关窗。",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
         };
