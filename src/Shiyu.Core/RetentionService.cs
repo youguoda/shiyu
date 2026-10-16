@@ -14,6 +14,8 @@ public sealed record RetentionResult(int Removed, int Reclaimed)
 /// tiny, and they are the thing the user actually goes looking for months
 /// later. Thumbnails are never cleaned up either — they are what keeps the
 /// history looking complete after the originals are gone.
+///
+/// 例外是用户自己选的「历史保留」周期（<see cref="SweepHistory"/>，评审 2026-10-16 F-13b）：选了才整条删。
 /// </summary>
 public sealed class RetentionService(
     EntryStore store,
@@ -92,5 +94,36 @@ public sealed class RetentionService(
         }
 
         return new RetentionResult(removed, reclaimed);
+    }
+
+    /// <summary>
+    /// 「历史保留」（评审 2026-10-16 F-13b）：早于 <paramref name="days"/> 天的条目整条删除——文字、文件、
+    /// 图片都算，图片的原图文件一并删掉。受删除保护的不删，与批量删除同一个承诺。用户选了周期才会跑；
+    /// 默认「永不」（0），类头注释里"文本永不清理"仍是不设周期时的样子。天数与翻译记录同一套档位：
+    /// 手改成不在档上的值归到不早于它删的那一档，宁可多留（<see cref="TranslationLogRetention.ChoiceOf"/>）。
+    ///
+    /// 与管理窗「按时间段删除」同一个次序：先删原图文件、再删行——中途打断最多留下指向空处的行，
+    /// 而不是没人认领的文件。
+    /// </summary>
+    /// <returns>删掉的条目数。</returns>
+    public int SweepHistory(int days, bool keepFavorites = false, bool keepPinned = false)
+    {
+        if (TranslationLogRetention.CutoffAt(days, clock.GetUtcNow()) is not { } cutoff)
+        {
+            return 0;
+        }
+
+        var before = cutoff - TimeSpan.FromMilliseconds(1);
+        var since = DateTimeOffset.FromUnixTimeMilliseconds(0);
+
+        foreach (var image in store.ImagesCreatedBetween(since, before, keepFavorites, keepPinned))
+        {
+            if (image.OriginalPath is { Length: > 0 } path)
+            {
+                archive.Delete(path);
+            }
+        }
+
+        return store.DeleteCreatedBetween(since, before, keepFavorites, keepPinned);
     }
 }

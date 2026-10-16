@@ -60,6 +60,9 @@ internal static class SettingsBindings
         "look.content-size" => (int)settings.ContentFontSize,
         "service.backend-kind" => TranslationBackendChoices.IndexOf(settings.TranslationBackend),
         "translate.log-retention" => TranslationLogRetention.ChoiceOf(settings.TranslationLogRetentionDays),
+
+        // 历史保留与翻译记录同四档（评审 2026-10-16 F-13b）。
+        "store.history-retention" => TranslationLogRetention.ChoiceOf(settings.HistoryRetentionDays),
         _ => 0,
     };
 
@@ -116,6 +119,7 @@ internal static class SettingsBindings
         {
             TranslationLogRetentionDays = TranslationLogRetention.DaysAt(choice),
         },
+        "store.history-retention" => current with { HistoryRetentionDays = TranslationLogRetention.DaysAt(choice) },
         "store.protect" => current with { ProtectEntries = AsBool(text) },
         "store.protect-favorites" => current with { ProtectFavorites = AsBool(text) },
         "store.protect-pinned" => current with { ProtectPinned = AsBool(text) },

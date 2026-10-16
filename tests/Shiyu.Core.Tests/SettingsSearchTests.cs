@@ -14,10 +14,10 @@ public class SettingsSearchTests
     {
         var hits = SettingsSearch.Find("多久删");
 
-        var hit = Assert.Single(hits);
-        Assert.Equal("store.retention-days", hit.Item.Id);
-        Assert.Equal("记录与隐私", hit.PageTitle);
-        Assert.Equal("保留与保护", hit.SectionTitle);
+        // 「历史保留」（评审 2026-10-16 F-13b）与「图片保留」同节，两条都回答"多久删"。
+        Assert.Equal(["store.history-retention", "store.retention-days"], hits.Select(hit => hit.Item.Id));
+        Assert.All(hits, hit => Assert.Equal("记录与隐私", hit.PageTitle));
+        Assert.All(hits, hit => Assert.Equal("保留与保护", hit.SectionTitle));
     }
 
     [Fact]

@@ -3,7 +3,7 @@ using Shiyu.Core;
 namespace Shiyu.App;
 
 /// <summary>
-/// 保留清理模块（O-40 拆自 App.xaml.cs）：过期图片原件与到期翻译记录的即时与每日清扫。
+/// 保留清理模块（O-40 拆自 App.xaml.cs）：过期图片原件、到期翻译记录与到期剪贴板历史的即时与每日清扫。
 /// </summary>
 internal sealed class RetentionModule
 {
@@ -12,6 +12,9 @@ internal sealed class RetentionModule
 
     /// <summary>上一次清扫翻译记录时的周期：周期一变就再扫一次，不等明天。</summary>
     private int _logDays;
+
+    /// <summary>上一次清扫剪贴板历史时的周期（评审 2026-10-16 F-13b），同上。</summary>
+    private int _historyDays;
 
     /// <summary>
     /// Sweeps expired image originals and translation records now and once a
@@ -27,6 +30,7 @@ internal sealed class RetentionModule
 
         Sweep();
         SweepTranslationLog();
+        SweepHistory();
 
         _timer = new System.Windows.Threading.DispatcherTimer
         {
@@ -36,10 +40,11 @@ internal sealed class RetentionModule
         {
             Sweep();
             SweepTranslationLog();
+            SweepHistory();
         };
         _timer.Start();
 
-        // 翻译记录的周期改了即刻作数（用户需求 2026-10-09）：从 30 天改成 7 天，8 天前的
+        // 翻译记录与剪贴板历史的周期改了即刻作数（用户需求 2026-10-09）：从 30 天改成 7 天，8 天前的
         // 记录此刻就清，而不是等到明天的这个时候。
         shell.SettingsChanged += settings =>
         {
@@ -47,7 +52,42 @@ internal sealed class RetentionModule
             {
                 SweepTranslationLog();
             }
+
+            if (settings.HistoryRetentionDays != _historyDays)
+            {
+                SweepHistory();
+            }
         };
+    }
+
+    /// <summary>
+    /// 「历史保留」（评审 2026-10-16 F-13b）：到期的剪贴板历史整条删（「永不」时不动），受删除保护的不删。
+    /// 与图片清扫一样在后台跑，失败只留日志。
+    /// </summary>
+    private void SweepHistory()
+    {
+        var shell = _shell!;
+        var days = _historyDays = shell.Settings.HistoryRetentionDays;
+        if (days <= 0)
+        {
+            return;
+        }
+
+        var service = new RetentionService(shell.Store, shell.Images, TimeProvider.System);
+        var keepFavorites = shell.Settings.ProtectEntries && shell.Settings.ProtectFavorites;
+        var keepPinned = shell.Settings.ProtectEntries && shell.Settings.ProtectPinned;
+        Task.Run(() =>
+        {
+            try
+            {
+                var removed = service.SweepHistory(days, keepFavorites, keepPinned);
+                Log.Event(LogEvent.RetentionSwept, ("removed", removed), ("history", true));
+            }
+            catch (Exception failure)
+            {
+                Log.Event(LogEvent.RetentionSweepFailed, failure, ("days", days), ("history", true));
+            }
+        });
     }
 
     private void Sweep()

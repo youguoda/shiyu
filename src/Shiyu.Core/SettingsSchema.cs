@@ -226,8 +226,14 @@ public static class SettingsSchema
                     FullBleed: true)),
             new SettingsSection("privacy.retention", "保留与保护",
                 new SettingsItem(
+                    "store.history-retention", "历史保留", SettingsControl.Segmented,
+                    Hint: "早于这个时间的剪贴板历史整条自动删除（文字、文件、图片都算）；受删除保护的不删。选「永不」则一直保留。",
+                    Choices: ["7 天", "30 天", "90 天", "永不"],
+                    Keywords: ["保留", "清理", "历史", "文本", "文字", "多久删", "过期", "自动删除", "隐私", "周期"],
+                    Icon: "E823"),
+                new SettingsItem(
                     "store.retention-days", "图片保留", SettingsControl.Number, Min: 1, Max: 36500,
-                    Hint: "天后清理原图；文本永不清理。",
+                    Hint: "天后清理原图，缩略图留着；整条什么时候删看「历史保留」。",
                     Keywords: ["保留", "清理", "图片", "原图", "多久删", "过期", "几天", "占用"],
                     Unit: "天",
                     Icon: "E823"),

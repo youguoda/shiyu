@@ -127,6 +127,13 @@ public sealed record AppSettings
     public int ImageRetentionDays { get; init; } = 30;
 
     /// <summary>
+    /// 剪贴板历史留多少天，到期整条删除（文字、文件、图片都算；受删除保护的不删）；0 是永不，默认永不
+    /// （评审 2026-10-16 F-13b：翻译记录有周期，剪贴板历史却只能无限期，隐私敏感的人期待同一套语义）。
+    /// 设置页给的四档与翻译记录相同（<see cref="TranslationLogRetention"/>）。
+    /// </summary>
+    public int HistoryRetentionDays { get; init; }
+
+    /// <summary>
     /// The master switch of delete protection — children name who is spared.
     /// Off means protection is entirely off, whichever child stays checked.
     /// </summary>

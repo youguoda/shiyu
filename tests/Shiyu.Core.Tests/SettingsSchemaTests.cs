@@ -49,6 +49,7 @@ public class SettingsSchemaTests
             ["record.images"] = "privacy",
             ["record.files"] = "privacy",
             ["exclusions"] = "privacy",
+            ["store.history-retention"] = "privacy",
             ["store.retention-days"] = "privacy",
             ["store.protect"] = "privacy",
             ["store.protect-favorites"] = "privacy",
