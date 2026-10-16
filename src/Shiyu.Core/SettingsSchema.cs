@@ -281,6 +281,15 @@ public static class SettingsSchema
                     Hint: "免费引擎：被翻译的文本发给微软必应翻译的网页接口，不可用时改发腾讯交互翻译，无需账号。这是网页接口而非正式 API，可能随时变更或限流。自备密钥：使用你自己的 OpenAI 兼容接口与凭据，被翻译的文本直接发给你选的服务商；更好的质量与 AI 动作需要自备密钥。剪贴板历史本身不出机器。",
                     Keywords: ["免费", "免费引擎", "翻译", "后端", "密钥", "零配置", "隐私", "自备", "必应", "bing", "微软", "腾讯", "无需账号", "网页接口"],
                     Icon: "E72E"),
+
+                // 评审 2026-10-16 F-14：免费引擎坏了只能等发版，至少让人看得到它刚才怎样。只在选着免费引擎时露面
+                // （其余子项只在自备密钥时露面，见设置窗的 SegmentedParentOn）。
+                new SettingsItem(
+                    "service.free-status", "免费引擎状态", SettingsControl.Custom,
+                    Parent: "service.backend-kind",
+                    Hint: "这次启动以来：上次成功、上次失败各是几点、哪一家，现在在用哪一家。只记时间与引擎名，不记翻译的内容。",
+                    Keywords: ["状态", "引擎", "免费引擎", "微软", "必应", "腾讯", "失败", "成功", "不可用", "坏了", "没反应"],
+                    Icon: "E9D9"),
                 new SettingsItem(
                     "service.preset", "服务商预设", SettingsControl.Custom,
                     Parent: "service.backend-kind",

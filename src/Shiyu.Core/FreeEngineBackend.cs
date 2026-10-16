@@ -57,6 +57,18 @@ internal sealed class FreeEngineHealth(TimeProvider clock)
             _bingUnhealthyUntil = clock.GetUtcNow() + BingCooldown;
         }
     }
+
+    /// <summary>必应的冷却到几点为止（设置卡上的「几点起再试微软」）；从未失败为 null。</summary>
+    internal DateTimeOffset? BingRetryAt
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _bingUnhealthyUntil == DateTimeOffset.MinValue ? null : _bingUnhealthyUntil;
+            }
+        }
+    }
 }
 
 /// <summary>
@@ -85,6 +97,7 @@ public sealed class FreeEngineBackend : ITranslationBackend
     private readonly IWholeTextTranslator _bing;
     private readonly IWholeTextTranslator _tencent;
     private readonly FreeEngineHealth _health;
+    private readonly FreeEngineStatus _status;
     private readonly TimeSpan _chunkTimeout;
     private readonly Func<TimeSpan> _pieceDelay;
     private readonly int _firstChunkChars;
@@ -98,7 +111,8 @@ public sealed class FreeEngineBackend : ITranslationBackend
         : this(
             new BingWebTranslator(HttpClients.Shared, BingSessionCache.Shared),
             new TransmartTranslator(HttpClients.Shared),
-            FreeEngineHealth.Shared)
+            FreeEngineHealth.Shared,
+            status: FreeEngineStatus.Shared)
     {
     }
 
@@ -109,11 +123,13 @@ public sealed class FreeEngineBackend : ITranslationBackend
         TimeSpan? chunkTimeout = null,
         Func<TimeSpan>? pieceDelay = null,
         int firstChunkChars = FreeEngineChunker.FirstChunkChars,
-        int chunkChars = FreeEngineChunker.ChunkChars)
+        int chunkChars = FreeEngineChunker.ChunkChars,
+        FreeEngineStatus? status = null)
     {
         _bing = bing;
         _tencent = tencent;
         _health = health;
+        _status = status ?? new FreeEngineStatus(health, TimeProvider.System);
         _chunkTimeout = chunkTimeout ?? DefaultChunkTimeout;
         _pieceDelay = pieceDelay ?? (() => StreamingSlicer.PieceInterval);
         _firstChunkChars = firstChunkChars;
@@ -162,6 +178,7 @@ public sealed class FreeEngineBackend : ITranslationBackend
                     bingFailure = attempt.Failure;
                     onTencent = true;
                     _health.MarkBingUnhealthy();
+                    _status.RecordBingFailure();
                     Log.Event(LogEvent.TranslationFailed, attempt.Failure!, ("engine", 1), ("chunk", index));
                 }
             }
@@ -171,6 +188,7 @@ public sealed class FreeEngineBackend : ITranslationBackend
                 var attempt = await AttemptAsync(_tencent, chunk.Text, source, target, cancellation);
                 if (attempt.Text is null)
                 {
+                    _status.RecordUnavailable();
                     throw new TranslationFailedException(
                         FreeEngineMessages.Unavailable, Combine(bingFailure, attempt.Failure));
                 }
@@ -196,6 +214,9 @@ public sealed class FreeEngineBackend : ITranslationBackend
                 yield return pieces[piece];
             }
         }
+
+        // 整段译完才算一次成功（评审 2026-10-16 F-14）；中途取消不记。
+        _status.RecordSuccess(onTencent ? FreeEngineName.Tencent : FreeEngineName.Bing);
     }
 
     /// <summary>

@@ -59,6 +59,7 @@ public class SettingsSchemaTests
             ["service.target-language"] = "translate",
             ["service.source-language"] = "translate",
             ["service.backend-kind"] = "translate",
+            ["service.free-status"] = "translate",
             ["service.preset"] = "translate",
             ["service.base-url"] = "translate",
             ["service.model"] = "translate",

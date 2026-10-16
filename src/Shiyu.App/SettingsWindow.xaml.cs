@@ -1135,12 +1135,53 @@ public partial class SettingsWindow : Window
         "hotkeys.cheatsheet" => KeyMapCard(),
         "service.preset" => PresetRow(state),
         "service.saved-providers" => SavedProvidersRow(),
+        "service.free-status" => FreeEngineStatusRow(),
         "exclusions" => ExclusionsRow(item, state),
         "translate.templates" => TemplatesRow(item),
         "translate.log-clear" => TranslationLogRow(),
         "bar.actions" => ActionsListRow(item, state),
         _ => new TextBlock(),
     };
+
+    /// <summary>
+    /// 免费引擎的近况（评审 2026-10-16 F-14）：几行字，窗口开着时翻译一结束就跟着变。与翻译记录那一行
+    /// 同样上屏才订、下屏退订——<see cref="FreeEngineStatus.Shared"/> 是进程级的，订着不退会把整个设置窗留在内存里。
+    /// </summary>
+    private FrameworkElement FreeEngineStatusRow()
+    {
+        var text = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+        };
+        text.SetResourceReference(TextElement.FontSizeProperty, "Type.Caption");
+        text.SetResourceReference(TextBlock.LineHeightProperty, "Line.CaptionMulti");
+        text.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+
+        void Refresh() => text.Text = string.Join("\n", FreeEngineStatus.Shared.Describe());
+        void OnChanged() => Dispatcher.BeginInvoke(Refresh);
+
+        var watching = false;
+        text.Loaded += (_, _) =>
+        {
+            if (!watching)
+            {
+                watching = true;
+                FreeEngineStatus.Shared.Changed += OnChanged;
+            }
+
+            Refresh();
+        };
+        text.Unloaded += (_, _) =>
+        {
+            if (watching)
+            {
+                watching = false;
+                FreeEngineStatus.Shared.Changed -= OnChanged;
+            }
+        };
+        return text;
+    }
 
     // --- 翻译记录（用户需求 2026-10-09） ---------------------------------------------
 
@@ -1820,7 +1861,7 @@ public partial class SettingsWindow : Window
 
     /// <summary>
     /// 父项的"开着"：开关看开关；热键看有没有键；分段看 <see cref="SegmentedParentOn"/>
-    /// （翻译方式只有自备密钥才有下面四行）。子项随它露面或收起。
+    /// （翻译方式下哪几行露面看选的是哪一种）。子项随它露面或收起。
     /// </summary>
     private void ApplyParentVisibility()
     {
@@ -1834,25 +1875,21 @@ public partial class SettingsWindow : Window
                 continue;
             }
 
-            var on = parent.Control switch
-            {
-                SettingsControl.Toggle => parentState.Toggle,
-                SettingsControl.Hotkey => parentState.Text.Trim().Length > 0,
-                SettingsControl.Segmented => SegmentedParentOn(parent.Id, parentState.Choice),
-                _ => true,
-            };
-            row.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            row.Visibility = ParentOn(parent, parentState, child.Id) ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
     /// <summary>
-    /// 分段父项的"开着"。翻译方式只有选了自备密钥，下面预设/地址/模型/凭据四行才有
-    /// 意义——免费引擎（零配置，票 41）用不着它们，选中时收起，免得"免费引擎"底下摆着
-    /// 一排要填的东西。其它分段父项沿用旧规则：不在第一位就开着。
+    /// 分段父项对某个子项算不算"开着"。翻译方式：预设/地址/模型/凭据/已保存的服务商只在选了自备密钥时
+    /// 有意义——免费引擎（零配置，票 41）用不着它们，选中时收起，免得"免费引擎"底下摆着一排要填的东西；
+    /// 免费引擎状态（评审 2026-10-16 F-14）反过来，只在选着免费引擎时露面。其它分段父项沿用旧规则：
+    /// 不在第一位就开着。
     /// </summary>
-    private static bool SegmentedParentOn(string parentId, int choice)
+    private static bool SegmentedParentOn(string parentId, int choice, string childId)
         => parentId == "service.backend-kind"
-            ? TranslationBackendChoices.At(choice) == TranslationBackendKind.OwnKey
+            ? TranslationBackendChoices.At(choice) == (childId == "service.free-status"
+                ? TranslationBackendKind.Free
+                : TranslationBackendKind.OwnKey)
             : choice != 0;
 
     // --- search and deep links ------------------------------------------------------
@@ -2139,7 +2176,7 @@ public partial class SettingsWindow : Window
         while (candidate is { Parent: { } parentId }
                && byId.TryGetValue(parentId, out var parentItem)
                && _edited.TryGetValue(parentId, out var parentState)
-               && !ParentOn(parentItem, parentState))
+               && !ParentOn(parentItem, parentState, candidate.Id))
         {
             if (!_rows.TryGetValue(parentId, out var parentRow))
             {
@@ -2161,12 +2198,12 @@ public partial class SettingsWindow : Window
         }, System.Windows.Threading.DispatcherPriority.Render);
     }
 
-    private bool ParentOn(SettingsItem? parent, ItemState state)
+    private static bool ParentOn(SettingsItem? parent, ItemState state, string childId)
         => parent?.Control switch
         {
             SettingsControl.Toggle => state.Toggle,
             SettingsControl.Hotkey => state.Text.Trim().Length > 0,
-            SettingsControl.Segmented => SegmentedParentOn(parent!.Id, state.Choice),
+            SettingsControl.Segmented => SegmentedParentOn(parent!.Id, state.Choice, childId),
             _ => true,
         };
 
