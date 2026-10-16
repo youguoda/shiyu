@@ -6,7 +6,7 @@
 # the string literals live in Shiyu.App.dll (and Shiyu.Core.dll for the update
 # feed override — pass -Exe to point at it).
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot "..\..\src\Shiyu.App\bin\Release\net9.0-windows\Shiyu.App.dll")
+    [string]$Exe = (Join-Path $PSScriptRoot "..\..\src\Shiyu.App\bin\Release\net9.0-windows10.0.17763.0\Shiyu.App.dll")
 )
 
 $bytes = [System.IO.File]::ReadAllBytes($Exe)

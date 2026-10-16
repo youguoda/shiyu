@@ -274,7 +274,7 @@ npm run typecheck
 npm test
 ```
 
-产物在 `src/Shiyu.App/bin/Release/net9.0-windows/`。**调试构建**启动时不写自启，适合开发时使用。
+产物在 `src/Shiyu.App/bin/Release/net9.0-windows10.0.17763.0/`。**调试构建**启动时不写自启，适合开发时使用。
 
 文档入口：
 

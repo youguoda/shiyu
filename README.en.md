@@ -276,7 +276,7 @@ npm run typecheck
 npm test
 ```
 
-The build output lands in `src/Shiyu.App/bin/Release/net9.0-windows/`. **Debug builds** don't register autostart, which suits development.
+The build output lands in `src/Shiyu.App/bin/Release/net9.0-windows10.0.17763.0/`. **Debug builds** don't register autostart, which suits development.
 
 Where to read more (these documents are in Chinese):
 

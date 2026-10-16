@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ($AppBin -eq "") {
-    $AppBin = Join-Path $PSScriptRoot '..\..\src\Shiyu.App\bin\Debug\net9.0-windows'
+    $AppBin = Join-Path $PSScriptRoot '..\..\src\Shiyu.App\bin\Debug\net9.0-windows10.0.17763.0'
 }
 $AppBin = [IO.Path]::GetFullPath($AppBin)
 

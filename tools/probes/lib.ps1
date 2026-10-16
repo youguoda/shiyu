@@ -456,7 +456,7 @@ function Test-UiaToggled($Item) {
 # --- probe app lifecycle -----------------------------------------------------
 
 function Get-DefaultProbeExe {
-    return (Join-Path (Join-Path $PSScriptRoot '..\..\src\Shiyu.App\bin\Debug\net9.0-windows') 'Shiyu.App.exe')
+    return (Join-Path (Join-Path $PSScriptRoot '..\..\src\Shiyu.App\bin\Debug\net9.0-windows10.0.17763.0') 'Shiyu.App.exe')
 }
 
 # Starts the probe instance. Always check the exe path first: a probe must
