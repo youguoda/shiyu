@@ -108,6 +108,9 @@ internal sealed class AppShell
     public Action<string>? OpenSettingsAt { get; set; }
     public Action? ShowLibrary { get; set; }
 
+    /// <summary>呼出历史窗口并指明「粘贴全部」贴回哪扇窗（窄条的品牌钮用：前台此刻是窄条自己）。</summary>
+    public Action<ForegroundWindow>? ShowLibraryFor { get; set; }
+
     /// <summary>管理窗打开在「翻译记录」页（设置里的「查看翻译记录」用）。</summary>
     public Action? ShowTranslationLog { get; set; }
 

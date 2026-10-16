@@ -144,7 +144,8 @@ internal sealed class TrayModule
                 RunAfterMenuSettles(() => shell.ShowReverseInput?.Invoke());
                 break;
             case LibraryKey:
-                shell.ShowLibrary?.Invoke();
+                // 同上等一拍（评审 2026-10-16 F-12）：历史窗口要记下「粘贴全部」贴回哪扇窗。
+                RunAfterMenuSettles(() => shell.ShowLibrary?.Invoke());
                 break;
             case SettingsKey:
                 shell.ShowSettings?.Invoke();

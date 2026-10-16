@@ -430,6 +430,9 @@ public partial class LibraryWindow
         // 整理组（§6.4：多选时的整理动作）。
         DetailBody.Children.Add(BuildDetailSectionLabel("整理"));
         var organize = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+        // 评审 2026-10-16 F-12：按选中先后、一条一行，贴回打开历史窗口前所在的窗口。
+        organize.Children.Add(BuildBatchButton($"粘贴全部 {selected.Count} 条", PasteAll));
         organize.Children.Add(BuildBatchButton($"置顶 {selected.Count} 条", () => OnTogglePin(this, new RoutedEventArgs())));
         organize.Children.Add(BuildBatchButton($"收藏 {selected.Count} 条", () => OnToggleFavorite(this, new RoutedEventArgs())));
         organize.Children.Add(BuildBatchButton("加标签…", OpenTagMenu));

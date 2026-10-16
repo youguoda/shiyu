@@ -63,7 +63,23 @@ public partial class LibraryWindow : Window
     /// <summary>自己发起的写入不触发重载（写入路径自己刷新了视觉，票 12 的 SelfWrite 纪律）。</summary>
     private int _selfWrites;
 
+    /// <summary>
+    /// 多选的先后（评审 2026-10-16 F-12「粘贴全部」按选中顺序）。重建列表、补回选中的那几拍里
+    /// <see cref="_holdSelectionOrder"/> 拦着不记——那是程序在按列表顺序重放，不是用户在点。
+    /// </summary>
+    private readonly SelectionOrder _selectionOrder = new();
+    private bool _holdSelectionOrder;
+
     private enum DateChoice { None, Today, Days7, Days30, Custom }
+
+    /// <summary>
+    /// 打开历史窗口之前用户所在的窗口（评审 2026-10-16 F-12）：「粘贴全部」贴回那里。每次呼出都由
+    /// <see cref="LibraryModule"/> 重记；拾语自己的窗口不算。
+    /// </summary>
+    public ForegroundWindow PasteTarget { get; set; }
+
+    /// <summary>写剪贴板 + Ctrl+V 的那条路，与窄条同一个。探针实例没有，「粘贴全部」就只复制。</summary>
+    public SelectionCapture? Paster { get; init; }
 
     public LibraryWindow(
         EntryStore store,
@@ -239,20 +255,36 @@ public partial class LibraryWindow : Window
     public void ApplySourceIcons()
     {
         var chosen = EntryList.SelectedItems.OfType<EntryItem>().Select(item => item.Id).ToHashSet();
-        Rebuild();
-        foreach (var item in _items.Where(item => chosen.Contains(item.Id)))
+        _holdSelectionOrder = true;
+        try
         {
-            EntryList.SelectedItems.Add(item);
+            Rebuild();
+            foreach (var item in _items.Where(item => chosen.Contains(item.Id)))
+            {
+                EntryList.SelectedItems.Add(item);
+            }
+        }
+        finally
+        {
+            _holdSelectionOrder = false;
         }
     }
 
     private void ReloadPreservingSelection()
     {
         var chosen = EntryList.SelectedItems.OfType<EntryItem>().Select(item => item.Id).ToHashSet();
-        Reload();
-        foreach (var item in _items.Where(item => chosen.Contains(item.Id)))
+        _holdSelectionOrder = true;
+        try
         {
-            EntryList.SelectedItems.Add(item);
+            Reload();
+            foreach (var item in _items.Where(item => chosen.Contains(item.Id)))
+            {
+                EntryList.SelectedItems.Add(item);
+            }
+        }
+        finally
+        {
+            _holdSelectionOrder = false;
         }
 
         RefreshTagChoices();
@@ -564,6 +596,12 @@ public partial class LibraryWindow : Window
             _anchor = _lead = EntryList.SelectedIndex;
         }
 
+        if (!_holdSelectionOrder)
+        {
+            _selectionOrder.Remove(e.RemovedItems.OfType<EntryItem>().Select(item => item.Id));
+            _selectionOrder.Add(e.AddedItems.OfType<EntryItem>().Select(item => item.Id));
+        }
+
         SyncCommandBarToSelection();
         SyncRowChecks();
         UpdateDetail();
@@ -598,6 +636,60 @@ public partial class LibraryWindow : Window
     private EntryItem? Primary => EntryList.SelectedItem as EntryItem;
 
     private List<EntryItem> SelectedItems() => [.. EntryList.SelectedItems.OfType<EntryItem>()];
+
+    /// <summary>
+    /// 「粘贴全部」（评审 2026-10-16 F-12）：选中的条目按选中先后、一条一行，贴回打开历史窗口之前所在的
+    /// 窗口。回不去（不知道是哪扇、它以管理员身份运行、抢不回前台）就只复制，说清楚让人自己按 Ctrl+V。
+    /// </summary>
+    private void PasteAll()
+    {
+        var ids = _selectionOrder.Arrange([.. SelectedItems().Select(item => item.Id)]);
+        if (ids.Count == 0)
+        {
+            ShowLightFeedback("先选中要粘贴的条目。");
+            return;
+        }
+
+        var batch = BatchPaste.Join(ids.Select(id => _store.Get(id)).OfType<Entry>());
+        if (batch.Pasted == 0)
+        {
+            ShowLightFeedback(batch.SkippedImages > 0 ? "选中的都是图片，贴不成文字。" : "选中的条目里没有可贴的文字。");
+            return;
+        }
+
+        var skipped = batch.SkippedImages > 0 ? $"，跳过 {batch.SkippedImages} 张图片" : string.Empty;
+        var target = PasteTarget;
+        var copyOnly = !target.IsSomething || Paster is null
+            ? "不知道该贴到哪个窗口"
+            : target.RunsElevated
+                ? "目标程序以管理员身份运行，拾语无法直接粘贴"
+                : null;
+        if (copyOnly is null && !target.Restore())
+        {
+            copyOnly = "没能回到原来的窗口";
+        }
+
+        if (copyOnly is not null)
+        {
+            ShowLightFeedback(_clipboard?.SetText(batch.Text) == true
+                ? $"{copyOnly}：已复制 {batch.Pasted} 条{skipped}，到目标窗口按 Ctrl+V 即可。"
+                : "没能写入剪贴板，可以重试。");
+            return;
+        }
+
+        if (!Paster!.Paste(batch.Text))
+        {
+            ShowLightFeedback("没能写入剪贴板，可以重试。");
+            return;
+        }
+
+        foreach (var id in ids)
+        {
+            SelfWrite(() => _store.BumpUse(id));
+        }
+
+        ShowLightFeedback($"已按选中顺序贴出 {batch.Pasted} 条{skipped}。");
+    }
 
     // --- 吸顶分组头 -------------------------------------------------------------------
 

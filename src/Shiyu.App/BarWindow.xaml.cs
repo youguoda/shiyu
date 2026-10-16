@@ -74,6 +74,9 @@ internal partial class BarWindow : Window
     /// </summary>
     private ForegroundWindow _returnTo;
 
+    /// <summary>窄条记着要贴回的那扇窗：品牌钮打开历史窗口时交给它（评审 2026-10-16 F-12「粘贴全部」）。</summary>
+    internal ForegroundWindow ReturnTarget => _returnTo;
+
     /// <summary>
     /// 一次呼出正开着（用户需求 2026-10-10 起只有快速粘贴一种呼出）。贴完、
     /// 失焦收不收看 <see cref="AppSettings.BarPinned"/>：没钉住即贴即走、点别处

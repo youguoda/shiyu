@@ -1,5 +1,6 @@
 using System.Windows;
 using Shiyu.Core;
+using Shiyu.Windows;
 
 namespace Shiyu.App;
 
@@ -8,6 +9,9 @@ internal sealed class LibraryModule
 {
     private AppShell? _shell;
     private LibraryWindow? _library;
+
+    /// <summary>上一次呼出历史窗口前用户所在的窗口（评审 2026-10-16 F-12「粘贴全部」贴回那里）。</summary>
+    private ForegroundWindow _pasteTarget;
 
     public void Attach(AppShell shell)
     {
@@ -30,9 +34,20 @@ internal sealed class LibraryModule
     /// One library window, reused. Opening a second copy of the same history
     /// would be two views that immediately disagree with each other.
     /// </summary>
-    public void Show()
+    public void Show() => ShowFor(ForegroundWindow.Current());
+
+    /// <summary>
+    /// 呼出历史窗口，并记下呼出前用户所在的窗口——「粘贴全部」（评审 2026-10-16 F-12）贴回那里。
+    /// 拾语自己的窗口（窄条、托盘菜单的消息窗口、设置、历史窗口本身）不算，沿用上一次记下的；
+    /// 窄条的品牌钮把它自己记着的那扇窗传进来。
+    /// </summary>
+    public void ShowFor(ForegroundWindow before)
     {
         var shell = _shell!;
+        if (before.IsSomething && !before.BelongsToThisProcess)
+        {
+            _pasteTarget = before;
+        }
 
         // 探针实例没有剪贴板写入器（刻意不接监听，票 15 的合成数据纪律），
         // 但管理窗必须能开——探针的 SHIYU_PROBE_CMD=library 正是从这里进
@@ -48,12 +63,15 @@ internal sealed class LibraryModule
             {
                 // 翻译记录页关着时的空态「去设置」（用户需求 2026-10-09）。
                 OpenSettingsAt = id => shell.OpenSettingsAt?.Invoke(id),
+                Paster = shell.Capture,
+                PasteTarget = _pasteTarget,
             };
             _library.Closed += (_, _) => _library = null;
             _library.Show();
         }
         else
         {
+            _library.PasteTarget = _pasteTarget;
             _library.ReloadOnReturn();
             if (_library.WindowState == WindowState.Minimized)
             {

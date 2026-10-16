@@ -548,6 +548,9 @@ public partial class LibraryWindow
         // 与键帽一样只装一个短形。
         string? Key(string id) => KeyMap.HintKey(id, KeySurface.Library);
 
+        // 评审 2026-10-16 F-12：窄窗口没有详情栏的批量面板，这里是「粘贴全部」的另一个入口。
+        body.Children.Add(MenuRow("粘贴全部", "\uE77F", PasteAll,
+            toolTip: "选中的条目按选中先后、一条一行，贴回打开历史前所在的窗口"));
         body.Children.Add(MenuRow("备注", "\uE70B", EditNoteSelection, keyHint: Key("note")));
         body.Children.Add(MenuRow("归组", "\uE8EC", OpenGroupMenu, keyHint: Key("group")));
 
