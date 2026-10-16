@@ -35,13 +35,15 @@ public class FreeEngineSettingsTests
     }
 
     [Fact]
-    public void The_segment_offers_the_free_engine_as_the_third_choice()
+    public void The_segment_offers_the_free_engine_first()
     {
+        // 评审 2026-10-16 F-05 之后只剩两段，免费引擎在前（与首次引导里的卡片顺序一致）。
         var item = SettingsSchema.Find("service.backend-kind")!;
 
         Assert.Equal(SettingsControl.Segmented, item.Control);
-        Assert.Equal(3, item.ChoiceList.Length);
-        Assert.Contains("免费引擎", item.ChoiceList[(int)TranslationBackendKind.Free]);
+        Assert.Equal(2, item.ChoiceList.Length);
+        Assert.Equal(0, TranslationBackendChoices.IndexOf(TranslationBackendKind.Free));
+        Assert.Contains("免费引擎", item.ChoiceList[0]);
     }
 
     [Fact]
@@ -51,12 +53,12 @@ public class FreeEngineSettingsTests
 
         foreach (var (kind, label) in new[]
                  {
-                     (TranslationBackendKind.Relay, "公共通道"),
+                     (TranslationBackendKind.Relay, "自备密钥"),
                      (TranslationBackendKind.OwnKey, "自备密钥"),
                      (TranslationBackendKind.Free, "免费引擎"),
                  })
         {
-            Assert.Contains(label, item.ChoiceList[(int)kind]);
+            Assert.Contains(label, item.ChoiceList[TranslationBackendChoices.IndexOf(kind)]);
         }
     }
 

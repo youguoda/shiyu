@@ -58,7 +58,7 @@ internal static class SettingsBindings
     {
         "theme" => (int)settings.Theme,
         "look.content-size" => (int)settings.ContentFontSize,
-        "service.backend-kind" => (int)settings.TranslationBackend,
+        "service.backend-kind" => TranslationBackendChoices.IndexOf(settings.TranslationBackend),
         "translate.log-retention" => TranslationLogRetention.ChoiceOf(settings.TranslationLogRetentionDays),
         _ => 0,
     };
@@ -98,7 +98,7 @@ internal static class SettingsBindings
             : current,
         "theme" => current with { Theme = (AppTheme)choice },
         "look.content-size" => current with { ContentFontSize = (ContentFontSize)choice },
-        "service.backend-kind" => current with { TranslationBackend = (TranslationBackendKind)choice },
+        "service.backend-kind" => current with { TranslationBackend = TranslationBackendChoices.At(choice) },
         "action.sound" => current with { ActionSound = AsBool(text) },
         "bar.pinned" => current with { BarPinned = AsBool(text) },
         "look.lightweight" => current with { LightweightWhenHidden = AsBool(text) },
@@ -196,7 +196,7 @@ internal static class SettingsBindings
     public static bool IsUnchanged(string id, AppSettings baseline, ItemState state) => id switch
     {
         "theme" => state.Choice == (int)baseline.Theme,
-        "service.backend-kind" => state.Choice == (int)baseline.TranslationBackend,
+        "service.backend-kind" => state.Choice == TranslationBackendChoices.IndexOf(baseline.TranslationBackend),
 
         // 这个开关的基线是 Windows 的现状而非文件值（两者可能不一致，
         // 而 Windows 是事实）。既有保存行为是每次都照 Windows 现状写回

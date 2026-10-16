@@ -484,12 +484,7 @@ public partial class SettingsWindow : Window
                 ApplyParentVisibility();
                 Commit(item, state);
             },
-
-            // 公共通道未上线（票 08/ADR-0009）：看得见、点不动。
-            choiceEnabled: item.Id == "service.backend-kind"
-                ? choice => choice != (int)TranslationBackendKind.Relay
-                    || RelayChannel.Available
-                : null);
+            choiceEnabled: null);
 
         _segmented[item.Id] = editor is StackPanel panel
             ? panel.Children.OfType<ToggleButton>().ToArray()
@@ -1806,12 +1801,12 @@ public partial class SettingsWindow : Window
 
     /// <summary>
     /// 分段父项的"开着"。翻译方式只有选了自备密钥，下面预设/地址/模型/凭据四行才有
-    /// 意义——公共通道（未上线）与免费引擎（零配置，票 41）都用不着它们，选中时收起，
-    /// 免得"免费引擎"底下摆着一排要填的东西。其它分段父项沿用旧规则：不在第一位就开着。
+    /// 意义——免费引擎（零配置，票 41）用不着它们，选中时收起，免得"免费引擎"底下摆着
+    /// 一排要填的东西。其它分段父项沿用旧规则：不在第一位就开着。
     /// </summary>
     private static bool SegmentedParentOn(string parentId, int choice)
         => parentId == "service.backend-kind"
-            ? choice == (int)TranslationBackendKind.OwnKey
+            ? TranslationBackendChoices.At(choice) == TranslationBackendKind.OwnKey
             : choice != 0;
 
     // --- search and deep links ------------------------------------------------------

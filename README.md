@@ -128,7 +128,7 @@ Windows 11 托盘里的剪贴板历史与翻译工具。
 没人看着的时候，才见一个工具的品性。
 
 - **剪贴板历史只在本机**（`%LOCALAPPDATA%\Shiyu`），不上传、不同步。把数据位置改到 OneDrive、坚果云这类同步目录时，拾语会明确警告：历史库本身不加密，安全靠的是 Windows 账户隔离（取舍见 [ADR-0007](docs/adr/0007-history-entry-and-data-safety.md)）。
-- **只有你要翻译的那段文字会离开电脑**，发给你选的翻译方式：免费引擎发给微软必应翻译的网页接口，不可用时改发腾讯交互翻译（无需账号；这是网页接口而非正式 API，可能随时变更或限流）；自备密钥则直接发给你配置的服务商。面向所有人的公共翻译通道尚未开放。
+- **只有你要翻译的那段文字会离开电脑**，发给你选的翻译方式：免费引擎发给微软必应翻译的网页接口，不可用时改发腾讯交互翻译（无需账号；这是网页接口而非正式 API，可能随时变更或限流）；自备密钥则直接发给你配置的服务商。
 - **没有遥测**，没有任何统计上报。除了翻译，只有两处会联网：「检查更新」访问 GitHub API（`api.github.com`，自动检查可以关）；英文单词的词典卡访问 `dictionaryapi.dev`。
 - **凭据各归其主**：自备密钥按服务商各存一份，只发给它所属的那一家；在设置文件里由 Windows 加密保护，备份默认不带。
 - **备份**可以加口令加密；导入时可以选合并或覆盖。
@@ -255,7 +255,7 @@ src/Shiyu.Core          # 纯逻辑层（含 SQLite 存储），全部单元测�
 src/Shiyu.Windows       # 平台层：Win32 / WPF 交互（剪贴板、热键、托盘、钩子、语音）
 src/Shiyu.App           # WPF 界面层（窄条、管理窗、设置、引导、更新、备份）
 tests/Shiyu.Core.Tests  # xUnit 单元测试
-server/                 # 公共翻译通道：Cloudflare Worker（TypeScript + vitest）
+server/                 # 公共翻译通道：Cloudflare Worker（TypeScript + vitest；界面不再提供，代码冻结）
 docs/                   # ADR、评审报告、人工验收清单
 .scratch/               # 票（issue tracker）：shiyu-v1 / shiyu-v2 两个里程碑
 spikes/                 # 技术验证样例

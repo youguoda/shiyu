@@ -360,33 +360,44 @@ public class RelaySettingsTests
     }
 
     [Fact]
-    public void The_schema_offers_the_relay_as_a_backend_choice()
+    public void The_schema_no_longer_offers_the_relay()
     {
+        // 评审 2026-10-16 F-05：公共通道上线条件迟迟未满足，占着首位、永远点不动的那一段不再显示。
         var item = SettingsSchema.Find("service.backend-kind");
 
         Assert.NotNull(item);
         Assert.Equal(SettingsControl.Segmented, item!.Control);
-
-        // 票 41：第三项是免费引擎，追加在末尾，前两项的下标不动。
-        Assert.Equal(3, item.ChoiceList.Length);
-        Assert.Contains("公共通道", item.ChoiceList[0]);
-        Assert.Contains("自备密钥", item.ChoiceList[1]);
-        Assert.Contains("免费引擎", item.ChoiceList[2]);
+        Assert.Equal(["免费引擎", "自备密钥"], item.ChoiceList);
+        Assert.DoesNotContain(item.ChoiceList, choice => choice.Contains("公共通道"));
+        Assert.DoesNotContain("公共通道", item.Hint);
     }
 
     [Fact]
     public void Each_choice_index_lands_on_its_own_enum_value()
     {
-        // 分段控件存的是下标、设置存的是枚举；两端靠"声明顺序一致"对上。
-        // 这条不变量坏了，选"公共通道"会悄悄存成自备密钥——钉死它。
+        // 分段控件存的是下标、设置存的是枚举；两端经 TranslationBackendChoices 对上。这条坏了，选
+        // "免费引擎"会悄悄存成别的——钉死它：每一段的名字、存下的值、读回的下标都对得上。
         var item = SettingsSchema.Find("service.backend-kind")!;
 
-        Assert.Contains("公共通道", item.ChoiceList[(int)TranslationBackendKind.Relay]);
-        Assert.Contains("自备密钥", item.ChoiceList[(int)TranslationBackendKind.OwnKey]);
-        Assert.Contains("免费引擎", item.ChoiceList[(int)TranslationBackendKind.Free]);
+        for (var index = 0; index < item.ChoiceList.Length; index++)
+        {
+            var kind = TranslationBackendChoices.At(index);
+            Assert.Equal(index, TranslationBackendChoices.IndexOf(kind));
+        }
 
-        // 枚举有几个值，分段就有几项——多一个少一个都是错位的前兆。
-        Assert.Equal(Enum.GetValues<TranslationBackendKind>().Length, item.ChoiceList.Length);
+        Assert.Contains("免费引擎", item.ChoiceList[TranslationBackendChoices.IndexOf(TranslationBackendKind.Free)]);
+        Assert.Contains("自备密钥", item.ChoiceList[TranslationBackendChoices.IndexOf(TranslationBackendKind.OwnKey)]);
+    }
+
+    [Fact]
+    public void An_old_setting_on_the_relay_shows_as_own_key_the_road_it_actually_takes()
+    {
+        // 存着公共通道的老设置照旧能读；没上线时它走的本来就是自备密钥那条路。
+        Assert.Equal(
+            TranslationBackendChoices.IndexOf(TranslationBackendKind.OwnKey),
+            TranslationBackendChoices.IndexOf(TranslationBackendKind.Relay));
+        Assert.IsType<OpenAiCompatibleBackend>(
+            new AppSettings { TranslationBackend = TranslationBackendKind.Relay }.BuildTranslationBackend());
     }
 
     [Fact]
@@ -396,7 +407,7 @@ public class RelaySettingsTests
 
         // 隐私披露的两半都要在：出机器的是被翻译的文本，不出机器的是历史。
         Assert.NotNull(item);
-        Assert.Contains("中转", item!.Hint);
+        Assert.Contains("被翻译的文本", item!.Hint);
         Assert.Contains("历史", item.Hint);
     }
 }

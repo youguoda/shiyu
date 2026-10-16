@@ -130,7 +130,7 @@ This layer has one iron rule: **no background, automatic or item-by-item model p
 You learn a tool's character when no one is watching.
 
 - **Your clipboard history stays on your machine** (`%LOCALAPPDATA%\Shiyu`): never uploaded, never synced. If you move the data folder into a synced folder such as OneDrive, Shiyu warns you plainly: the history database itself is not encrypted, and its safety rests on Windows account isolation (the trade-off is explained in [ADR-0007](docs/adr/0007-history-entry-and-data-safety.md), in Chinese).
-- **Only the text you choose to translate leaves your computer**, sent to the translation method you chose. The free engine sends it to Microsoft Bing Translator's web endpoint, falling back to Tencent TranSmart when Bing is unavailable (no account needed; these are web endpoints rather than official APIs, and may change or be rate-limited at any time). With your own key, it goes straight to the provider you configured. The public translation relay for everyone is not open yet.
+- **Only the text you choose to translate leaves your computer**, sent to the translation method you chose. The free engine sends it to Microsoft Bing Translator's web endpoint, falling back to Tencent TranSmart when Bing is unavailable (no account needed; these are web endpoints rather than official APIs, and may change or be rate-limited at any time). With your own key, it goes straight to the provider you configured.
 - **No telemetry**, and no usage statistics of any kind. Besides translation, only two things go online: Check for updates (「检查更新」) calls the GitHub API (`api.github.com`; automatic checks can be turned off), and dictionary cards for English words call `dictionaryapi.dev`.
 - **Each credential stays with its owner**: own-key credentials are stored per provider and sent only to the provider they belong to. They are encrypted by Windows in the settings file, and left out of backups by default.
 - **Backups** can be encrypted with a passphrase; on import, you choose to merge or overwrite.
@@ -257,7 +257,7 @@ src/Shiyu.Core          # pure logic (including SQLite storage); the target of a
 src/Shiyu.Windows       # platform layer: Win32 / WPF interop (clipboard, hotkeys, tray, hooks, speech)
 src/Shiyu.App           # WPF UI (bar, library, settings, onboarding, updates, backups)
 tests/Shiyu.Core.Tests  # xUnit unit tests
-server/                 # public translation relay: Cloudflare Worker (TypeScript + vitest)
+server/                 # public translation relay: Cloudflare Worker (TypeScript + vitest; no longer offered in the UI, code frozen)
 docs/                   # ADRs, reviews, manual acceptance checklists
 .scratch/               # tickets (issue tracker): milestones shiyu-v1 / shiyu-v2
 spikes/                 # technical spikes

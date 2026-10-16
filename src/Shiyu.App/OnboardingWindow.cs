@@ -683,7 +683,8 @@ internal sealed class OnboardingWindow : Window
             new TextBlock());
         panel.Children.Add(freeCard);
 
-        // 两张单选卡（§5.3）：自备密钥可选，公共通道「即将推出」点不动。
+        // 两张单选卡：免费引擎、自备密钥（评审 2026-10-16 F-05：原先第三张「公共通道 · 即将推出」
+        // 点不动，只会让人多想一次"我的文本发给谁"，不再显示）。
         var ownBody = new StackPanel();
 
         _presetState = new ItemState();
@@ -730,13 +731,6 @@ internal sealed class OnboardingWindow : Window
             ownBody);
         WireBackendCards(freeCard, ownCard);
         panel.Children.Add(ownCard);
-
-        var relayCard = Card(
-            "公共通道 · 即将推出",
-            "零配置零密钥；上线条件（大陆可达、服务端加固、运营费用）未满足前不可选。",
-            new TextBlock(),
-            disabled: true);
-        panel.Children.Add(relayCard);
 
         var privacy = new TextBlock
         {
@@ -1013,17 +1007,14 @@ internal sealed class OnboardingWindow : Window
 
     /// <summary>
     /// 一张卡（§5.3 的主卡/子卡/次卡）：Surface 底、1px 边、Radius.Control、
-    /// 标题加说明在上。<paramref name="disabled"/> 把文字压到 TextTertiary——
-    /// IsEnabled 挡不住点击之外的视觉，"即将推出"必须一眼看出点不动。
+    /// 标题加说明在上。
     /// </summary>
-    private static Border Card(string title, string description, FrameworkElement body, bool disabled = false)
+    private static Border Card(string title, string description, FrameworkElement body)
     {
         var heading = new TextBlock { Text = title };
         heading.SetResourceReference(TextElement.FontSizeProperty, "Type.Body");
         heading.FontWeight = FontWeights.SemiBold;
-        heading.SetResourceReference(
-            TextBlock.ForegroundProperty,
-            disabled ? "Brush.TextTertiary" : "Brush.Text");
+        heading.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text");
 
         var caption = new TextBlock
         {
@@ -1032,9 +1023,7 @@ internal sealed class OnboardingWindow : Window
             Margin = new Thickness(0, 2, 0, 8),
         };
         caption.SetResourceReference(TextElement.FontSizeProperty, "Type.Caption");
-        caption.SetResourceReference(
-            TextBlock.ForegroundProperty,
-            disabled ? "Brush.TextTertiary" : "Brush.TextSecondary");
+        caption.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
 
         var panel = new StackPanel();
         panel.Children.Add(heading);
@@ -1046,7 +1035,6 @@ internal sealed class OnboardingWindow : Window
             Child = panel,
             Padding = new Thickness(14, 12, 14, 12),
             Margin = new Thickness(0, 0, 0, 10),
-            IsEnabled = !disabled,
         };
         card.SetResourceReference(BackgroundProperty, "Brush.Surface");
         card.SetResourceReference(Border.BorderBrushProperty, "Brush.Border");
