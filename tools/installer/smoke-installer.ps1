@@ -46,12 +46,21 @@ function Check([string]$What, [bool]$Ok) {
 
 # --- install ------------------------------------------------------------------------
 
+# /SMOKEWINBUILD pretends this is Windows 10 (review 2026-10-16 F-13): setup must say it is
+# not verified there, and must still go on - the notice defaults to "yes", which is what a
+# silent install answers. The log is the evidence that the notice came up.
 $tasks = if ($WithDesktopIcon) { 'desktopicon' } else { '' }
+$log = $dir + '.log'
 $p = Start-Process -FilePath $Setup -Wait -PassThru -ArgumentList @(
-    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", "/TASKS=$tasks")
+    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", "/TASKS=$tasks",
+    '/SMOKEWINBUILD=19045', "/LOG=$log")
 Check "setup exits 0 (got $($p.ExitCode))" ($p.ExitCode -eq 0)
 Check 'Shiyu.App.exe is in the chosen folder' (Test-Path (Join-Path $dir 'Shiyu.App.exe'))
 Check 'the uninstaller is there' (Test-Path (Join-Path $dir 'unins000.exe'))
+$setupLog = if (Test-Path $log) { Get-Content $log -Raw } else { '' }
+Check 'on Windows 10 setup says it is not verified there, then installs anyway' (
+    $setupLog.Contains('Windows build 19045 is before Windows 11'))
+Remove-Item $log -Force -ErrorAction SilentlyContinue
 
 $entry = Get-ItemProperty $uninstallKey -ErrorAction SilentlyContinue
 Check 'registered in Apps for the current user only' ($null -ne $entry)

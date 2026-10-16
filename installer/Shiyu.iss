@@ -79,6 +79,39 @@ Type: filesandordirs; Name: "{app}"
 [Code]
 const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  { Windows 11 的第一个 build 号；比它小的都是 Windows 10。 }
+  FirstWindows11Build = 22000;
+
+{ 这台机器的 Windows build 号。/SMOKEWINBUILD=19045 让冒烟在 Windows 11 的机器上走一遍 Windows 10 的
+  分支——它只决定要不要多问一句，不碍事，所以做成运行时参数，不必为冒烟另编一份安装包。 }
+function WindowsBuild: Cardinal;
+var
+  Version: TWindowsVersion;
+begin
+  Result := StrToIntDef(ExpandConstant('{param:SMOKEWINBUILD|0}'), 0);
+  if Result = 0 then
+  begin
+    GetWindowsVersionEx(Version);
+    Result := Version.Build;
+  end;
+end;
+
+{ Windows 10（评审 2026-10-16 F-13 · D6）：拾语没在上面验收过。说清楚、让人自己决定，不拦——默认「是」，
+  静默安装（/SUPPRESSMSGBOXES）照装，只在日志里留一行。 }
+function InitializeSetup: Boolean;
+var
+  Build: Cardinal;
+begin
+  Result := True;
+  Build := WindowsBuild;
+  if Build < FirstWindows11Build then
+  begin
+    Log('Windows build ' + IntToStr(Build) + ' is before Windows 11: telling the user Shiyu is not verified there');
+    Result := SuppressibleMsgBox('拾语还没有在 Windows 10 上验收过：可能有显示问题（比如窗口是直角、背景不透明），' +
+      '也可能有还没发现的毛病。' + #13#10#13#10 + '仍要继续安装吗？',
+      mbConfirmation, MB_YESNO, IDYES) = IDYES;
+  end;
+end;
 
 function IsDirEmpty(const Dir: String): Boolean;
 var

@@ -247,7 +247,7 @@ In the translation panel: `Esc` closes it; the top lets you flip the direction a
 
 ### System requirements
 
-- Windows 11 (not verified on Windows 10, and not promised to work there).
+- Windows 11. Shiyu has not been verified on Windows 10: the installer says so up front and lets you carry on, but there may be display glitches (square window corners, an opaque background).
 - The installer and the zip both include the .NET runtime; building from source needs the .NET 9 SDK (WPF projects build only on Windows).
 
 ### Development
