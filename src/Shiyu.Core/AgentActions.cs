@@ -49,6 +49,44 @@ public static class AgentActions
         _ => kind.ToString(),
     };
 
+    /// <summary>备注里每条来源只留开头几个字：认得出是哪条就够，不把原文再抄一遍。</summary>
+    private const int SourcePreviewChars = 12;
+
+    /// <summary>备注里最多点名几条来源，其余写「等」。</summary>
+    private const int SourcesNamed = 3;
+
+    /// <summary>
+    /// 结果能不能「存为条目」（评审 2026-10-16 F-17）：总结、合并成笔记、改写的结果是要留的正文；
+    /// 建议标签的结果是一串点了就用的标签，不是。
+    /// </summary>
+    public static bool CanSaveResult(AgentActionKind kind) => kind != AgentActionKind.SuggestTags;
+
+    /// <summary>
+    /// 存为条目时写进备注的来源：哪个动作、来自几条、各条开头几个字。条目编号用户看不到，开头几个字
+    /// 才认得出是哪几条。
+    /// </summary>
+    public static string ResultNote(AgentActionKind kind, IReadOnlyList<Entry> sources)
+    {
+        var named = sources
+            .Take(SourcesNamed)
+            .Select(source => $"「{Preview(source.Text)}」");
+        var rest = sources.Count > SourcesNamed ? "等" : string.Empty;
+        return $"由「{Label(kind)}」生成，来自 {sources.Count} 条：{string.Concat(named)}{rest}";
+    }
+
+    /// <summary>第一行非空文字、空白压成一个，超长截断加「…」。</summary>
+    private static string Preview(string text)
+    {
+        var line = text
+            .Split('\n')
+            .Select(part => string.Join(' ', part.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+            .FirstOrDefault(part => part.Length > 0) ?? string.Empty;
+        var runes = line.EnumerateRunes().ToArray();
+        return runes.Length <= SourcePreviewChars
+            ? line
+            : string.Concat(runes.Take(SourcePreviewChars).Select(rune => rune.ToString())) + "…";
+    }
+
     public static string SystemPrompt(AgentActionKind kind) => kind switch
     {
         AgentActionKind.Summarise =>

@@ -215,4 +215,45 @@ public class TranslationHistoryTests
         Assert.Equal(original.Id, saved.TranslatedFrom);
         Assert.Equal("Shiyu", saved.SourceApp);
     }
+    // ── AI 动作的结果存为条目（评审 2026-10-16 F-17）──
+
+    [Fact]
+    public void A_saved_action_result_is_a_new_entry_whose_note_names_its_sources()
+    {
+        using var bench = new Bench();
+        var first = bench.Store.Append("周一的会议纪要：预算还差两万", "ZCode", Noon);
+        var second = bench.Store.Append("客户电话：下周三前给报价", "ZCode", Noon);
+
+        var saved = bench.Pipeline.RecordActionResult("  合并后的笔记正文  ", AgentActionKind.MergeIntoNote, [first, second]);
+
+        Assert.NotNull(saved);
+        var stored = bench.Store.Get(saved!.Id)!;
+        Assert.Equal("合并后的笔记正文", stored.Text);
+        Assert.Equal("Shiyu", stored.SourceApp);
+        Assert.Equal("由「合并成笔记」生成，来自 2 条：「周一的会议纪要：预算还差…」「客户电话：下周三前给报价」", stored.Note);
+        Assert.Equal(3, bench.Store.Count());
+    }
+
+    [Fact]
+    public void An_action_result_blocked_by_an_exclusion_rule_is_not_saved()
+    {
+        using var bench = new Bench(new ExclusionPolicy(
+            [new ExclusionRule(ExclusionRuleKind.ContentPattern, "sekrit")]));
+        var source = bench.Store.Append("safe text", "ZCode", Noon);
+
+        var saved = bench.Pipeline.RecordActionResult("the sekrit summary", AgentActionKind.Summarise, [source]);
+
+        Assert.Null(saved);
+        Assert.Equal(1, bench.Store.Count());
+    }
+
+    [Fact]
+    public void An_empty_action_result_is_not_saved()
+    {
+        using var bench = new Bench();
+        var source = bench.Store.Append("text", "ZCode", Noon);
+
+        Assert.Null(bench.Pipeline.RecordActionResult("   ", AgentActionKind.Rewrite, [source]));
+        Assert.Equal(1, bench.Store.Count());
+    }
 }

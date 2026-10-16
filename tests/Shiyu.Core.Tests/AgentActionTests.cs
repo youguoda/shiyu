@@ -155,6 +155,27 @@ public class AgentActionTests
     [Fact]
     public void Nothing_suggested_parses_to_nothing()
         => Assert.Empty(AgentActions.ParseSuggestedTags("   \n\n  "));
+
+    // ── 存为条目（评审 2026-10-16 F-17）──
+
+    [Fact]
+    public void Only_tag_suggestions_cannot_be_saved_as_an_entry()
+    {
+        Assert.True(AgentActions.CanSaveResult(AgentActionKind.Summarise));
+        Assert.True(AgentActions.CanSaveResult(AgentActionKind.MergeIntoNote));
+        Assert.True(AgentActions.CanSaveResult(AgentActionKind.Rewrite));
+        Assert.False(AgentActions.CanSaveResult(AgentActionKind.SuggestTags));
+    }
+
+    [Fact]
+    public void The_note_names_three_sources_by_their_first_words_and_says_there_are_more()
+    {
+        var note = AgentActions.ResultNote(
+            AgentActionKind.Summarise,
+            [Make(1, "\n  first   line\nsecond line"), Make(2, "甲"), Make(3, "乙"), Make(4, "丙")]);
+
+        Assert.Equal("由「总结」生成，来自 4 条：「first line」「甲」「乙」等", note);
+    }
 }
 
 public class NoBackgroundRequestsTests

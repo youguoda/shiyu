@@ -77,6 +77,25 @@ public sealed partial class ClipboardPipeline
         _store.AppendTranslation(translated, sourceApp, _clock.GetUtcNow(), translatedFrom);
         return true;
     }
+
+    /// <summary>
+    /// 把 AI 动作的结果存成一条新记录（评审 2026-10-16 F-17：合并成笔记的结果天然是一条新记录），备注写明
+    /// 由哪个动作、从哪几条来。与收下译文同一道排除闸口；空结果或被排除时什么都不存，返回 null。
+    /// </summary>
+    public Entry? RecordActionResult(
+        string result, AgentActionKind kind, IReadOnlyList<Entry> sources, string? sourceApp = "Shiyu")
+    {
+        var text = result.Trim();
+        if (text.Length == 0 || _exclusions.Excludes(new ClipboardSnapshot(text, sourceApp, false)))
+        {
+            return null;
+        }
+
+        var entry = _store.Append(text, sourceApp, _clock.GetUtcNow());
+        var note = AgentActions.ResultNote(kind, sources);
+        _store.SetNote(entry.Id, note);
+        return entry with { Note = note };
+    }
 }
 
 /// <param name="FailureReason">第一条失败的人话原因（若有过失败）；全部成功或只是跳过时为 null。批量结束的报告带着它，用户才知道"失败"该去修什么。</param>

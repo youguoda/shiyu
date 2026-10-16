@@ -566,6 +566,11 @@ public partial class LibraryWindow
     private TextBlock? _agentTitleView;
     private ItemsControl? _suggestedTagsView;
 
+    /// <summary>「存为条目」（评审 2026-10-16 F-17）：结果完整到手才点得动；存一次就够。</summary>
+    private Button? _agentSaveButton;
+    private AgentActionKind _agentKind;
+    private IReadOnlyList<Entry> _agentSources = [];
+
     /// <summary>
     /// Agent 动作要的是通用对话模型，只有自备密钥供得起（ADR-0009/票 08）。
     /// 没配就收起入口并说明去哪——而不是点了才在结果框里报一次运行时失败。
@@ -613,10 +618,12 @@ public partial class LibraryWindow
                 ShowLightFeedback($"已跳过 {skipped} 条来自排除名单应用的条目。");
             }
 
-            ShowAgentView($"{AgentActions.Label(kind)} · {sendable.Count} 条");
+            ShowAgentView($"{AgentActions.Label(kind)} · {sendable.Count} 条", AgentActions.CanSaveResult(kind));
 
             var run = new AgentRun(_model());
             _agentRun = run;
+            _agentKind = kind;
+            _agentSources = sendable;
             _detailState = null;
             run.Updated += () => Dispatcher.Invoke(() =>
             {
@@ -641,6 +648,14 @@ public partial class LibraryWindow
 
             await run.RunAsync(kind, sendable);
 
+            if (ReferenceEquals(_agentRun, run)
+                && run.State == TranslationState.Finished
+                && run.Output.Trim().Length > 0
+                && _agentSaveButton is { } save)
+            {
+                save.IsEnabled = true;
+            }
+
             if (kind == AgentActionKind.SuggestTags && run.State == TranslationState.Finished)
             {
                 if (_suggestedTagsView is not null)
@@ -663,8 +678,8 @@ public partial class LibraryWindow
         }
     }
 
-    /// <summary>Agent 结果面板（§6.4 详情）：标题 + 流式输出 + 建议标签 + 复制。</summary>
-    private void ShowAgentView(string title)
+    /// <summary>Agent 结果面板（§6.4 详情）：标题 + 流式输出 + 建议标签 + 复制 + 存为条目。</summary>
+    private void ShowAgentView(string title, bool canSave = false)
     {
         DetailBody.Children.Clear();
 
@@ -687,6 +702,26 @@ public partial class LibraryWindow
         copy.Click += (_, _) => CopyAgentOutput(copy);
         DockPanel.SetDock(copy, Dock.Right);
         head.Children.Add(copy);
+
+        _agentSaveButton = null;
+        if (canSave)
+        {
+            var save = new Button
+            {
+                Content = "存为条目",
+                Padding = new Thickness(12, 4, 12, 4),
+                Margin = new Thickness(0, 0, 6, 0),
+                Cursor = Cursors.Hand,
+                IsEnabled = false,
+                ToolTip = "把结果存成一条新记录，备注里写明由哪几条生成",
+            };
+            ToolTipService.SetShowOnDisabled(save, true);
+            save.SetResourceReference(StyleProperty, "FlyoutButton");
+            save.Click += (_, _) => SaveAgentOutput(save);
+            DockPanel.SetDock(save, Dock.Right);
+            head.Children.Add(save);
+            _agentSaveButton = save;
+        }
 
         var close = new Button
         {
@@ -733,6 +768,8 @@ public partial class LibraryWindow
         _agentOutputView = null;
         _agentTitleView = null;
         _suggestedTagsView = null;
+        _agentSaveButton = null;
+        _agentSources = [];
         _detailState = null;
         UpdateDetail();
     }
@@ -760,6 +797,39 @@ public partial class LibraryWindow
         if (_agentRun?.Output is { Length: > 0 } output)
         {
             source.Content = _clipboard?.SetText(output) == true ? "已复制" : "复制失败";
+        }
+    }
+
+    /// <summary>
+    /// 结果存成一条新记录（评审 2026-10-16 F-17），备注写明来源；存过就不再存第二份。
+    /// </summary>
+    private void SaveAgentOutput(Button source)
+    {
+        if (_agentRun is not { State: TranslationState.Finished, Output: { Length: > 0 } output }
+            || _pipeline is not { } pipeline)
+        {
+            return;
+        }
+
+        try
+        {
+            Entry? saved = null;
+            SelfWrite(() => saved = pipeline.RecordActionResult(output, _agentKind, _agentSources));
+            if (saved is null)
+            {
+                ShowLightFeedback("结果命中了排除规则，没有存。");
+                return;
+            }
+
+            source.Content = "已存为条目";
+            source.IsEnabled = false;
+            Reload();
+            ShowLightFeedback("已存为一条新记录，备注里写着来源。");
+        }
+        catch (Exception failure)
+        {
+            Log.Event(LogEvent.AgentActionFailed, failure, ("save", 1));
+            ShowError("没能存为条目", "可以先「复制结果」，再试一次。");
         }
     }
 
