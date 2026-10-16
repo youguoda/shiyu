@@ -89,14 +89,15 @@ public class HotkeyPlanTests
     // --- 反向输入（票 43）----------------------------------------------------------
 
     [Fact]
-    public void The_reverse_input_hotkey_defaults_to_Alt_Q_and_is_named_in_plain_words()
+    public void The_reverse_input_hotkey_defaults_to_Win_Alt_Q_and_is_named_in_plain_words()
     {
-        Assert.Equal("Alt+Q", new AppSettings().ReverseInputHotkey);
+        // 新安装默认 Win+Alt+Q（评审 2026-10-16 F-04）；0.16.1 及以前是 Alt+Q（见 DefaultHotkeyTests 的迁移）。
+        Assert.Equal("Win+Alt+Q", new AppSettings().ReverseInputHotkey);
         Assert.Equal("反向输入", HotkeyPlan.ActionNames[HotkeyAction.ReverseInput]);
 
         var binding = Assert.Single(
             HotkeyPlan.Build(new AppSettings()).Bindings, b => b.Action == HotkeyAction.ReverseInput);
-        Assert.Equal(HotkeyModifier.Alt, binding.Spec.Modifiers);
+        Assert.Equal(HotkeyModifier.Windows | HotkeyModifier.Alt, binding.Spec.Modifiers);
         Assert.Equal('Q', binding.Spec.Key);
     }
 

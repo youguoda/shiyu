@@ -573,14 +573,20 @@ internal sealed class OnboardingWindow : Window
         var panel = new StackPanel();
         panel.Children.Add(StepIntro("两组组合键。快速粘贴在输入光标旁呼出窄条，选一条即贴即走（点窄条上的图钉可让它一直留着）；划词翻译抓当前选中。"));
 
+        // 评审 2026-10-16 F-04：全局键在拾语运行期间归拾语，会盖掉其他应用里的同名快捷键——Windows 不会
+        // 报这种冲突。先说清楚，录到常见冲突时再就地点名。
+        panel.Children.Add(StepIntro("这些组合键在拾语运行期间归拾语所有，会盖掉其他应用里的同名快捷键；录到常见冲突时会在下面提醒。"));
+
         // 窄条示意图：静态占位（§5.3）。
         panel.Children.Add(BarSketch());
 
         // 主卡：快速粘贴 + 也用 Win+V（用户需求 2026-10-10 起窄条唯一的入口，
         // 常驻窄条的键撤掉了）。
-        _quickRecorder = NewRecorder(HotkeyAction.QuickBar, _baseline.QuickBarHotkey);
+        var quickConflict = SettingsWindow.ConflictLine();
+        _quickRecorder = NewRecorder(HotkeyAction.QuickBar, _baseline.QuickBarHotkey, quickConflict);
         var quickBody = new StackPanel();
         quickBody.Children.Add(_quickRecorder.Build());
+        quickBody.Children.Add(quickConflict);
         _winVSwitch = new CheckBox { Content = "也用 Win+V 呼出", Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0) };
         _winVSwitch.SetResourceReference(FrameworkElement.StyleProperty, "ToggleSwitch");
         _winVSwitch.IsChecked = _baseline.TakeOverWinV;
@@ -598,19 +604,27 @@ internal sealed class OnboardingWindow : Window
         panel.Children.Add(Card("快速粘贴", "在输入光标旁呼出窄条，选中即粘贴", quickBody));
 
         // 次卡：划词翻译。
-        _captureRecorder = NewRecorder(HotkeyAction.CaptureSelection, _baseline.CaptureHotkey);
-        panel.Children.Add(Card("划词翻译", "抓取当前选中的文字并翻译", _captureRecorder.Build()));
+        var captureConflict = SettingsWindow.ConflictLine();
+        _captureRecorder = NewRecorder(HotkeyAction.CaptureSelection, _baseline.CaptureHotkey, captureConflict);
+        var captureBody = new StackPanel();
+        captureBody.Children.Add(_captureRecorder.Build());
+        captureBody.Children.Add(captureConflict);
+        panel.Children.Add(Card("划词翻译", "抓取当前选中的文字并翻译", captureBody));
 
         return panel;
     }
 
-    /// <summary>录制器：即时校验五键互撞（含未在此编辑的翻译剪贴板/管理窗），文案逐条点名。</summary>
-    private KeyCapRecorder NewRecorder(HotkeyAction action, string initial)
+    /// <summary>
+    /// 录制器：即时校验五键互撞（含未在此编辑的翻译剪贴板/管理窗），文案逐条点名；录到常见应用里另有
+    /// 用处的组合，<paramref name="conflict"/> 那一行就地说一句（不拦）。
+    /// </summary>
+    private KeyCapRecorder NewRecorder(HotkeyAction action, string initial, TextBlock conflict)
     {
+        SettingsWindow.ShowConflict(conflict, initial);
         var recorder = new KeyCapRecorder(
             this,
             initial,
-            _ => { },
+            value => SettingsWindow.ShowConflict(conflict, value),
             combination =>
             {
                 var candidate = HotkeyCandidate(action, combination);

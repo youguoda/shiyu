@@ -67,15 +67,17 @@ internal sealed class HotkeyModule
         // physically fire, the host has wired them.
         var actions = new Dictionary<HotkeyAction, Action>
         {
-            // Ctrl+Shift+Z: deliberately a combination whose modifiers the
-            // user is still holding when it fires, so the released-modifier
-            // handling in the capture platform is exercised every single time
-            // rather than only in some configurations.
+            // Win+Alt+Z by default (Ctrl+Shift+Z before 评审 2026-10-16 F-04):
+            // either way a combination whose modifiers the user is still
+            // holding when it fires, so the released-modifier handling in the
+            // capture platform is exercised every single time rather than
+            // only in some configurations.
             [HotkeyAction.CaptureSelection] = () => shell.TranslateSelection?.Invoke(),
 
-            // Ctrl+Shift+V sits next to the paste the user already knows.
-            // 用户需求 2026-10-10 起它是窄条唯一的入口：在插入符旁呼出，
-            // 贴完走还是留下看「常驻钉住」（ADR-0012 #8 修订）。
+            // Win+Alt+V by default — Win+V is the clipboard the user already
+            // knows; Ctrl+Shift+V (the old default) is "paste as plain text"
+            // in browsers and chat apps. 用户需求 2026-10-10 起它是窄条唯一的
+            // 入口：在插入符旁呼出，贴完走还是留下看「常驻钉住」（ADR-0012 #8 修订）。
             [HotkeyAction.QuickBar] = () => shell.ShowQuickPaste?.Invoke(),
 
             // The escape hatch. Without it the user cannot tell a filter that
@@ -85,9 +87,9 @@ internal sealed class HotkeyModule
             // 打开管理窗（§5.1 新增，默认不设）：键盘重度用户不必绕托盘。
             [HotkeyAction.Library] = () => shell.ShowLibrary?.Invoke(),
 
-            // 反向输入框（票 43，默认 Alt+Q）：在当前输入框旁呼出，打中文出英文，Enter 贴回。
-            // 在 Microsoft 365 里 Alt+Q 是应用内的"跳到搜索框"——RegisterHotKey 不会报冲突，注册后
-            // 会悄悄把它盖掉；设置项的说明里写明了，用户可以自己改键。
+            // 反向输入框（票 43，新安装默认 Win+Alt+Q，0.16.1 及以前是 Alt+Q）：在当前输入框旁呼出，
+            // 打中文出英文，Enter 贴回。Microsoft 365 里 Alt+Q 是应用内的"跳到搜索框"——RegisterHotKey
+            // 不会报冲突，注册后会悄悄把它盖掉；录键处会就地提醒（HotkeyConflicts）。
             [HotkeyAction.ReverseInput] = () => shell.ShowReverseInput?.Invoke(),
         };
 

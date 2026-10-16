@@ -81,15 +81,19 @@ public sealed record HotkeySpec(HotkeyModifier Modifiers, char Key)
             : null;
     }
 
-    /// <summary>Always in the same order, so the settings file stays stable.</summary>
+    /// <summary>
+    /// Always in the same order, so the settings file stays stable. Win comes
+    /// first, the way Windows itself writes its shortcuts ("Win+Alt+B") — the
+    /// defaults became Win+Alt combinations (评审 2026-10-16 F-04).
+    /// </summary>
     public override string ToString()
     {
         var parts = new List<string>();
 
+        if (Modifiers.HasFlag(HotkeyModifier.Windows)) parts.Add("Win");
         if (Modifiers.HasFlag(HotkeyModifier.Control)) parts.Add("Ctrl");
         if (Modifiers.HasFlag(HotkeyModifier.Shift)) parts.Add("Shift");
         if (Modifiers.HasFlag(HotkeyModifier.Alt)) parts.Add("Alt");
-        if (Modifiers.HasFlag(HotkeyModifier.Windows)) parts.Add("Win");
 
         parts.Add(Key.ToString());
         return string.Join("+", parts);

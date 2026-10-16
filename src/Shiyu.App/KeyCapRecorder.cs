@@ -170,11 +170,12 @@ internal sealed class KeyCapRecorder
             return;
         }
 
+        // 与 HotkeySpec 的写法同序：Win 在最前（评审 2026-10-16 F-04 起默认键是 Win+Alt 组）。
         var parts = new List<string>();
+        if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
         if (mods.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
         if (mods.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
         if (mods.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
-        if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
         parts.Add(digit.ToString());
         var combination = string.Join("+", parts);
 

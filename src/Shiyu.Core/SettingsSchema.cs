@@ -391,7 +391,7 @@ public static class SettingsSchema
                     Icon: "E8B7"),
                 new SettingsItem(
                     "hotkey.reverse", "反向输入", SettingsControl.Hotkey,
-                    Hint: "在当前输入框旁呼出一个小框：打中文，出英文（或按提示词模板改写），Enter 贴回原处。注意：在 Microsoft 365（Word、Excel、PowerPoint、Outlook）里 Alt+Q 是「跳到搜索框」，这是应用内快捷键，拾语注册后会悄悄把它盖掉、并不会报冲突——常用 Office 的话，在这里改键即可。",
+                    Hint: "在当前输入框旁呼出一个小框：打中文，出英文（或按提示词模板改写），Enter 贴回原处。注意：全局快捷键会盖掉其他应用里的同名快捷键，并且不会报冲突。例如 Microsoft 365（Word、Excel、PowerPoint、Outlook）里 Alt+Q 是「跳到搜索框」——0.16.1 及以前装的拾语默认就是 Alt+Q，常用 Office 的话在这里改键即可；录到常见冲突时这里会提醒。",
                     Keywords: ["反向输入", "反向", "输入框", "回帖", "回复", "写英文", "翻译", "快捷键", "alt+q", "office", "搜索框"],
                     Icon: "E70F")),
             new SettingsSection("hotkeys.cheatsheet", "窗口内按键",

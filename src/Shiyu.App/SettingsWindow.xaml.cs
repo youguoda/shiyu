@@ -57,6 +57,9 @@ public partial class SettingsWindow : Window
 
     // 外部变化的"跟随"要把新值推进控件，建行时把每种形状的控件记下来。
     private readonly Dictionary<string, TextBox> _textBoxes = [];
+
+    /// <summary>每个全局键录制框下面的冲突提示行（评审 2026-10-16 F-04）。</summary>
+    private readonly Dictionary<string, TextBlock> _hotkeyConflicts = [];
     private readonly Dictionary<string, CheckBox> _toggles = [];
     private readonly Dictionary<string, ToggleButton[]> _segmented = [];
     private readonly Dictionary<string, ComboBox> _choices = [];
@@ -629,6 +632,11 @@ public partial class SettingsWindow : Window
         row.Children.Add(box);
         row.Children.Add(clear);
 
+        // 录到常见应用里另有用处的组合（评审 2026-10-16 F-04），就地说一句——不拦，照样能用。
+        var conflict = ConflictLine();
+        ShowConflict(conflict, box.Text);
+        _hotkeyConflicts[item.Id] = conflict;
+
         box.PreviewMouseDown += (_, e) =>
         {
             e.Handled = true;
@@ -639,11 +647,37 @@ public partial class SettingsWindow : Window
         {
             state.Text = string.Empty;
             box.Text = string.Empty;
+            ShowConflict(conflict, string.Empty);
             ApplyParentVisibility();
             Commit(item, state);
         };
 
-        return row;
+        var editor = new StackPanel();
+        editor.Children.Add(row);
+        editor.Children.Add(conflict);
+        return editor;
+    }
+
+    /// <summary>全局键录制框下面那一行：这个组合在常见应用里另有什么用处。</summary>
+    internal static TextBlock ConflictLine()
+    {
+        var line = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 260,
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = Visibility.Collapsed,
+        };
+        line.SetResourceReference(TextElement.FontSizeProperty, "Type.Caption");
+        line.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+        return line;
+    }
+
+    internal static void ShowConflict(TextBlock line, string? hotkey)
+    {
+        var warning = hotkey is { Length: > 0 } ? HotkeyConflicts.Warning(hotkey) : null;
+        line.Text = warning ?? string.Empty;
+        line.Visibility = warning is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void CaptureNextCombination(SettingsItem item, ItemState state, TextBox box)
@@ -704,11 +738,12 @@ public partial class SettingsWindow : Window
                 return;
             }
 
+            // 与 HotkeySpec 的写法同序：Win 在最前，像 Windows 自己写快捷键那样。
             var parts = new List<string>();
+            if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
             if (mods.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
             if (mods.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
             if (mods.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
-            if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
             parts.Add(digit.ToString());
             var combination = string.Join("+", parts);
 
@@ -724,6 +759,11 @@ public partial class SettingsWindow : Window
             CardOf(item)?.ClearError();
             state.Text = combination;
             box.Text = combination;
+            if (_hotkeyConflicts.TryGetValue(item.Id, out var conflict))
+            {
+                ShowConflict(conflict, combination);
+            }
+
             ApplyParentVisibility();
             Commit(item, state);
         }
@@ -1541,17 +1581,23 @@ public partial class SettingsWindow : Window
         {
             try
             {
+                // 恢复的是现在的默认（评审 2026-10-16 F-04 起是 Win+Alt 组），不是装机时的那一组。
+                var defaults = new AppSettings();
                 var latest = _store.Update(
                     current => current with
                     {
-                        CaptureHotkey = "Ctrl+Shift+Z",
-                        ClipboardTranslateHotkey = "Ctrl+Shift+X",
-                        QuickBarHotkey = "Ctrl+Shift+V",
-                        LibraryHotkey = string.Empty,
-                        ReverseInputHotkey = new AppSettings().ReverseInputHotkey,
+                        CaptureHotkey = defaults.CaptureHotkey,
+                        ClipboardTranslateHotkey = defaults.ClipboardTranslateHotkey,
+                        QuickBarHotkey = defaults.QuickBarHotkey,
+                        LibraryHotkey = defaults.LibraryHotkey,
+                        ReverseInputHotkey = defaults.ReverseInputHotkey,
                     },
                     AppPaths.SettingsFile);
                 _baseline = latest;
+                foreach (var (itemId, line) in _hotkeyConflicts)
+                {
+                    ShowConflict(line, SettingsBindings.ReadText(itemId, latest));
+                }
             }
             catch (SettingsSaveException failure)
             {

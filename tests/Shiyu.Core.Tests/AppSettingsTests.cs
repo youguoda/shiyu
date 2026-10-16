@@ -42,7 +42,7 @@ public class AppSettingsTests
 
         // The narrow bar: opened by quick paste, density knobs in the middle
         // of their range, and no remembered position yet.
-        Assert.Equal("Ctrl+Shift+V", settings.QuickBarHotkey);
+        Assert.Equal("Win+Alt+V", settings.QuickBarHotkey);
         Assert.Equal(4, settings.BarTextLines);
         Assert.Equal(120, settings.BarImageHeight);
         Assert.Equal(3, settings.BarFileCount);

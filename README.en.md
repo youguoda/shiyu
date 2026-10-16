@@ -28,9 +28,9 @@ It holds to one plain rule: **record greedily, interrupt sparingly.** Record eve
 ## Quick start
 
 1. Download `shiyu-win-x64-setup.exe` from [Releases](https://github.com/youguoda/shiyu/releases/latest) and install it. Shiyu's icon appears in the tray (Windows 11 may first tuck it under the "^" at the right of the taskbar). The first launch offers a short guided setup in which every step can be skipped.
-2. Copy a few things, then press **`Ctrl+Shift+V`** in any text box: the bar appears beside your cursor. `↑` `↓` to choose, `Enter` to paste.
-3. Select some foreign text and press **`Ctrl+Shift+Z`**: the translation streams in beside it. The default free engine needs no account and no key.
-4. In a chat box, press **`Alt+Q`**: type Chinese, get English, and press `Enter` to paste it back.
+2. Copy a few things, then press **`Win+Alt+V`** in any text box: the bar appears beside your cursor. `↑` `↓` to choose, `Enter` to paste.
+3. Select some foreign text and press **`Win+Alt+Z`**: the translation streams in beside it. The default free engine needs no account and no key.
+4. In a chat box, press **`Win+Alt+Q`**: type Chinese, get English, and press `Enter` to paste it back.
 
 ## Layer by layer
 
@@ -58,7 +58,7 @@ Light while resident: turn on Lightweight mode (「轻量模式」) and Shiyu re
 
 Recording is for getting things back. Shiyu has two ways in, one quick and one complete, each with its own job.
 
-**The bar** (`Ctrl+Shift+V`) handles the dozens of quick grabs a day:
+**The bar** (`Win+Alt+V`) handles the dozens of quick grabs a day:
 
 - it appears beside your text cursor; just type to search, `↑` `↓` to choose, `Enter` to paste into the window you came from;
 - `1`–`9` and `0` paste items 1–10 directly, with pinned items first;
@@ -77,8 +77,8 @@ Three roads lead to the translation panel, each for its own moment:
 
 | Way in | When to use it |
 | --- | --- |
-| Translate selection `Ctrl+Shift+Z` | You hit something you can't read: select it and translate |
-| Translate clipboard `Ctrl+Shift+X` | You already copied it; or the badge didn't show when it should have, and you insist |
+| Translate selection `Win+Alt+Z` | You hit something you can't read: select it and translate |
+| Translate clipboard `Win+Alt+X` | You already copied it; or the badge didn't show when it should have, and you insist |
 | The 译 badge (「翻译徽标」, off by default) | Once it's on, a small 译 appears by your cursor when you copy foreign text, and translates only when clicked; it can also appear after you drag-select text |
 
 The translation panel:
@@ -94,7 +94,7 @@ The translation panel:
 
 > In language it is simply required that it convey the meaning. — Confucius, *Analects* (tr. James Legge)
 
-Reading turns inward; writing turns outward. The **reverse input box** (`Alt+Q`) opens beside the text box you're typing in:
+Reading turns inward; writing turns outward. The **reverse input box** (`Win+Alt+Q`) opens beside the text box you're typing in:
 
 - type Chinese; when your hands pause, the English appears; press `Enter` or click the `↵` at the bottom to paste it back where you were;
 - `Tab` flips the direction, `Shift+Enter` starts a new line; while your input method is still choosing characters, `Enter` belongs to the input method;
@@ -155,14 +155,14 @@ A single feature is a move; chain a few together and you have a routine.
 
 ### Read
 
-- **Word lookup in three moves**: select an unfamiliar word → `Ctrl+Shift+Z` → read the dictionary card and hear the word → switch the template at the top to Casual (「口语」) to see how it's said in everyday speech (own key).
-- **Working through a long text**: select a passage → `Ctrl+Shift+Z` → switch to the sentence-by-sentence view → keep the useful parts with Save to history; later, a search in the bar finds them, and so does the translation log.
-- **Chinese straight to English**: select some Chinese → `Ctrl+Shift+Z`. When your target language is Chinese, Shiyu recognizes the echo and translates into English instead.
+- **Word lookup in three moves**: select an unfamiliar word → `Win+Alt+Z` → read the dictionary card and hear the word → switch the template at the top to Casual (「口语」) to see how it's said in everyday speech (own key).
+- **Working through a long text**: select a passage → `Win+Alt+Z` → switch to the sentence-by-sentence view → keep the useful parts with Save to history; later, a search in the bar finds them, and so does the translation log.
+- **Chinese straight to English**: select some Chinese → `Win+Alt+Z`. When your target language is Chinese, Shiyu recognizes the echo and translates into English instead.
 
 ### Write
 
-- **Replying to a colleague abroad**: in the chat box, `Alt+Q` → type Chinese → switch the template to Casual → `Enter` to paste (own key). Turn on Auto-copy translation, and the translation also lands in your history, ready to reuse from the bar.
-- **Explaining a requirement to an AI**: `Alt+Q` → switch the template to Prompt polish → jot the requirement down in Chinese → `Enter` to polish it → review → `Enter` again (or click `↵`) to paste it into your AI coding assistant (own key).
+- **Replying to a colleague abroad**: in the chat box, `Win+Alt+Q` → type Chinese → switch the template to Casual → `Enter` to paste (own key). Turn on Auto-copy translation, and the translation also lands in your history, ready to reuse from the bar.
+- **Explaining a requirement to an AI**: `Win+Alt+Q` → switch the template to Prompt polish → jot the requirement down in Chinese → `Enter` to polish it → review → `Enter` again (or click `↵`) to paste it into your AI coding assistant (own key).
 
 ### Organize
 
@@ -171,7 +171,7 @@ A single feature is a move; chain a few together and you have a routine.
 
 ### Everyday
 
-- **Scrapbook**: while writing something long, pin the bar with the pin in its top-right corner, and pin your most-used items to the top of the list; when you need one, press `Ctrl+Shift+V` and then `1`–`9`. The bar stays where it is after pasting.
+- **Scrapbook**: while writing something long, pin the bar with the pin in its top-right corner, and pin your most-used items to the top of the list; when you need one, press `Win+Alt+V` and then `1`–`9`. The bar stays where it is after pasting.
 - **Replacing Win+V**: Settings → Hotkeys (「快捷键」) → turn on Also open with Win+V (「也用 Win+V 呼出」). Your old habit keeps working, and Windows gets `Win+V` back when Shiyu exits.
 - **Moving to a new PC**: Settings → General (「常规」) → Backup (「备份」), and export with a passphrase; import on the new machine, choosing merge or overwrite.
 
@@ -209,14 +209,14 @@ Global hotkeys (all of them can be changed in Settings → Hotkeys, 「快捷键
 
 | Hotkey | What it does |
 | --- | --- |
-| `Ctrl+Shift+V` | Quick paste: open the bar beside your text cursor; it closes after pasting, or stays when pinned |
-| `Ctrl+Shift+Z` | Translate selection: translate the text currently selected |
-| `Ctrl+Shift+X` | Translate clipboard: the escape hatch when the filter judges wrong |
-| `Alt+Q` | Reverse input box: type Chinese beside the current text box and get English |
+| `Win+Alt+V` | Quick paste: open the bar beside your text cursor; it closes after pasting, or stays when pinned |
+| `Win+Alt+Z` | Translate selection: translate the text currently selected |
+| `Win+Alt+X` | Translate clipboard: the escape hatch when the filter judges wrong |
+| `Win+Alt+Q` | Reverse input box: type Chinese beside the current text box and get English |
 | (none by default) | Open the library |
 | `Win+V` (optional) | Also open the bar with Win+V; off by default, and Windows gets it back when you turn it off or Shiyu exits |
 
-While Shiyu runs, these combinations belong to it: `Ctrl+Shift+Z` ("redo" in many apps) and `Ctrl+Shift+V` ("paste as plain text" in browsers, Office and others) are overridden, and `Alt+Q` overrides Microsoft 365's "jump to search". If one clashes with something you use, change it.
+While Shiyu runs, these combinations belong to it and override the same shortcut in other apps. The default set starts with `Win+Alt`, clear of the common shortcuts in editors, browsers, chat apps and Office; settings warn you on the spot when you record a known clash. Installs from 0.16.1 or earlier keep their original keys — `Ctrl+Shift+Z` ("redo" in many apps), `Ctrl+Shift+V` ("paste as plain text"), `Ctrl+Shift+X` and `Alt+Q` (Microsoft 365's "jump to search"); to switch to the new set, use Settings → Hotkeys → Restore all defaults.
 
 In the bar (**hold `Ctrl` and each available action shows its key in place**):
 

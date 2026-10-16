@@ -281,11 +281,25 @@ public sealed record AppSettings
     /// </summary>
     public bool ShowSourceIcons { get; init; } = true;
 
-    public string CaptureHotkey { get; init; } = "Ctrl+Shift+Z";
+    // 默认全局键（评审 2026-10-16 F-04）：Win+Alt 组。原来的 Ctrl+Shift+Z / X / V 与 Alt+Q 盖掉的是近乎
+    // 通用的快捷键——编辑器的"重做"、浏览器与聊天软件的"粘贴为纯文本"、Microsoft 365 的"跳到搜索框"，
+    // 目标用户每天都会撞上。只对新安装生效：老用户的设置文件里缺哪一项，读回来仍是那一项当年的默认
+    // （TryParse 里的 Former* 迁移），不会悄悄换掉他们用惯的键。
 
-    public string ClipboardTranslateHotkey { get; init; } = "Ctrl+Shift+X";
+    public string CaptureHotkey { get; init; } = "Win+Alt+Z";
 
-    public string QuickBarHotkey { get; init; } = "Ctrl+Shift+V";
+    public string ClipboardTranslateHotkey { get; init; } = "Win+Alt+X";
+
+    public string QuickBarHotkey { get; init; } = "Win+Alt+V";
+
+    /// <summary>0.16.1 及以前的默认键：老设置文件里缺这一项时用它（见 <see cref="TryParse"/>）。</summary>
+    public const string FormerCaptureHotkey = "Ctrl+Shift+Z";
+
+    public const string FormerClipboardTranslateHotkey = "Ctrl+Shift+X";
+
+    public const string FormerQuickBarHotkey = "Ctrl+Shift+V";
+
+    public const string FormerReverseInputHotkey = "Alt+Q";
 
     /// <summary>
     /// 打开历史管理窗（§5.1 快捷键页新增）。默认不设：与四个默认键不同，
@@ -294,11 +308,11 @@ public sealed record AppSettings
     public string LibraryHotkey { get; init; } = string.Empty;
 
     /// <summary>
-    /// 反向输入框（票 43）：在当前输入框旁呼出小框，打中文出英文，Enter 贴回原处。默认 Alt+Q（Xtranslate
-    /// 同款）。注意 Microsoft 365（Word、Excel、PowerPoint、Outlook）里 Alt+Q 是"跳到搜索框"：这是应用内
-    /// 快捷键，RegisterHotKey 不会报冲突，注册后会悄悄把它盖掉——设置项的说明里写明，用户可以自己改键。
+    /// 反向输入框（票 43）：在当前输入框旁呼出小框，打中文出英文，Enter 贴回原处。新安装默认 Win+Alt+Q；
+    /// 0.16.1 及以前是 Alt+Q（Xtranslate 同款），而 Microsoft 365 里 Alt+Q 是"跳到搜索框"——应用内快捷键，
+    /// RegisterHotKey 不会报冲突，注册后会悄悄把它盖掉。
     /// </summary>
-    public string ReverseInputHotkey { get; init; } = "Alt+Q";
+    public string ReverseInputHotkey { get; init; } = "Win+Alt+Q";
 
     // --- narrow bar density ---
     // Density is how much content each card clamps, never how small the text
@@ -477,6 +491,10 @@ public sealed record AppSettings
                 return false;
             }
 
+            // 默认全局键换成 Win+Alt 组（评审 2026-10-16 F-04）只对新安装生效：设置文件里没写这一项的，
+            // 是在这一项还没有、或从没存过它的版本里存下的——那时它用的是旧默认，照旧给它。
+            parsed = WithFormerHotkeysWhereMissing(parsed, json);
+
             // A saved action list that exactly matches a former default is a
             // default that predates newer actions, not a choice — upgrade it,
             // while respecting anything the user actually reordered or pruned.
@@ -544,6 +562,27 @@ public sealed record AppSettings
     /// <summary>The default action list before favourites and notes existed.</summary>
     private static readonly string[] FormerDefaultActions =
         ["copy", "paste", "plain", "open", "locate", "pin", "delete"];
+
+    /// <summary>
+    /// 文件里没写的全局键补回旧默认（评审 2026-10-16 F-04）。写了的——哪怕写的正好是新默认——
+    /// 都是用户的设置，原样保留。
+    /// </summary>
+    private static AppSettings WithFormerHotkeysWhereMissing(AppSettings parsed, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        bool Missing(string name) => !root.TryGetProperty(name, out _);
+
+        return parsed with
+        {
+            CaptureHotkey = Missing(nameof(CaptureHotkey)) ? FormerCaptureHotkey : parsed.CaptureHotkey,
+            ClipboardTranslateHotkey = Missing(nameof(ClipboardTranslateHotkey))
+                ? FormerClipboardTranslateHotkey
+                : parsed.ClipboardTranslateHotkey,
+            QuickBarHotkey = Missing(nameof(QuickBarHotkey)) ? FormerQuickBarHotkey : parsed.QuickBarHotkey,
+            ReverseInputHotkey = Missing(nameof(ReverseInputHotkey)) ? FormerReverseInputHotkey : parsed.ReverseInputHotkey,
+        };
+    }
 
     public void Save(string path)
     {

@@ -141,8 +141,8 @@ public class KeyMapTests
     public void Tray_menu_lines_carry_the_live_combination_in_the_accelerator_column()
     {
         // Win32 菜单惯例：\t 之后的文本右对齐成加速键列（§5.2）。
-        Assert.Equal("快速粘贴\tCtrl+Shift+V", KeyMap.TrayMenuLine(HotkeyAction.QuickBar, new AppSettings()));
-        Assert.Equal("翻译剪贴板\tCtrl+Shift+X",
+        Assert.Equal("快速粘贴\tWin+Alt+V", KeyMap.TrayMenuLine(HotkeyAction.QuickBar, new AppSettings()));
+        Assert.Equal("翻译剪贴板\tWin+Alt+X",
             KeyMap.TrayMenuLine(HotkeyAction.ClipboardTranslate, new AppSettings()));
     }
 
@@ -158,7 +158,7 @@ public class KeyMapTests
     {
         // 票 43：托盘菜单的动作行，名称"反向输入"，加速键列读现设置——改键即改菜单。
         Assert.Equal("反向输入", KeyMap.TrayLabel(HotkeyAction.ReverseInput));
-        Assert.Equal("反向输入\tAlt+Q", KeyMap.TrayMenuLine(HotkeyAction.ReverseInput, new AppSettings()));
+        Assert.Equal("反向输入\tWin+Alt+Q", KeyMap.TrayMenuLine(HotkeyAction.ReverseInput, new AppSettings()));
         Assert.Equal(
             "反向输入\tCtrl+Alt+R",
             KeyMap.TrayMenuLine(
