@@ -12,6 +12,8 @@
 #                                   warm lookup takes well under 50 ms
 #   - flow:dictionary-card-example  "example" shows its IPA, a Chinese sense and exam tags
 #   - flow:dictionary-card-inflection  "went" shows go's card and says it is a form of go
+#   - flow:vocabulary-star          starring "example" fills the star and puts exactly that word
+#                                   into the vocabulary (review 2026-10-16 F-09)
 #
 # ASCII only (see lib.ps1 header).
 
@@ -63,5 +65,14 @@ foreach ($pair in @(@('example', 'flow:dictionary-card-example'), @('went', 'flo
     $detail = if ($card) { "card shown {0}, phonetic {1}, Chinese sense {2}, tags/inflection note {3}" -f $card['card'], $card['phonetic'], $card['meaning'], $card['meta'] } else { "no line for $($pair[0])" }
     Add-Check $pair[1] $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 }
+
+# The vocabulary (review 2026-10-16 F-09): starring "example" on its card fills the star and
+# puts exactly that word into the vocabulary.
+$example = $lines['example']
+$vocabulary = $lines['vocabulary']
+$ok = $example -and $example['starred'] -eq 'True' -and $example['filled'] -eq 'True' `
+    -and $vocabulary -and $vocabulary['count'] -eq '1' -and $vocabulary['headword'] -eq 'example'
+$detail = if ($example -and $vocabulary) { "starred {0}, star filled {1}; vocabulary holds {2} word(s): {3}" -f $example['starred'], $example['filled'], $vocabulary['count'], $vocabulary['headword'] } else { 'no example or vocabulary line' }
+Add-Check 'flow:vocabulary-star' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 return $script:Checks

@@ -20,7 +20,53 @@ public sealed record TranslationRecord(
     string Translated,
     TranslationOrigin Origin,
     string Template,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt)
+{
+    /// <summary>收进了生词本时，那张词典卡的要点；没收为 null（评审 2026-10-16 F-09）。</summary>
+    public VocabularyWord? Word { get; init; }
+}
+
+/// <summary>
+/// 生词本里的一个词（评审 2026-10-16 F-09）：收进来那一刻词典卡的要点，存成翻译记录上的一列 JSON。
+/// 存卡的要点而不是只存词：词典以后换了数据，生词本里记着的仍是当时看到的那张。
+/// </summary>
+/// <param name="Definition">各义项连成一行：「n. 例子, 样本；vt. 作为……的例子」。</param>
+/// <param name="Example">卡上的第一句例句；没有为 null。</param>
+public sealed record VocabularyWord(
+    string Headword,
+    string? Phonetic,
+    string Definition,
+    string? Example,
+    IReadOnlyList<string> Tags)
+{
+    public static VocabularyWord From(DictionaryCard card) => new(
+        card.Word,
+        card.Phonetic,
+        string.Join("；", card.Senses.Select(sense =>
+            (sense.PartOfSpeech is { Length: > 0 } pos ? pos + " " : string.Empty) + string.Join("；", sense.Definitions))),
+        card.Senses.SelectMany(sense => sense.Examples).FirstOrDefault(),
+        card.Tags);
+
+    internal string ToJson() => System.Text.Json.JsonSerializer.Serialize(this);
+
+    internal static VocabularyWord? FromJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<VocabularyWord>(json);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // expected: 认不出的一列当作没收——不让一行坏数据拖垮整页翻译记录。
+            return null;
+        }
+    }
+}
 
 /// <summary>翻译记录页的字：行的元信息、单行原文、空态。管理窗照着显示，不自己拼。</summary>
 public static class TranslationLogText
@@ -168,17 +214,27 @@ public sealed partial class EntryStore
     /// <summary>
     /// 最新的在前。<paramref name="query"/> 在原文与译文里按子串找（通配符按字面）。
     /// </summary>
-    public IReadOnlyList<TranslationRecord> TranslationLog(string? query = null, int limit = 1000)
+    public IReadOnlyList<TranslationRecord> TranslationLog(string? query = null, int limit = 1000, bool vocabularyOnly = false)
     {
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
             var filtered = !string.IsNullOrWhiteSpace(query);
-            var where = filtered
-                ? "WHERE original LIKE $pattern ESCAPE '\\' OR translated LIKE $pattern ESCAPE '\\'"
-                : string.Empty;
+            var conditions = new List<string>();
+            if (filtered)
+            {
+                conditions.Add("(original LIKE $pattern ESCAPE '\\' OR translated LIKE $pattern ESCAPE '\\')");
+            }
+
+            // 「生词」筛选（评审 2026-10-16 F-09）：只看收进了生词本的。
+            if (vocabularyOnly)
+            {
+                conditions.Add("vocabulary IS NOT NULL");
+            }
+
+            var where = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
             command.CommandText = $"""
-                SELECT id, original, translated, origin, template, created_at
+                SELECT id, original, translated, origin, template, created_at, vocabulary
                 FROM translation_log
                 {where}
                 ORDER BY created_at DESC, id DESC
@@ -201,21 +257,132 @@ public sealed partial class EntryStore
                     reader.GetString(2),
                     Enum.TryParse<TranslationOrigin>(reader.GetString(3), out var origin) ? origin : TranslationOrigin.Panel,
                     reader.GetString(4),
-                    DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(5))));
+                    DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(5)))
+                {
+                    Word = VocabularyWord.FromJson(reader.IsDBNull(6) ? null : reader.GetString(6)),
+                });
             }
 
             return records;
         }
     }
 
-    public int CountTranslationLog()
+    public int CountTranslationLog(bool vocabularyOnly = false)
     {
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(*) FROM translation_log;";
+            command.CommandText = vocabularyOnly
+                ? "SELECT COUNT(*) FROM translation_log WHERE vocabulary IS NOT NULL;"
+                : "SELECT COUNT(*) FROM translation_log;";
             return Convert.ToInt32(command.ExecuteScalar());
         }
+    }
+
+    // --- 生词本（评审 2026-10-16 F-09）：收进来的词是翻译记录上的一列 ---------------------------------
+
+    /// <summary>这个原文最近的一条翻译记录；没有为 null。词典卡上的星标收的就是它。</summary>
+    public long? LatestTranslationId(string original)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT id FROM translation_log WHERE original = $original
+                ORDER BY created_at DESC, id DESC LIMIT 1;
+                """;
+            command.Parameters.AddWithValue("$original", original);
+            return command.ExecuteScalar() is long id ? id : null;
+        }
+    }
+
+    /// <summary>把一条记录收进生词本（<paramref name="word"/> 为 null 是移出）。</summary>
+    public bool SetVocabulary(long id, VocabularyWord? word)
+    {
+        int changed;
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "UPDATE translation_log SET vocabulary = $word WHERE id = $id;";
+            command.Parameters.AddWithValue("$word", (object?)word?.ToJson() ?? DBNull.Value);
+            command.Parameters.AddWithValue("$id", id);
+            changed = command.ExecuteNonQuery();
+        }
+
+        if (changed > 0)
+        {
+            TranslationLogChanged?.Invoke();
+        }
+
+        return changed > 0;
+    }
+
+    /// <summary>
+    /// 没有现成的记录可收时（翻译记录关着、或还没译完），专为这个词记一条，带着生词本那一列。
+    /// 收生词是用户自己点的，不受翻译记录开关管。
+    /// </summary>
+    public long AddVocabulary(
+        string original, string translated, string template, VocabularyWord word, DateTimeOffset at)
+    {
+        long id;
+        lock (_gate)
+        {
+            using var insert = _connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO translation_log (original, translated, origin, template, created_at, vocabulary)
+                VALUES ($original, $translated, $origin, $template, $at, $word)
+                RETURNING id;
+                """;
+            insert.Parameters.AddWithValue("$original", original);
+            insert.Parameters.AddWithValue("$translated", translated);
+            insert.Parameters.AddWithValue("$origin", TranslationOrigin.Panel.ToString());
+            insert.Parameters.AddWithValue("$template", template);
+            insert.Parameters.AddWithValue("$at", at.ToUnixTimeMilliseconds());
+            insert.Parameters.AddWithValue("$word", word.ToJson());
+            id = (long)insert.ExecuteScalar()!;
+        }
+
+        TranslationLogChanged?.Invoke();
+        return id;
+    }
+
+    /// <summary>这个词头在不在生词本里（词典卡上的星标实心还是空心）。</summary>
+    public bool InVocabulary(string headword)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT 1 FROM translation_log
+                WHERE vocabulary IS NOT NULL AND json_extract(vocabulary, '$.Headword') = $headword
+                LIMIT 1;
+                """;
+            command.Parameters.AddWithValue("$headword", headword);
+            return command.ExecuteScalar() is not null;
+        }
+    }
+
+    /// <summary>把这个词头移出生词本：收过它的每一条都摘掉星标，记录本身留着。</summary>
+    public int RemoveFromVocabulary(string headword)
+    {
+        int changed;
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                UPDATE translation_log SET vocabulary = NULL
+                WHERE vocabulary IS NOT NULL AND json_extract(vocabulary, '$.Headword') = $headword;
+                """;
+            command.Parameters.AddWithValue("$headword", headword);
+            changed = command.ExecuteNonQuery();
+        }
+
+        if (changed > 0)
+        {
+            TranslationLogChanged?.Invoke();
+        }
+
+        return changed;
     }
 
     public bool DeleteTranslationRecord(long id)
@@ -252,8 +419,8 @@ public sealed partial class EntryStore
                 using var insert = _connection.CreateCommand();
                 insert.Transaction = transaction;
                 insert.CommandText = """
-                    INSERT OR IGNORE INTO translation_log (id, original, translated, origin, template, created_at)
-                    VALUES ($id, $original, $translated, $origin, $template, $at);
+                    INSERT OR IGNORE INTO translation_log (id, original, translated, origin, template, created_at, vocabulary)
+                    VALUES ($id, $original, $translated, $origin, $template, $at, $word);
                     """;
                 insert.Parameters.AddWithValue("$id", record.Id);
                 insert.Parameters.AddWithValue("$original", record.Original);
@@ -261,6 +428,7 @@ public sealed partial class EntryStore
                 insert.Parameters.AddWithValue("$origin", record.Origin.ToString());
                 insert.Parameters.AddWithValue("$template", record.Template);
                 insert.Parameters.AddWithValue("$at", record.CreatedAt.ToUnixTimeMilliseconds());
+                insert.Parameters.AddWithValue("$word", (object?)record.Word?.ToJson() ?? DBNull.Value);
                 restored += insert.ExecuteNonQuery();
             }
 
@@ -275,10 +443,13 @@ public sealed partial class EntryStore
         return restored;
     }
 
-    /// <summary>清空全部翻译记录（翻译记录页的「清空全部」）。条目一条不碰。</summary>
+    /// <summary>
+    /// 清空全部翻译记录（翻译记录页的「清空全部」）。条目一条不碰；生词本里的词也留着（评审 2026-10-16
+    /// F-09）——那是用户一个个点星收下的，与"清掉翻译的流水"不是一回事，要删就在「生词」里删。
+    /// </summary>
     public int ClearTranslationLog() => DeleteTranslationLogWhere(null);
 
-    /// <summary>到期清理：删掉早于 <paramref name="cutoff"/> 的翻译记录。</summary>
+    /// <summary>到期清理：删掉早于 <paramref name="cutoff"/> 的翻译记录；生词本里的不随周期走。</summary>
     public int PurgeTranslationLog(DateTimeOffset cutoff) => DeleteTranslationLogWhere(cutoff);
 
     private int DeleteTranslationLogWhere(DateTimeOffset? olderThan)
@@ -289,12 +460,12 @@ public sealed partial class EntryStore
             using var command = _connection.CreateCommand();
             if (olderThan is { } cutoff)
             {
-                command.CommandText = "DELETE FROM translation_log WHERE created_at < $cutoff;";
+                command.CommandText = "DELETE FROM translation_log WHERE created_at < $cutoff AND vocabulary IS NULL;";
                 command.Parameters.AddWithValue("$cutoff", cutoff.ToUnixTimeMilliseconds());
             }
             else
             {
-                command.CommandText = "DELETE FROM translation_log;";
+                command.CommandText = "DELETE FROM translation_log WHERE vocabulary IS NULL;";
             }
 
             removed = command.ExecuteNonQuery();
@@ -341,6 +512,35 @@ public sealed class TranslationLogger(
 
         return store.LogTranslation(original.Trim(), translated.Trim(), origin, template, clock.GetUtcNow());
     }
+
+    /// <summary>
+    /// 词典卡上的星标（评审 2026-10-16 F-09）：把这次查的词收进生词本。收的是这个原文最近的一条翻译记录；
+    /// 还没有（翻译记录关着、或还没译完）就专为它记一条——收生词是用户自己点的，不受翻译记录开关管。
+    /// 排除名单的内容规则照样拦。
+    /// </summary>
+    public bool StarWord(string original, string translated, string template, DictionaryCard card)
+    {
+        var key = original.Trim();
+        if (key.Length == 0 || exclusions().Excludes(new ClipboardSnapshot(key, null, false)))
+        {
+            return false;
+        }
+
+        var word = VocabularyWord.From(card);
+        if (store.LatestTranslationId(key) is { } id)
+        {
+            return store.SetVocabulary(id, word);
+        }
+
+        var said = translated.Trim();
+        store.AddVocabulary(key, said.Length > 0 ? said : card.Word, template, word, clock.GetUtcNow());
+        return true;
+    }
+
+    /// <summary>星标点回空心：这个词头移出生词本，记录本身留着。</summary>
+    public int UnstarWord(string headword) => store.RemoveFromVocabulary(headword);
+
+    public bool IsStarred(string headword) => store.InVocabulary(headword);
 
     /// <summary>到期清理：按设置的周期删掉旧记录，返回删了几条；「永不」时什么也不做。</summary>
     public int Sweep()

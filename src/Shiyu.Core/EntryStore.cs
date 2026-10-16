@@ -135,7 +135,7 @@ public sealed partial class EntryStore : IDisposable
     /// <summary>
     /// The shape the code expects. Bumped whenever a migration is added below.
     /// </summary>
-    private const int SchemaVersion = 15;
+    private const int SchemaVersion = 16;
 
     /// <summary>
     /// The columns every list path reads: everything except the payloads that
@@ -379,6 +379,13 @@ public sealed partial class EntryStore : IDisposable
                 );
                 """);
             Execute("CREATE INDEX IF NOT EXISTS idx_translation_log_created_at ON translation_log (created_at DESC);");
+        }
+
+        // 生词本（评审 2026-10-16 F-09）：翻译记录多一列，存收进生词本时那张词典卡的要点（JSON）。按列在不在判断，
+        // 不按版本号：旧版拾语打开过新库会把 user_version 改回去，再回到新版时不能因为"列已存在"起不来。
+        if (from < 16 && !HasColumn("vocabulary", "translation_log"))
+        {
+            Execute("ALTER TABLE translation_log ADD COLUMN vocabulary TEXT NULL;");
         }
 
         if (from != SchemaVersion)
@@ -644,10 +651,11 @@ public sealed partial class EntryStore : IDisposable
         return version == 0 && HasColumn("kind") ? 2 : Math.Max(version, 1);
     }
 
-    private bool HasColumn(string name)
+    private bool HasColumn(string name, string table = "entries")
     {
         using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('entries') WHERE name = $name;";
+        command.CommandText = "SELECT COUNT(*) FROM pragma_table_info($table) WHERE name = $name;";
+        command.Parameters.AddWithValue("$table", table);
         command.Parameters.AddWithValue("$name", name);
         return Convert.ToInt32(command.ExecuteScalar()) > 0;
     }

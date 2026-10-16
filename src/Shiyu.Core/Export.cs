@@ -151,6 +151,53 @@ public static class TranslationLogExport
     }
 }
 
+/// <summary>
+/// 生词本的导出（评审 2026-10-16 F-09）：CSV 给 Anki 直接导入——文件开头三行是 Anki 认的文件头（逗号分隔、
+/// 不当 HTML、各列叫什么），之后一词一行：词头、音标、释义、例句、考试标签。同一个词收过几次只导出最新的
+/// 一次。「原句」拾语拿不到（取词只拿到选中的那个词），例句来自词典卡。
+/// </summary>
+public static class VocabularyExport
+{
+    /// <returns>写了几个词。</returns>
+    public static int Write(TextWriter writer, IEnumerable<TranslationRecord> records, ExportFormat format)
+    {
+        var words = records
+            .Select(record => record.Word)
+            .OfType<VocabularyWord>()
+            .DistinctBy(word => word.Headword, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (format == ExportFormat.Csv)
+        {
+            writer.Write("#separator:Comma\r\n#html:false\r\n#columns:词头,音标,释义,例句,标签\r\n");
+            foreach (var word in words)
+            {
+                Csv.Row(writer, word.Headword, word.Phonetic ?? string.Empty, word.Definition,
+                    word.Example ?? string.Empty, string.Join(" ", word.Tags));
+            }
+
+            return words.Count;
+        }
+
+        foreach (var word in words)
+        {
+            var phonetic = word.Phonetic is { Length: > 0 } ipa ? $"  {ipa}" : string.Empty;
+            writer.Write($"## {word.Headword}{phonetic}\n\n{word.Definition}\n\n");
+            if (word.Example is { Length: > 0 } example)
+            {
+                writer.Write($"> {example.ReplaceLineEndings(" ")}\n\n");
+            }
+
+            if (word.Tags.Count > 0)
+            {
+                writer.Write($"标签：{string.Join("、", word.Tags)}\n\n");
+            }
+        }
+
+        return words.Count;
+    }
+}
+
 /// <summary>导出文件本身：存成什么编码、默认叫什么、对话框里两种格式的过滤器。</summary>
 public static class ExportFile
 {

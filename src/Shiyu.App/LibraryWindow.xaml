@@ -364,6 +364,16 @@
                     <TextBlock Text="导出…" Margin="6,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
+
+            <!-- 生词（评审 2026-10-16 F-09）：只看收进生词本的词；开着时「导出…」出 Anki 能直接导入的 CSV。 -->
+            <Button x:Name="LogVocabularyButton" DockPanel.Dock="Right" Style="{StaticResource CommandButton}"
+                    Margin="0,0,6,0" Click="OnLogVocabularyToggle" ToolTip="只看收进生词本的词">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="LogVocabularyGlyph" Text="&#xE734;" FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}" VerticalAlignment="Center"/>
+                    <TextBlock Text="生词" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
         </DockPanel>
 
         <!-- 翻译记录页的内容：列表与空态；撤销条在切页时搬过来（同一个 ToastHost）。 -->

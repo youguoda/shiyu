@@ -123,6 +123,14 @@
                     <TextBlock Text="&#xE767;" FontFamily="{DynamicResource Font.Icon}"
                                FontSize="{DynamicResource Size.IconS}"/>
                 </Button>
+                <!-- 生词本（评审 2026-10-16 F-09）：卡到了才露面；空心 = 没收，实心 = 已在生词本里。 -->
+                <Button x:Name="WordStarButton" Style="{DynamicResource IconButton}" Visibility="Collapsed"
+                        Margin="2,0,0,0" VerticalAlignment="Center" Cursor="Hand"
+                        Click="OnStarWord" ToolTip="收进生词本"
+                        AutomationProperties.Name="收进生词本">
+                    <TextBlock x:Name="WordStarGlyph" Text="&#xE734;" FontFamily="{DynamicResource Font.Icon}"
+                               FontSize="{DynamicResource Size.IconS}"/>
+                </Button>
                 <!-- 本地词典（评审 2026-10-16 F-08）：「go 的变形 · 中考 · 四级」。没有就收起。 -->
                 <TextBlock x:Name="CardMeta" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"
                            FontSize="{DynamicResource Type.Caption}"

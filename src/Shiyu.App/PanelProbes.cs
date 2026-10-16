@@ -71,7 +71,7 @@ public partial class PanelWindow
     /// 都在；查变形（went）说是 go 的变形。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1，不碰网络。
     /// 判断在这里做完，日志里只有真假（探针脚本只认 ASCII）；音标传 null 时只看有没有。
     /// </summary>
-    internal async Task<string> ProbeDictionaryCard(string word, string? phonetic, string meaning, string meta)
+    internal async Task<string> ProbeDictionaryCard(string word, string? phonetic, string meaning, string meta, bool star = false)
     {
         for (var waited = 0; waited < 50 && !DictionaryArea.IsVisible; waited++)
         {
@@ -88,8 +88,18 @@ public partial class PanelWindow
             App.RenderToPng(root, System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, $"panel-dictionary-{word}.png"));
         }
 
+        // 生词本（评审 2026-10-16 F-09）：点一下星，看它收没收进去、星有没有变实心。
+        var starred = string.Empty;
+        if (star)
+        {
+            WordStarButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            await Settled();
+            starred = FormattableString.Invariant(
+                $"|starred={_card is { } card && _vocabulary?.IsStarred(card.Word) == true}|filled={WordStarGlyph.Text == "\uE735"}");
+        }
+
         return FormattableString.Invariant(
-            $"{word}|card={DictionaryArea.IsVisible}|phonetic={(phonetic is null ? CardPhonetic.Text.Length > 0 : CardPhonetic.Text == phonetic)}|meaning={definitions.Any(text => text.Contains(meaning, StringComparison.Ordinal))}|meta={CardMeta.Text.Contains(meta, StringComparison.Ordinal)}{Environment.NewLine}");
+            $"{word}|card={DictionaryArea.IsVisible}|phonetic={(phonetic is null ? CardPhonetic.Text.Length > 0 : CardPhonetic.Text == phonetic)}|meaning={definitions.Any(text => text.Contains(meaning, StringComparison.Ordinal))}|meta={CardMeta.Text.Contains(meta, StringComparison.Ordinal)}{starred}{Environment.NewLine}");
     }
 
     /// <summary>

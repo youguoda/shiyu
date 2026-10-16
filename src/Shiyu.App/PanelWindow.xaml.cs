@@ -16,6 +16,15 @@ namespace Shiyu.App;
 public sealed record SenseEntry(int Number, string Text);
 
 /// <summary>
+/// 词典卡上的星标要用的三件事（评审 2026-10-16 F-09），由翻译模块接到翻译记录上：收进（原文、译文、模板、
+/// 那张卡）、按词头移出、按词头问在不在。
+/// </summary>
+public sealed record PanelVocabulary(
+    Func<string, string, string, DictionaryCard, bool> Star,
+    Func<string, int> Unstar,
+    Func<string, bool> IsStarred);
+
+/// <summary>
 /// 词典例句：斜体只给拉丁（U-22——含中文的 TextBlock 的 FontStyle 永远
 /// Normal，中文没有斜体传统，仿斜只会发虚）。
 /// </summary>
@@ -163,6 +172,12 @@ public partial class PanelWindow : Window
     private TranslationSession? _streaming;
 
     private string _original = string.Empty;
+
+    /// <summary>星标（评审 2026-10-16 F-09）：没接上就不露面；接上了，卡到了才露面。</summary>
+    private readonly PanelVocabulary? _vocabulary;
+
+    /// <summary>此刻卡上的那一张：星标收的就是它。换词、卡作废时清掉。</summary>
+    private DictionaryCard? _card;
     private string _target;
     private string? _source;
 
@@ -227,9 +242,12 @@ public partial class PanelWindow : Window
         Action? openSettings = null,
         Func<bool>? enableFreeEngine = null,
         Func<string, string, bool>? keepTranslation = null,
-        Action<string, string, string>? logTranslation = null)
+        Action<string, string, string>? logTranslation = null,
+        PanelVocabulary? vocabulary = null)
     {
         InitializeComponent();
+
+        _vocabulary = vocabulary;
 
         _hotkeys = hotkeys;
         _clipboard = clipboard;
@@ -334,6 +352,8 @@ public partial class PanelWindow : Window
         CardMeta.Text = string.Empty;
         CardMeta.Visibility = Visibility.Collapsed;
         _cardLater = null;
+        _card = null;
+        WordStarButton.Visibility = Visibility.Collapsed;
         SetupCard.Visibility = Visibility.Collapsed;
         ContentScroll.Visibility = Visibility.Visible;
         SaveLabel.Text = "存入历史";
@@ -696,6 +716,10 @@ public partial class PanelWindow : Window
         meta.AddRange(card.Tags);
         CardMeta.Text = string.Join(" · ", meta);
         CardMeta.Visibility = meta.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        _card = card;
+        WordStarButton.Visibility = _vocabulary is null ? Visibility.Collapsed : Visibility.Visible;
+        ShowStar(_vocabulary?.IsStarred(card.Word) == true);
         _senseGroups = card.Senses.Select(sense =>
         {
             var group = new SenseGroupView(sense);
@@ -1139,6 +1163,42 @@ public partial class PanelWindow : Window
         // 换向后的那段，方向标签看到的是哪个，耳朵听到的就是哪个。
         var language = _session.CurrentRequest?.TargetLanguage ?? _target;
         _speech.SpeakOrStop(text, SpeechLanguage.CulturePrefix(language));
+    }
+
+    /// <summary>
+    /// 词典卡上的星标（评审 2026-10-16 F-09）：空心点下去收进生词本，实心点下去移出。收的是此刻卡上的那一张，
+    /// 连同这次查词的原文、译文与模板；翻译记录关着也收得进（那是用户自己点的）。
+    /// </summary>
+    private void OnStarWord(object sender, RoutedEventArgs e)
+    {
+        if (_card is not { } card || _vocabulary is not { } vocabulary)
+        {
+            return;
+        }
+
+        try
+        {
+            if (vocabulary.IsStarred(card.Word))
+            {
+                vocabulary.Unstar(card.Word);
+                ShowStar(false);
+                return;
+            }
+
+            ShowStar(vocabulary.Star(_original, _session?.Text ?? string.Empty, _templateState.Template.Name, card));
+        }
+        catch (Exception failure)
+        {
+            // 库被占着一类的意外：星标保持原样，留一行日志。
+            Log.Event(LogEvent.TranslationLogFailed, failure, ("vocabulary", 1));
+        }
+    }
+
+    private void ShowStar(bool starred)
+    {
+        WordStarGlyph.Text = starred ? "" : "";
+        WordStarButton.ToolTip = starred ? "已在生词本里 · 再点移出" : "收进生词本";
+        System.Windows.Automation.AutomationProperties.SetName(WordStarButton, starred ? "移出生词本" : "收进生词本");
     }
 
     /// <summary>

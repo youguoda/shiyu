@@ -155,10 +155,10 @@ public partial class LibraryWindow
         var now = DateTimeOffset.UtcNow;
         var clamp = 3 * ThemeManager.Content.ContentLine;
 
-        var items = _store.TranslationLog(searching ? query : null)
+        var items = _store.TranslationLog(searching ? query : null, vocabularyOnly: _vocabularyOnly)
             .Select(record => new TranslationLogItem(
                 record,
-                TranslationLogText.Meta(record, now),
+                (record.Word is not null ? "★ 生词  ·  " : string.Empty) + TranslationLogText.Meta(record, now),
                 TranslationLogText.OneLine(record.Original),
                 clamp))
             .ToList();
@@ -181,11 +181,24 @@ public partial class LibraryWindow
             LogList.ScrollIntoView(items[index]);
         }
 
-        var total = _store.CountTranslationLog();
+        var total = _store.CountTranslationLog(vocabularyOnly: _vocabularyOnly);
         LogCountLabel.Text = $"{items.Count} / {total}";
-        LogClearButton.IsEnabled = total > 0;
-        ShowLogEmpty(TranslationLogText.Empty(items.Count, searching, _settings().TranslationLogEnabled));
+        LogClearButton.IsEnabled = _store.CountTranslationLog() > _store.CountTranslationLog(vocabularyOnly: true);
+        ShowLogEmpty(_vocabularyOnly && items.Count == 0 && !searching
+            ? new EmptyStateCopy("生词本还是空的", "查一个英文单词时，点词典卡上的 ☆ 就收进来了。", false)
+            : TranslationLogText.Empty(items.Count, searching, _settings().TranslationLogEnabled));
         UpdateLogCommands();
+    }
+
+    /// <summary>「生词」筛选开着（评审 2026-10-16 F-09）：列表只放收进生词本的，导出走 Anki 的格式。</summary>
+    private bool _vocabularyOnly;
+
+    private void OnLogVocabularyToggle(object sender, RoutedEventArgs e)
+    {
+        _vocabularyOnly = !_vocabularyOnly;
+        LogVocabularyGlyph.Text = _vocabularyOnly ? "" : "";
+        LogVocabularyButton.ToolTip = _vocabularyOnly ? "正在只看生词 · 再点看全部" : "只看收进生词本的词";
+        ReloadLog();
     }
 
     private void ShowLogEmpty(EmptyStateCopy? copy)
@@ -305,6 +318,21 @@ public partial class LibraryWindow
             .Select(item => item.Record)
             .OrderByDescending(record => record.CreatedAt)
             .ToList();
+
+        // 「生词」筛选开着就导出生词本（评审 2026-10-16 F-09）：CSV 带 Anki 的文件头，能直接导入。
+        if (_vocabularyOnly)
+        {
+            ExportUi.Run(
+                this,
+                "生词本",
+                selected.Count,
+                () => selected,
+                () => _store.TranslationLog(query: null, limit: int.MaxValue, vocabularyOnly: true),
+                VocabularyExport.Write,
+                ShowLightFeedback);
+            return;
+        }
+
         ExportUi.Run(
             this,
             "翻译记录",
@@ -578,16 +606,19 @@ internal static class TranslationLogDialogs
     /// </summary>
     public static int AskClear(Window owner, EntryStore store)
     {
-        var total = store.CountTranslationLog();
+        // 生词本里的不清（评审 2026-10-16 F-09）：条数照实说，留下的也说一声。
+        var kept = store.CountTranslationLog(vocabularyOnly: true);
+        var total = store.CountTranslationLog() - kept;
         if (total == 0)
         {
             return 0;
         }
 
+        var keptNote = kept > 0 ? $"生词本里的 {kept} 条留着。" : string.Empty;
         var answer = ContentDialog.Show(
             owner,
             "清空翻译记录",
-            $"将永久删除全部 {total} 条翻译记录，无法撤销。剪贴板历史不受影响。",
+            $"将永久删除 {total} 条翻译记录，无法撤销。{keptNote}剪贴板历史不受影响。",
             new ContentDialogButton("取消", ContentDialogButtonStyle.Standard, IsCancelFocus: true),
             new ContentDialogButton($"清空 {total} 条", ContentDialogButtonStyle.Danger));
 

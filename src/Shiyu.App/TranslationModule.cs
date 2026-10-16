@@ -88,7 +88,13 @@ internal sealed class TranslationModule
 
                 // 翻译记录（用户需求 2026-10-09）：开关与排除名单在 shell 那一头把关。
                 logTranslation: (original, translated, template)
-                    => shell.LogTranslation(original, translated, TranslationOrigin.Panel, template));
+                    => shell.LogTranslation(original, translated, TranslationOrigin.Panel, template),
+
+                // 生词本（评审 2026-10-16 F-09）：词典卡上的星标收进翻译记录的那一列。
+                vocabulary: new PanelVocabulary(
+                    (original, translated, template, card) => shell.TranslationLog.StarWord(original, translated, template, card),
+                    headword => shell.TranslationLog.UnstarWord(headword),
+                    headword => shell.TranslationLog.IsStarred(headword)));
             await _panel.TranslateAsync(text, Displayed);
         }
         catch (Exception failure)
@@ -277,8 +283,13 @@ internal sealed class TranslationModule
                 await Task.Delay(100);
             }
 
-            log.Append(_panel is null ? $"{word}|missing{Environment.NewLine}" : await _panel.ProbeDictionaryCard(word, phonetic, meaning, meta));
+            log.Append(_panel is null ? $"{word}|missing{Environment.NewLine}" : await _panel.ProbeDictionaryCard(word, phonetic, meaning, meta, star: word == "example"));
         }
+
+        // 生词本里只有刚点过星的那一个（评审 2026-10-16 F-09）。
+        var words = _shell!.Store.TranslationLog(vocabularyOnly: true);
+        log.AppendLine(FormattableString.Invariant(
+            $"vocabulary|count={words.Count}|headword={words.FirstOrDefault()?.Word?.Headword}"));
 
         System.IO.File.WriteAllText(
             System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "panel-dictionary.log"), log + "done" + Environment.NewLine);
