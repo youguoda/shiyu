@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 评审 2026-10-16 F-11 的 UIA 取词 spike：量 TextPattern.GetSelection 在几个应用里读不读得到选区。
+       一次性工具，不在 Shiyu.sln 里；用法与结论见同目录 README.md 与 ADR-0003。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
