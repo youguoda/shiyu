@@ -112,4 +112,38 @@ public class HoverActionTests
             catch (IOException) { }
         }
     }
+    // ── 「复制图中文字」（评审 2026-10-16 F-07）──
+
+    [Fact]
+    public void Copying_text_in_an_image_is_offered_only_for_images()
+    {
+        var images = HoverActions.AvailableFor(HoverActions.All, EntryKind.Image, hasOriginal: true);
+        var text = HoverActions.AvailableFor(HoverActions.All, EntryKind.Text, hasOriginal: false);
+
+        Assert.Contains("ocr", images);
+        Assert.DoesNotContain("ocr", text);
+    }
+
+    [Fact]
+    public void The_old_default_action_list_upgrades_to_include_the_new_action()
+    {
+        var old = new AppSettings { BarActions = HoverActions.FormerDefaultBeforeOcr };
+
+        Assert.True(AppSettings.TryParse(
+            System.Text.Json.JsonSerializer.Serialize(old), out var parsed));
+
+        Assert.Equal(HoverActions.All, parsed.BarActions);
+    }
+
+    [Fact]
+    public void A_hand_reordered_list_is_never_upgraded()
+    {
+        var reordered = HoverActions.FormerDefaultBeforeOcr.Reverse().ToArray();
+        var kept = new AppSettings { BarActions = reordered };
+
+        Assert.True(AppSettings.TryParse(
+            System.Text.Json.JsonSerializer.Serialize(kept), out var parsed));
+
+        Assert.Equal(reordered, parsed.BarActions);
+    }
 }

@@ -299,6 +299,12 @@ internal partial class BarWindow : Window
     /// </summary>
     public event Action? LibraryRequested;
 
+    /// <summary>
+    /// 图里的字（评审 2026-10-16 F-07）：窄条自己不认字，问这一格——OcrModule 接的
+    /// 「认过给存下的，没认过当场认」。没接上（探针实例）时「复制图中文字」说一声就作罢。
+    /// </summary>
+    public Func<long, Task<string?>>? OcrTextOf { get; set; }
+
     private void OnBrandClicked(object sender, RoutedEventArgs e) => LibraryRequested?.Invoke();
 
     /// <summary>

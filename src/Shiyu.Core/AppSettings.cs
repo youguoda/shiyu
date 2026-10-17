@@ -523,7 +523,8 @@ public sealed record AppSettings
             // default that predates newer actions, not a choice — upgrade it,
             // while respecting anything the user actually reordered or pruned.
             if (parsed.BarActions.SequenceEqual(FormerDefaultActions)
-                || parsed.BarActions.SequenceEqual(HoverActions.FormerDefaultWithoutGroup))
+                || parsed.BarActions.SequenceEqual(HoverActions.FormerDefaultWithoutGroup)
+                || parsed.BarActions.SequenceEqual(HoverActions.FormerDefaultBeforeOcr))
             {
                 parsed = parsed with { BarActions = HoverActions.All };
             }

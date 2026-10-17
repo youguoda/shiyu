@@ -271,6 +271,24 @@ internal sealed class SelectionModule
 
         if (string.IsNullOrWhiteSpace(text))
         {
+            // 剪贴板是一张图（评审 2026-10-16 F-07）：先认出图里的字再翻。识别在后台，字到了再开面板。
+            WindowsClipboardImage? image;
+            try
+            {
+                image = capturePlatform.ReadClipboardImage();
+            }
+            catch (ClipboardUnavailableException)
+            {
+                shell.Tray.ShowNotification("拾语", "剪贴板正被其他程序占用，稍后再试。");
+                return;
+            }
+
+            if (image is not null && ImageText.Available)
+            {
+                TranslateImage(image);
+                return;
+            }
+
             shell.Tray.ShowNotification("拾语", "剪贴板里没有可翻译的文字。");
             return;
         }
@@ -278,6 +296,33 @@ internal sealed class SelectionModule
         // Deliberately not passed through the badge's filter: insisting is the
         // entire point of this hotkey.
         shell.ShowPanel?.Invoke(text, null);
+    }
+
+    /// <summary>
+    /// 翻译剪贴板上的图（评审 2026-10-16 F-07）：解码、识别都在线程池上，界面线程只在字到了以后开面板。
+    /// 认不出字就说一声，不开一个空面板。
+    /// </summary>
+    private async void TranslateImage(WindowsClipboardImage image)
+    {
+        var shell = _shell!;
+        try
+        {
+            var rendered = await image.RenderAsync();
+            var text = await Task.Run(() => ImageText.RecognizeAsync(rendered.FullPng));
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                shell.Tray?.ShowNotification("拾语", "剪贴板里的图片上没有认出文字。");
+                return;
+            }
+
+            shell.ShowPanel?.Invoke(text, null);
+        }
+        catch (Exception failure)
+        {
+            // async void 逃出去的异常是进程级崩溃（O-05）：图坏了只说一句，留一行日志。
+            Log.Event(LogEvent.OcrFailed, failure, ("clipboard", 1));
+            shell.Tray?.ShowNotification("拾语", "没能识别剪贴板里的图片。");
+        }
     }
 
     /// <summary>

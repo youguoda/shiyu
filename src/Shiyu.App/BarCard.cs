@@ -148,6 +148,13 @@ internal sealed class BarCard : INotifyPropertyChanged
         ? Visibility.Visible
         : Visibility.Collapsed;
 
+    /// <summary>图里认出过文字（评审 2026-10-16 F-07）：水印条上多一枚「文」。</summary>
+    public bool HasOcrText { get; init; }
+
+    public Visibility OcrBadgeVisibility => HasOcrText
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
     public Visibility FilePreviewVisibility => FilePreviewSource is null
         ? Visibility.Collapsed
         : Visibility.Visible;

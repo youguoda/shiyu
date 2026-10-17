@@ -135,7 +135,7 @@ public sealed partial class EntryStore : IDisposable
     /// <summary>
     /// The shape the code expects. Bumped whenever a migration is added below.
     /// </summary>
-    private const int SchemaVersion = 16;
+    private const int SchemaVersion = 17;
 
     /// <summary>
     /// The columns every list path reads: everything except the payloads that
@@ -146,7 +146,7 @@ public sealed partial class EntryStore : IDisposable
     /// </summary>
     private const string NarrowColumns = """
         id, text, source_app, created_at, kind, original_path, pinned, sub_type,
-        files, favorite, note, use_count, group_id, translated_from, image_width, image_height
+        files, favorite, note, use_count, group_id, translated_from, image_width, image_height, ocr_text
         """;
 
     /// <summary>
@@ -388,6 +388,13 @@ public sealed partial class EntryStore : IDisposable
             Execute("ALTER TABLE translation_log ADD COLUMN vocabulary TEXT NULL;");
         }
 
+        // 图里的字（评审 2026-10-16 F-07）：条目多一列 ocr_text（NULL = 还没认过，空串 = 认过、没有字），全文索引
+        // 加这一列，复制过的截图搜其中的词也能搜到。同样按列在不在判断。
+        if (from < 17)
+        {
+            WidenFullTextIndex();
+        }
+
         if (from != SchemaVersion)
         {
             Execute($"PRAGMA user_version = {SchemaVersion};");
@@ -612,9 +619,16 @@ public sealed partial class EntryStore : IDisposable
     /// </summary>
     private void CreateFullTextIndex()
     {
+        // 索引里有图里认出来的字（评审 2026-10-16 F-07），外部内容表按列名回 entries 取，列得先在。
+        if (!HasColumn("ocr_text"))
+        {
+            Execute("ALTER TABLE entries ADD COLUMN ocr_text TEXT NULL;");
+        }
+
         Execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
                 text,
+                ocr_text,
                 tokenize = 'trigram',
                 content = 'entries',
                 content_rowid = 'id');
@@ -622,22 +636,40 @@ public sealed partial class EntryStore : IDisposable
 
         Execute("""
             CREATE TRIGGER IF NOT EXISTS entries_fts_insert AFTER INSERT ON entries BEGIN
-                INSERT INTO entries_fts (rowid, text) VALUES (new.id, new.text);
+                INSERT INTO entries_fts (rowid, text, ocr_text) VALUES (new.id, new.text, new.ocr_text);
             END;
             """);
         Execute("""
             CREATE TRIGGER IF NOT EXISTS entries_fts_delete AFTER DELETE ON entries BEGIN
-                INSERT INTO entries_fts (entries_fts, rowid, text) VALUES ('delete', old.id, old.text);
+                INSERT INTO entries_fts (entries_fts, rowid, text, ocr_text) VALUES ('delete', old.id, old.text, old.ocr_text);
             END;
             """);
         Execute("""
-            CREATE TRIGGER IF NOT EXISTS entries_fts_update AFTER UPDATE OF text ON entries BEGIN
-                INSERT INTO entries_fts (entries_fts, rowid, text) VALUES ('delete', old.id, old.text);
-                INSERT INTO entries_fts (rowid, text) VALUES (new.id, new.text);
+            CREATE TRIGGER IF NOT EXISTS entries_fts_update AFTER UPDATE OF text, ocr_text ON entries BEGIN
+                INSERT INTO entries_fts (entries_fts, rowid, text, ocr_text) VALUES ('delete', old.id, old.text, old.ocr_text);
+                INSERT INTO entries_fts (rowid, text, ocr_text) VALUES (new.id, new.text, new.ocr_text);
             END;
             """);
 
         Execute("INSERT INTO entries_fts (entries_fts) VALUES ('rebuild');");
+    }
+
+    /// <summary>
+    /// 全文索引从一列（text）换成两列（text、ocr_text）（评审 2026-10-16 F-07）：拆掉旧的表与三个触发器、照新样子
+    /// 重建、整表重灌。已经是两列的（旧版改回过版本号的库）不动——按索引里有没有那一列判断，不按版本号。
+    /// </summary>
+    private void WidenFullTextIndex()
+    {
+        if (HasColumn("ocr_text", "entries_fts"))
+        {
+            return;
+        }
+
+        Execute("DROP TRIGGER IF EXISTS entries_fts_insert;");
+        Execute("DROP TRIGGER IF EXISTS entries_fts_delete;");
+        Execute("DROP TRIGGER IF EXISTS entries_fts_update;");
+        Execute("DROP TABLE IF EXISTS entries_fts;");
+        CreateFullTextIndex();
     }
 
     private int ReadSchemaVersion()
@@ -884,6 +916,49 @@ public sealed partial class EntryStore : IDisposable
                 command.ExecuteNonQuery();
             }
         });
+
+    /// <summary>
+    /// 记下图里认出来的字（评审 2026-10-16 F-07；空串 = 认过、没有字）。**不发 Changed**：后台一张张认图时，
+    /// 每认完一张就让窄条和历史窗口整个重读一遍不值当；全文索引由触发器当场更新，下次打开列表自然看得到。
+    /// </summary>
+    public void SetOcrText(long id, string text)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "UPDATE entries SET ocr_text = $text WHERE id = $id AND kind = $kind;";
+            command.Parameters.AddWithValue("$text", text);
+            command.Parameters.AddWithValue("$id", id);
+            command.Parameters.AddWithValue("$kind", (int)EntryKind.Image);
+            command.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>还没认过字、原图还在的图片条目，新的在前，最多 <paramref name="limit"/> 条（给后台补认用）。</summary>
+    public IReadOnlyList<(long Id, string OriginalPath)> ImagesAwaitingText(int limit)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT id, original_path FROM entries
+                WHERE kind = $kind AND ocr_text IS NULL AND original_path IS NOT NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT $limit;
+                """;
+            command.Parameters.AddWithValue("$kind", (int)EntryKind.Image);
+            command.Parameters.AddWithValue("$limit", limit);
+
+            var found = new List<(long, string)>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                found.Add((reader.GetInt64(0), reader.GetString(1)));
+            }
+
+            return found;
+        }
+    }
 
     /// <summary>Every image entry that still has an original on disk.</summary>
     public IReadOnlyList<Entry> ImagesWithOriginals(bool keepFavorites = false, bool keepPinned = false)
@@ -1485,8 +1560,9 @@ public sealed partial class EntryStore : IDisposable
             return "id IN (SELECT rowid FROM entries_fts WHERE entries_fts MATCH $ftsQuery)";
         }
 
+        // 图里认出来的字（评审 2026-10-16 F-07）短到全文索引够不着时，同样逐行比。
         command.Parameters.AddWithValue("$textPattern", $"%{EscapeForLike(query)}%");
-        return "text LIKE $textPattern ESCAPE '\\'";
+        return "(text LIKE $textPattern ESCAPE '\\' OR ocr_text LIKE $textPattern ESCAPE '\\')";
     }
 
     /// <summary>
@@ -1598,6 +1674,7 @@ public sealed partial class EntryStore : IDisposable
             TranslatedFrom = reader.IsDBNull(13) ? null : reader.GetInt64(13),
             ImageWidth = reader.GetInt32(14),
             ImageHeight = reader.GetInt32(15),
+            OcrText = reader.IsDBNull(16) ? null : reader.GetString(16),
 
             // Joined in rather than fetched per row: a list of a hundred
             // entries would otherwise be a hundred extra queries.

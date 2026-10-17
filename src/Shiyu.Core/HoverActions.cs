@@ -8,6 +8,10 @@ public static class HoverActions
 {
     /// <summary>Every action id that exists, in default order.</summary>
     public static readonly string[] All =
+        ["copy", "paste", "plain", "ocr", "open", "locate", "pin", "favorite", "note", "group", "delete"];
+
+    /// <summary>「复制图中文字」加进来之前（评审 2026-10-16 F-07）的默认清单：原样没动过的，升级时换成新的默认。</summary>
+    public static readonly string[] FormerDefaultBeforeOcr =
         ["copy", "paste", "plain", "open", "locate", "pin", "favorite", "note", "group", "delete"];
 
     /// <summary>The ids the previous default shipped with, before groups.</summary>
@@ -20,6 +24,7 @@ public static class HoverActions
         "copy" => "复制",
         "paste" => "粘贴",
         "plain" => "纯文本粘贴",
+        "ocr" => "复制图中文字",
         "open" => "打开",
         "locate" => "定位",
         "pin" => "置顶",
@@ -36,6 +41,7 @@ public static class HoverActions
         "copy" => "复",
         "paste" => "贴",
         "plain" => "文",
+        "ocr" => "字",
         "open" => "开",
         "locate" => "位",
         "pin" => "钉",
@@ -58,6 +64,7 @@ public static class HoverActions
         "copy" => "\uE8C8",   // Copy
         "paste" => "\uE77F",  // Paste
         "plain" => "\uE8D2",  // Font — text without formatting
+        "ocr" => "\uE7C3",    // Page — 图里认出来的字（评审 2026-10-16 F-07）
         "open" => "\uE8E5",   // OpenFile
         "locate" => "\uE702", // MapPin
         "pin" => "\uE718",    // Pin
@@ -110,6 +117,9 @@ public static class HoverActions
             // Stored text is plain; pasting "as plain text" means something
             // only where formatted content could have been.
             "plain" => kind == EntryKind.Text,
+
+            // 图里的字（评审 2026-10-16 F-07）：只有图片有；认过的用存下的，没认过的当场认。
+            "ocr" => kind == EntryKind.Image,
 
             // Files carry their own paths to act on; images need the retained
             // original.

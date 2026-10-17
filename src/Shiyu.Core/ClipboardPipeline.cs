@@ -31,6 +31,12 @@ public sealed partial class ClipboardPipeline : IDisposable
     /// </summary>
     public event Action<string>? ImageFailed;
 
+    /// <summary>
+    /// 一张图记下了（评审 2026-10-16 F-07）：条目号与整张图的 PNG，给后台认字用——图刚解码完就在手里，不必
+    /// 再从磁盘读一遍。在线程池上触发；订阅方自己排队，别在这里干重活。
+    /// </summary>
+    public event Action<long, byte[]>? ImageRecorded;
+
     /// <summary>Completes when any in-flight image work has finished.</summary>
     public Task Idle { get; private set; } = Task.CompletedTask;
 
@@ -239,7 +245,7 @@ public sealed partial class ClipboardPipeline : IDisposable
             var now = _clock.GetUtcNow();
             var path = _images!.Save(rendered.FullPng, now);
 
-            _store.AppendImage(
+            var entry = _store.AppendImage(
                 $"图片 {rendered.Width}×{rendered.Height}",
                 rendered.ThumbnailPng,
                 path,
@@ -250,6 +256,7 @@ public sealed partial class ClipboardPipeline : IDisposable
             Log.Event(
                 LogEvent.ClipboardRecorded,
                 ("kind", (int)EntryKind.Image), ("width", rendered.Width), ("height", rendered.Height));
+            ImageRecorded?.Invoke(entry.Id, rendered.FullPng);
         }
         catch (Exception failure)
         {

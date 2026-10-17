@@ -453,6 +453,12 @@
                                    Foreground="{DynamicResource Brush.Accent}"
                                    ToolTip="拾语生成的译文，已关联原文条目"
                                    Visibility="{Binding TranslationVisibility}"/>
+                        <!-- 图里的字（评审 2026-10-16 F-07）：认出过文字的截图，水印条上多一枚「文」；
+                             搜其中的词能搜到这张图。 -->
+                        <TextBlock Text="文" FontSize="{DynamicResource Type.Caption}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                   ToolTip="已认出图中的文字，可以直接搜索"
+                                   Visibility="{Binding OcrBadgeVisibility}"/>
                         <TextBlock Text="{Binding GroupBadge}" FontSize="{DynamicResource Type.Caption}"
                                    Foreground="{DynamicResource Brush.TextTertiary}"
                                    Margin="4,0,0,0"

@@ -1281,7 +1281,10 @@ internal sealed record EntryItem(
         var when = RelativeTime.For(entry.CreatedAt, now);
         var tail = entry.Kind switch
         {
-            EntryKind.Image when entry.ImageWidth > 0 => $"{entry.ImageWidth}×{entry.ImageHeight}",
+            // 图里认出过文字的（评审 2026-10-16 F-07），行上多一句「含文字」。
+            EntryKind.Image when entry.ImageWidth > 0 => entry.OcrText is { Length: > 0 }
+                ? $"{entry.ImageWidth}×{entry.ImageHeight} · 含文字"
+                : $"{entry.ImageWidth}×{entry.ImageHeight}",
             EntryKind.Files => $"{entry.Files.Count} 个",
             _ => $"{entry.Text.Length} 字",
         };

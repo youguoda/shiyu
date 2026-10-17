@@ -165,6 +165,7 @@ public partial class App : Application
 
         _modules.Retention.Start(shell);
         _modules.AutoBackup.Start(shell);
+        _modules.Ocr.Start(shell);
         StartupPreference.Apply(shell.Settings);
 
 #if !DEBUG
@@ -218,6 +219,7 @@ public partial class App : Application
 
         // Reverse order of construction: the tray and the clipboard listener
         // both hold the message window.
+        _modules?.Ocr.Shutdown();
         _modules?.AutoBackup.Shutdown();
         _modules?.Retention.Shutdown();
         _shell?.Theme.Dispose();

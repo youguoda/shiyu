@@ -78,6 +78,33 @@ public sealed class WindowsCapturePlatform(MessageWindow window, WindowsClipboar
     }
 
     /// <summary>
+    /// 剪贴板上的图片（评审 2026-10-16 F-07：翻译剪贴板遇到图片就先识别）：只在打开剪贴板的那一下拷出字节，解码与
+    /// 识别留给调用方在后台做。没有图片为 null；剪贴板一直被别人占着抛 <see cref="ClipboardUnavailableException"/>。
+    /// </summary>
+    public WindowsClipboardImage? ReadClipboardImage()
+    {
+        for (var attempt = 0; attempt < OpenAttempts; attempt++)
+        {
+            if (!NativeMethods.OpenClipboard(window.Handle))
+            {
+                Thread.Sleep(RetryDelay);
+                continue;
+            }
+
+            try
+            {
+                return WindowsClipboardImage.FromOpenClipboard();
+            }
+            finally
+            {
+                NativeMethods.CloseClipboard();
+            }
+        }
+
+        throw new ClipboardUnavailableException("The clipboard stayed locked by another process.");
+    }
+
+    /// <summary>
     /// Null clears the clipboard rather than writing an empty string. Capture
     /// puts the user's clipboard back through <see cref="Restore"/>, which
     /// keeps more than text; this is for writing Shiyu's own text.

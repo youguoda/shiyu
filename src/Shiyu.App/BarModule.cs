@@ -74,6 +74,9 @@ internal sealed partial class BarModule
         _bar.DataSettingsRequested += itemId => shell.OpenSettingsAt?.Invoke(itemId);
         _bar.DeadDragNotice += notice => shell.TellUser(notice);
 
+        // 「复制图中文字」（评审 2026-10-16 F-07）：条只管要字，认与存都在 OcrModule。
+        _bar.OcrTextOf = id => shell.Ocr?.TextOfAsync(id);
+
         // 品牌钮打开管理窗（票 21 §6.1 第 1 行）：窄条管"拿回"，
         // 整理归管理窗。
         // 前台此刻是窄条自己，「粘贴全部」该贴回的是窄条记着的那扇（评审 2026-10-16 F-12）。

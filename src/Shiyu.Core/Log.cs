@@ -43,6 +43,9 @@ public enum LogEvent
     AutoBackupSaved,
     AutoBackupFailed,
 
+    // 文字识别（评审 2026-10-16 F-07）
+    OcrFailed,
+
     // 进程级（三个全局处理器的落点）
     StartupFailed,
     AppCrash,

@@ -1064,6 +1064,11 @@ public partial class App
                 _modules!.Bar.ProbeSummonTiming();
                 break;
 
+            // 图里的字：真认一张、量输入延迟（评审 2026-10-16 F-07）。
+            case "ocr":
+                _modules!.Ocr.ProbeOcr();
+                break;
+
             // 朗读用 OneCore 音色、朗读中按钮显示停止（评审 2026-10-16 F-10）。配 SHIYU_FAKE_BACKEND=1；语音已静音。
             case "panel-speech":
                 _modules!.Translation.ProbeSpeech();

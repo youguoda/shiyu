@@ -678,6 +678,11 @@ internal partial class BarWindow
                 }
                 break;
 
+            case "ocr":
+                // 图里的字（评审 2026-10-16 F-07）：认与读都在后台，回来再说结果。
+                _ = CopyImageTextAsync(card, feedback);
+                break;
+
             case "paste":
                 PasteEntry(card);
                 break;
@@ -745,6 +750,51 @@ internal partial class BarWindow
         {
             ShowFeedback(hint);
         }
+    }
+
+    /// <summary>
+    /// 「复制图中文字」（评审 2026-10-16 F-07）：认过的给存下的，没认过的当场认一次（认完也记进库，下次就是
+    /// 即时的）。认不出字、没接上认字的路，都说一声，不算失败。
+    /// </summary>
+    private async Task CopyImageTextAsync(BarCard card, Button? feedback)
+    {
+        string? text = null;
+        try
+        {
+            text = OcrTextOf is { } ask ? await ask(card.Id) : null;
+        }
+        catch (Exception failure)
+        {
+            // expected: 识别是锦上添花；图坏了只说一句，留一行日志。
+            Log.Event(LogEvent.OcrFailed, failure, ("bar", 1));
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                Confirm(feedback, false);
+                ShowFeedback("图上没有认出文字");
+                return;
+            }
+
+            SelfWrite(() => _store.BumpUse(card.Id));
+            if (_clipboard.SetText(text))
+            {
+                Confirm(feedback, true);
+                ShowFeedback("已复制图中的文字");
+            }
+            else
+            {
+                Confirm(feedback, false);
+            }
+
+            if (_pendingKeyHint is { } hint)
+            {
+                _pendingKeyHint = null;
+                ShowFeedback(hint);
+            }
+        });
     }
 
     /// <summary>The feedback row is one line: keep a deleted name honest to it.</summary>

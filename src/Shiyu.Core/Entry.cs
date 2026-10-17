@@ -104,6 +104,12 @@ public sealed record Entry(
 
     public IReadOnlyList<string> Tags { get; init; } = [];
 
+    /// <summary>
+    /// 图里认出来的字（评审 2026-10-16 F-07）：null 是还没认过，空串是认过、没有字。只图片条目有；进全文索引，
+    /// 搜截图里的词也搜得到。
+    /// </summary>
+    public string? OcrText { get; init; }
+
     /// <summary>False once retention has removed the original from disk.</summary>
     public bool HasOriginal => OriginalPath is { Length: > 0 } path && File.Exists(path);
 }

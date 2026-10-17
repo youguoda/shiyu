@@ -116,6 +116,7 @@ internal partial class BarWindow
                 ? pile.Name
                 : null,
             IsTranslation = entry.TranslatedFrom is not null,
+            HasOcrText = entry.OcrText is { Length: > 0 },
             FileRows = fileRows,
             FilePreviewSource = null,
             AllPathsDead = entry.Kind == EntryKind.Files
