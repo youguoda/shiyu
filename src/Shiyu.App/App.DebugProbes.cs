@@ -413,6 +413,53 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 degraded-shell（评审 F-13 的 Win10 降级外观；用户在 Win10 虚拟机实录 2026-10-17：
+    /// 三扇壳窗透出桌面）：在 Win11 上强制走 <see cref="Backdrop.DegradeShell"/>（不透明底 + 自绘描边
+    /// + 阴影），渲一张窄条 PNG 给人眼核对。产品在 Win10 上走的就是这条路——DWM 拒收材质即触发。
+    /// </summary>
+    private async void ProbeDegradedShell()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _modules!.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsLoaded); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            await Task.Delay(600);
+            Backdrop.DegradeShell(bar.Shell);
+            await Task.Delay(300);
+
+            if (bar.Content is FrameworkElement root)
+            {
+                App.RenderToPng(root, Path.Combine(directory, "degraded-bar.png"));
+            }
+
+            var fill = bar.Shell.Background;
+            var opaque = fill is System.Windows.Media.SolidColorBrush brush && brush.Color.A == 255;
+            log.AppendLine(FormattableString.Invariant(
+                $"degraded|margin={bar.Shell.Margin.Left == Backdrop.FallbackMargin}|stroke={bar.Shell.BorderThickness.Left == 1}|opaque={opaque}"));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "degraded-shell.log"), log.ToString());
+    }
+
+    /// <summary>
     /// 探针命令 vocabulary（评审 2026-10-16 F-09 的验收，用户委托 2026-10-17）：收三个词的星
     /// （走 TranslationLogger.StarWord 与真的离线词典卡），「生词」筛选该有三条，历史窗口里点开
     /// 「生词」列表也只有三条，导出的 CSV 带 Anki 文件头、三个词头。判断在应用里做完，日志只有
@@ -1345,6 +1392,11 @@ public partial class App
             // 离线词典的卡（评审 2026-10-16 F-08）。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1。
             case "panel-dictionary":
                 _modules!.Translation.ProbeDictionaryCard();
+                break;
+
+            // Win10 降级外观（评审 F-13；用户实录 2026-10-17）：强制走 DegradeShell 渲 PNG。
+            case "degraded-shell":
+                ProbeDegradedShell();
                 break;
 
             // 生词本验收（评审 2026-10-16 F-09，用户委托 2026-10-17）。

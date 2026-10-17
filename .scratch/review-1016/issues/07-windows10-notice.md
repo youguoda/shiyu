@@ -16,3 +16,9 @@
   - 在 Win10 22H2 上双击安装包，开头出现这句提示，点「是」能照常装完；
   - 顺手跑一遍 run-all 与手工清单 A–D，看显示降级到什么程度；
   - 推送后看 CI 的 installer job 里多出的那条 `[PASS] on Windows 10 setup says it is not verified there, then installs anyway`。
+
+## Win10 实测发现（2026-10-17，用户在 VMware 的 Win10 虚拟机）
+
+- **窄条、反向输入框、翻译弹窗背景透明，透出桌面。** 根因：三扇壳窗的材质底 `Brush.SurfaceMaterial` 刻意半透明（等 DWM 在背后画 Acrylic），Win10 拒收材质后 `DegradeShell` 只补了描边+阴影+边距，没补不透明底。
+- **修复**：`Backdrop.DegradeShell` 增加 `Brush.Surface` 不透明底（随主题走、幂等）——三扇窗与预览窗共用这一个咽喉。Win11 上的强制降级探针 `probe-degraded-shell`（已进 run-all）渲染核对：不透明底、12 DIP 边距带阴影、描边都在；PNG 人工过目。
+- 待办：把修复带给 Win10 虚拟机复测（发 0.17.1 或自带构建）。

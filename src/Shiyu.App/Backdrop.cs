@@ -98,15 +98,18 @@ internal static class Backdrop
         });
 
     /// <summary>
-    /// The fallback a shell draws when DWM will not paint it: a 1 DIP
-    /// CardStroke outline, the shared floating shadow, and the 12 DIP
-    /// transparent margin the shadow needs to exist at all. Idempotent and
-    /// token-driven, so a theme swap re-resolves the colours on its own.
+    /// The fallback a shell draws when DWM will not paint it: an opaque
+    /// surface fill (Win10 的关键一档——壳的材质底 <c>Brush.SurfaceMaterial</c> 是刻意半透明的，
+    /// 背后没有 DWM 材质时透出桌面，Windows 10 实录 2026-10-17), a 1 DIP CardStroke outline,
+    /// the shared floating shadow, and the 12 DIP transparent margin the shadow needs to
+    /// exist at all. Idempotent and token-driven, so a theme swap re-resolves the colours
+    /// on its own.
     /// </summary>
     public static void DegradeShell(Border shell)
     {
         shell.Margin = new Thickness(FallbackMargin);
         shell.BorderThickness = new Thickness(1);
+        shell.SetResourceReference(Border.BackgroundProperty, "Brush.Surface");
         shell.SetResourceReference(Border.BorderBrushProperty, "Brush.CardStroke");
         shell.SetResourceReference(Border.EffectProperty, "Shadow.Floating");
     }
