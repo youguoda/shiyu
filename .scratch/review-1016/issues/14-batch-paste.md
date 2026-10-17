@@ -17,3 +17,10 @@
   - 回不去（不知道是哪扇 / 管理员窗口 / 抢不回前台）就只复制并说清楚；贴成功后各条使用次数 +1。
   - 9 个测试。
 - **待你实机验收**（会动真剪贴板）：在记事本里按历史窗口的快捷键（或托盘「历史…」）→ Ctrl+点选 3 条（故意不按列表顺序）→「粘贴全部」→ 记事本里按点选的先后出现 3 行。
+
+## 自动验收（2026-10-17，受你委托；probe-batch-paste，会动真剪贴板，不进 run-all）
+
+- **PASS flow:batch-paste-target**：真记事本置前台 → 历史窗口记下它为贴回目标；
+- **PASS flow:batch-paste-order**：造三条 ASCII 条目，按**非列表顺序**（one → three → two）选中、点「粘贴全部」，记事本里读回的正是 `probe paste one / probe paste three / probe paste two`，一次粘贴、一行一条。
+- 过程中修了三个探针自身的坑（不是产品问题）：Win11 记事本是打包应用，`Process.MainWindowHandle` 恒为零，改按「标题以 Notepad 结尾的新顶层窗口」找；`GetCurrentPattern` 对不支持的控件抛 `InvalidOperationException`，读取要按元素接住；比对前把两侧空白归一。
+- 抢前台失败（用户正在用机器）时产品走的是设计好的「只复制 + 提示」兜底，探针据此自动重试（最多 3 次）。脚本会保存并恢复你的剪贴板文本（图片格式不保）。

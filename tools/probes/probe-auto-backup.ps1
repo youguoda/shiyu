@@ -74,4 +74,11 @@ $ok = $locked -and $locked['said'] -eq 'True' -and $locked['unchanged'] -eq 'Tru
 $detail = if ($locked) { "names the password {0}, folder unchanged {1}" -f $locked['said'], $locked['unchanged'] } else { 'no locked line' }
 Add-Check 'flow:auto-backup-locked' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+# The sealed archive round-trips: importing it into a fresh store with the password brings
+# the entries back (acceptance 2026-10-17, delegated by the user).
+$import = $lines['import']
+$ok = $import -and [int]$import['added'] -gt 0 -and [int]$import['entriesInStore'] -eq [int]$import['added']
+$detail = if ($import) { "sealed archive imported into a fresh store: {0} entr(ies), {1} image(s), store holds {2}" -f $import['added'], $import['images'], $import['entriesInStore'] } else { 'no import line' }
+Add-Check 'flow:auto-backup-import' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 return $script:Checks

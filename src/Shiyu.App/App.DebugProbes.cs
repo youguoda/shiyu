@@ -241,6 +241,250 @@ public partial class App
         File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "tooltip.log"), log.ToString());
     }
 
+    /// <summary>此刻所有顶层窗口的句柄（找「新出现的记事本窗口」用）。</summary>
+    private static System.Collections.Generic.HashSet<System.IntPtr> KnownWindowHandles()
+    {
+        var handles = new System.Collections.Generic.HashSet<System.IntPtr>();
+        foreach (System.Windows.Automation.AutomationElement window in System.Windows.Automation.AutomationElement
+            .RootElement.FindAll(
+                System.Windows.Automation.TreeScope.Children,
+                System.Windows.Automation.Condition.TrueCondition))
+        {
+            try
+            {
+                handles.Add((System.IntPtr)window.Current.NativeWindowHandle);
+            }
+            catch (System.Windows.Automation.ElementNotAvailableException)
+            {
+                // expected: 窗口正在消失。
+            }
+        }
+
+        return handles;
+    }
+
+    /// <summary>
+    /// 探针命令 batch-paste 的入口（评审 2026-10-16 F-12 的验收，用户委托 2026-10-17；**会动真剪贴板**，
+    /// 脚本不进 run-all）：起一个空记事本置前台，开历史窗口（贴回目标记成记事本），库里造三条 ASCII 条目，
+    /// 按非列表顺序选中、点「粘贴全部」，读回记事本文字比对顺序。目标不是前台就收手不贴——宁可不验，
+    /// 不往一个不知哪来的窗口里贴。
+    /// </summary>
+    private async void ProbeBatchPaste(AppShell shell)
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        // Win11 的记事本是打包应用：新进程的 Process.MainWindowHandle 一直是零（实测 2026-10-17）。
+        // 窗口按「启动之后新出现的、标题以 Notepad 结尾的顶层窗口」找——UIA 看得见它（UIA spike 已证）。
+        var before = KnownWindowHandles();
+        System.Diagnostics.Process? launcher = null;
+        try
+        {
+            launcher = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo("notepad.exe") { UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            // expected: 起不来——下面等不到窗口，按计划收手。
+        }
+
+        try
+        {
+            var target = Shiyu.Windows.ForegroundWindow.Current();
+            var haveNotepadWindow = false;
+            for (var waited = 0; waited < 100 && !haveNotepadWindow; waited++)
+            {
+                await Task.Delay(200);
+                foreach (System.Windows.Automation.AutomationElement window in System.Windows.Automation.AutomationElement
+                    .RootElement.FindAll(
+                        System.Windows.Automation.TreeScope.Children,
+                        System.Windows.Automation.Condition.TrueCondition))
+                {
+                    try
+                    {
+                        var name = window.Current.Name;
+                        if (!name.EndsWith("notepad", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        var handle = (IntPtr)window.Current.NativeWindowHandle;
+                        if (handle != IntPtr.Zero && !before.Contains(handle))
+                        {
+                            target = new Shiyu.Windows.ForegroundWindow(handle);
+                            haveNotepadWindow = true;
+                            break;
+                        }
+
+                        // 句柄拿不到（窗口挂在别人名下）：让 UIA 把焦点交给它，再取此刻的前台。
+                        if (handle == IntPtr.Zero)
+                        {
+                            window.SetFocus();
+                            await Task.Delay(400);
+                            var foreground = Shiyu.Windows.ForegroundWindow.Current();
+                            if (foreground.IsSomething && !foreground.BelongsToThisProcess)
+                            {
+                                target = foreground;
+                                haveNotepadWindow = true;
+                                break;
+                            }
+                        }
+                    }
+                    catch (System.Windows.Automation.ElementNotAvailableException)
+                    {
+                        // expected: 窗口正在出现或消失的半路上。
+                    }
+                }
+            }
+
+            // 没拿到真记事本的窗口（新版记事本的启动器把它并进了已开的实例）就收手：
+            // 继续做会把这三个字贴进"此刻的前台"，那扇窗是谁没人知道。
+            if (!haveNotepadWindow)
+            {
+                log.AppendLine("target|ok=False|reason=no-notepad-window");
+                return;
+            }
+
+            // 抢前台是和用户的手赛跑（settings-front 探针的同款 flake）：试三次。
+            var okTarget = false;
+            for (var attempt = 0; attempt < 3 && !okTarget; attempt++)
+            {
+                target.Restore();
+                await Task.Delay(400);
+                okTarget = target.IsSomething
+                    && !target.BelongsToThisProcess
+                    && Shiyu.Windows.ForegroundWindow.Current().Handle == target.Handle;
+            }
+
+            log.AppendLine(FormattableString.Invariant($"target|ok={okTarget}"));
+            if (!okTarget)
+            {
+                return;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var first = shell.Store.Append("probe paste one", "notepad-probe", now);
+            var third = shell.Store.Append("probe paste three", "notepad-probe", now.AddSeconds(1));
+            var second = shell.Store.Append("probe paste two", "notepad-probe", now.AddSeconds(2));
+
+            _modules!.Library.ShowFor(target);
+            for (var waited = 0; waited < 50 && Windows.OfType<LibraryWindow>().All(window => !window.IsLoaded); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(800);
+            if (Windows.OfType<LibraryWindow>().FirstOrDefault() is not { } library)
+            {
+                log.AppendLine("library|missing");
+                return;
+            }
+
+            // 列表最新在前（two, three, one）；选中顺序故意 one → three → two。
+            log.Append(await library.ProbeBatchPaste(
+                [first.Id, third.Id, second.Id],
+                string.Join("\r\n", "probe paste one", "probe paste three", "probe paste two"),
+                target.Handle,
+                () => shell.CapturePlatform?.ReadClipboardText()));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            // 只关这一趟起的记事本进程（若被并进用户已开的实例，launcher 已退出，这里什么都不杀；
+            // 那个页签留在用户的记事本里，里面就是被贴进去的三行）。日志无论如何都落地。
+            try
+            {
+                if (launcher is { HasExited: false } process)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (Exception)
+            {
+                // expected: 已经退出了。
+            }
+
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "batch-paste.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
+    /// 探针命令 vocabulary（评审 2026-10-16 F-09 的验收，用户委托 2026-10-17）：收三个词的星
+    /// （走 TranslationLogger.StarWord 与真的离线词典卡），「生词」筛选该有三条，历史窗口里点开
+    /// 「生词」列表也只有三条，导出的 CSV 带 Anki 文件头、三个词头。判断在应用里做完，日志只有
+    /// 真假与词头（词头本身是 ASCII，脚本只认 ASCII）。
+    /// </summary>
+    private async void ProbeVocabulary(AppShell shell)
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var local = TranslationModule.LocalWords;
+            var logger = shell.TranslationLog;
+            foreach (var word in new[] { "example", "went", "ubiquitous" })
+            {
+                if (local.Lookup(word) is not { } card)
+                {
+                    log.AppendLine(FormattableString.Invariant($"star|word={word}|card=False"));
+                    continue;
+                }
+
+                logger.StarWord(word, "probe", "标准", card);
+            }
+
+            var words = shell.Store.TranslationLog(vocabularyOnly: true);
+            log.AppendLine(FormattableString.Invariant(
+                $"filter|count={words.Count}|headwords={string.Join(",", words.Select(record => record.Word?.Headword))}"));
+
+            shell.ShowTranslationLog?.Invoke();
+            for (var waited = 0; waited < 50 && Windows.OfType<LibraryWindow>().All(window => !window.IsLoaded); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<LibraryWindow>().FirstOrDefault() is not { } library)
+            {
+                log.AppendLine("library|missing");
+            }
+            else
+            {
+                await Task.Delay(800);
+                library.RaiseVocabularyToggle();
+                await Task.Delay(400);
+                log.AppendLine(FormattableString.Invariant($"toggle|count={library.ProbeVocabularyListCount()}"));
+            }
+
+            var csv = Path.Combine(directory, "vocabulary.csv");
+            int written;
+            using (var writer = new StreamWriter(csv, append: false, Shiyu.Core.ExportFile.EncodingFor(Shiyu.Core.ExportFormat.Csv)))
+            {
+                written = Shiyu.Core.VocabularyExport.Write(
+                    writer, shell.Store.TranslationLog(vocabularyOnly: true, limit: int.MaxValue), Shiyu.Core.ExportFormat.Csv);
+            }
+
+            var content = File.ReadAllText(csv);
+            var csvLine =
+                $"csv|written={written}|header={content.StartsWith("#separator:Comma", StringComparison.Ordinal)}"
+                + $"|example={content.Contains("example,", StringComparison.Ordinal)}"
+                + $"|go={content.Contains("go,", StringComparison.Ordinal)}"
+                + $"|ubiquitous={content.Contains("ubiquitous,", StringComparison.Ordinal)}";
+            log.AppendLine(csvLine);
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把异常写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "vocabulary.log"), log.ToString());
+    }
+
     /// <summary>
     /// 探针命令 auto-backup（评审 2026-10-16 F-20）：在探针自己的目录下摆一个备份文件夹——5 份旧的自动备份、
     /// 1 份手动导出的、1 个别的文件——设好口令，按「立即备份一次」：该多出一份新的、是加密的；自动备份只剩
@@ -288,6 +532,30 @@ public partial class App
 
             log.AppendLine(FormattableString.Invariant(
                 $"run|ok={outcome.StartsWith("已备份", StringComparison.Ordinal)}|fresh={fresh}|ours={ours.Count}|sealed={Encoding.ASCII.GetString(head) == "SHIYUBK1"}|manual={names.Contains("拾语备份 2026-01-01.shiyubk")}|other={names.Contains("notes.txt")}"));
+
+            // 验收补一刀（2026-10-17，用户委托）：把这份加密备份导进一个空库，条目该原样回来。
+            if (newest is { } backupStamp)
+            {
+                var importDatabase = Path.Combine(directory, "import-check.db");
+                var importImages = Path.Combine(directory, "import-images");
+                Directory.CreateDirectory(importImages);
+                using (var importStore = Shiyu.Core.EntryStore.Open(importDatabase))
+                {
+                    var importPassword = Encoding.Unicode.GetBytes("probe password");
+                    try
+                    {
+                        var restored = Shiyu.Core.BackupArchive.Import(
+                            Path.Combine(folder, Shiyu.Core.AutoBackupSchedule.FileName(backupStamp)),
+                            importStore, importImages, overwrite: true, importPassword);
+                        log.AppendLine(FormattableString.Invariant(
+                            $"import|added={restored.Added}|images={restored.ImagesRestored}|entriesInStore={importStore.Count()}"));
+                    }
+                    finally
+                    {
+                        Array.Clear(importPassword);
+                    }
+                }
+            }
 
             // 本机打不开的口令（另一台电脑保护的）：不写文件，说人话。
             shell.TryUpdateSettings(settings => settings with { AutoBackupPassword = Shiyu.Core.AppSettings.SecretMarker + "AAAA" });
@@ -1077,6 +1345,16 @@ public partial class App
             // 离线词典的卡（评审 2026-10-16 F-08）。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1。
             case "panel-dictionary":
                 _modules!.Translation.ProbeDictionaryCard();
+                break;
+
+            // 生词本验收（评审 2026-10-16 F-09，用户委托 2026-10-17）。
+            case "vocabulary":
+                ProbeVocabulary(shell);
+                break;
+
+            // 粘贴全部验收（评审 2026-10-16 F-12，用户委托 2026-10-17）：会动真剪贴板，脚本不进 run-all。
+            case "batch-paste":
+                ProbeBatchPaste(shell);
                 break;
 
             // 定期备份：备份、修剪、打不开的口令（评审 2026-10-16 F-20）。

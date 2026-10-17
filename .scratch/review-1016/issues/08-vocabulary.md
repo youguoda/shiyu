@@ -17,3 +17,11 @@
   - **与验收的出入**：「原句」拾语拿不到——取词只拿到选中的那个词，拿不到它所在的句子。导出的第四列叫「例句」，取自词典卡（在线词典补到的例句）。若票 09 的 UIA 取词能拿到所在句，再补真正的原句。
   - 测试 12 个；探针 probe-panel-dictionary 加了 flow:vocabulary-star（点星 → 星变实心、生词本里正好是这个词），PASS。
 - **待你实机验收**：查 3 个英文词各点一下 ☆ → 历史窗口「翻译记录」→「生词」看到 3 条 →「导出…」存 CSV → Anki「导入」能直接认出各列。
+
+## 自动验收（2026-10-17，受你委托；probe-vocabulary，已进 run-all）
+
+- **PASS flow:vocabulary-filter**：收 example / went / ubiquitous 三颗星，「生词」筛选正好这三条；
+- **PASS flow:vocabulary-toggle**：历史窗口「翻译记录」页点「生词」，列表正好 3 条；
+- **PASS flow:vocabulary-csv-export**：导出的 CSV 带 Anki 文件头（#separator:Comma / #html:false / #columns:…），三行词头都在。
+- 一个值得知道的行为：收 **went** 时，生词本里记的是原形 **go**（词典卡本就是 go 的卡）——查变形词收的是它本身。
+- probe-vocabulary 加进了 run-all（不碰剪贴板）。剩下唯一人工的一步：你若用 Anki，把那份 CSV 导进去看一眼列名。
