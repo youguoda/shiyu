@@ -66,6 +66,9 @@ public class SettingsStoreTests : IDisposable
 
         Assert.Equal(500, store.Current.ImageRetentionDays);
         Assert.Equal(500, AppSettings.Load(SettingsPath).ImageRetentionDays);
+
+        // 每次保存用唯一临时名、成功即搬走：目录里不留半份草稿。
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(SettingsPath)!, "*.tmp*"));
     }
 
     // --- Changed 事件 ------------------------------------------------------------
