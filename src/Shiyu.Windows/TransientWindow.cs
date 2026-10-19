@@ -32,6 +32,25 @@ public static class TransientWindow
     }
 
     /// <summary>
+    /// 摘掉「永不激活」：钉住的预览要接字、要缩放，得能接住焦点与点击。
+    /// topmost 位照 <paramref name="band"/> 重摆，与
+    /// <see cref="MakeNonActivating"/> 同一套位语义，只是这一枚反过来。
+    /// </summary>
+    public static void MakeActivatable(IntPtr handle, ZBand band)
+    {
+        var style = NativeMethods.GetWindowLongPtr(handle, NativeMethods.GwlExStyle).ToInt64();
+        var withBand = band == ZBand.Topmost
+            ? (style & ~(long)NativeMethods.WsExNoActivate) | (long)NativeMethods.WsExTopmost
+            : (style & ~((long)NativeMethods.WsExNoActivate | (long)NativeMethods.WsExTopmost));
+        NativeMethods.SetWindowLongPtr(handle, NativeMethods.GwlExStyle, new IntPtr(withBand));
+    }
+
+    /// <summary>该窗口是否带着「永不激活」位（探针核对用）。</summary>
+    public static bool IsNonActivating(IntPtr handle)
+        => (NativeMethods.GetWindowLongPtr(handle, NativeMethods.GwlExStyle).ToInt64()
+            & (long)NativeMethods.WsExNoActivate) != 0;
+
+    /// <summary>
     /// Places a window at an explicit size and position, directly below
     /// another handle in the z-order, without activating it — visible first,
     /// pressed under second (O-31).

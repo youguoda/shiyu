@@ -68,6 +68,17 @@
             </DockPanel>
 
             <Grid Grid.Row="1">
+                <!-- 钉住工作台（用户需求 2026-10-20）：文字类可直接编辑；色值卡给颜色条。 -->
+                <TextBox x:Name="EditHost" Visibility="Collapsed"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" Padding="10,8"
+                         Background="{DynamicResource Brush.SurfaceInput}"
+                         BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1"
+                         FontSize="{DynamicResource Type.Content}"
+                         AutomationProperties.Name="钉住的文字，可直接编辑"/>
+                <Border x:Name="SwatchHost" Height="48"
+                        CornerRadius="{DynamicResource Radius.Control}"
+                        Visibility="Collapsed" VerticalAlignment="Top"/>
                 <ScrollViewer x:Name="TextHost" Focusable="False"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
@@ -101,6 +112,7 @@
             <Border x:Name="TeachHost" Grid.Row="2" Margin="0,10,0,0"
                     BorderBrush="{DynamicResource Brush.Divider}" BorderThickness="0,1,0,0"
                     Padding="0,8,0,0" Visibility="Collapsed">
+                <Grid>
                 <ItemsControl x:Name="TeachRow" Focusable="False" IsTabStop="False">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -119,6 +131,24 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- 钉住：动作行按形态出芯片（同一槽位与教学行互换）。 -->
+                <ItemsControl x:Name="ActionRow" Focusable="False" IsTabStop="False"
+                              Visibility="Collapsed">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding Label}" Tag="{Binding Action}"
+                                    Style="{DynamicResource FlyoutButton}"
+                                    Height="{DynamicResource Control.Height}" Padding="8,0"
+                                    Margin="0,0,8,0" Focusable="False" Cursor="Hand"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </Grid>
             </Border>
         </Grid>
     </Border>

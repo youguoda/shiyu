@@ -72,6 +72,7 @@ internal partial class BarWindow
             _preview = new PreviewWindow(_fileIcons, _fileProbe);
             _preview.PointerRestingOnPanel += () => RunPreviewCommand(_previewPolicy.PreviewEntered());
             _preview.PointerLeftPanel += () => RunPreviewCommand(_previewPolicy.PreviewLeft());
+            _preview.WorkbenchAction += RunWorkbenchAction;
 
             // Born into the bar's z-tier (票 39): the panel never hovers above
             // windows the bar itself is under.

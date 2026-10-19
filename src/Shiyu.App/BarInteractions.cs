@@ -491,16 +491,17 @@ internal partial class BarWindow
     }
 
     private void OpenUri(BarCard card)
+        => OpenUrl(card.Subtype == EntrySubtype.Email
+            ? "mailto:" + card.Text.Trim()
+            : card.Text.Trim());
+
+    /// <summary>打开即弃（O-43）：.NET 9 的 Process 是 IDisposable，弃置不写
+    /// 句柄要等到终结器——浏览器自己会活。钉住预览的动作行走同一条路。</summary>
+    private void OpenUrl(string url)
     {
         try
         {
-            var target = card.Subtype == EntrySubtype.Email
-                ? "mailto:" + card.Text.Trim()
-                : card.Text.Trim();
-
-            // 打开即弃（O-43）：.NET 9 的 Process 是 IDisposable，弃置不写
-            // 句柄要等到终结器——浏览器自己会活。
-            using var opened = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target)
+            using var opened = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
             {
                 UseShellExecute = true,
             });
@@ -840,6 +841,61 @@ internal partial class BarWindow
             : _store.Get(card.Id) is { } full && (full.Html is { Length: > 0 } || full.Rtf is { Length: > 0 })
                 ? _clipboard.SetRich(card.Text, full.Html, full.Rtf)
                 : _clipboard.SetText(card.Text);
+    }
+
+    /// <summary>
+    /// 钉住预览动作行的执行者（用户需求 2026-10-20）：动作名 + 此刻文本 + 条目，
+    /// 复用条上现成的实现——打开走 OpenUrl，路径的打开/定位与窄条动作同一条
+    /// 解析，存为新条目直接入库（用户亲手改写的草稿，无需再过排除名单）。
+    /// 反馈一律走托盘：钉住的预览常常在窄条隐藏时独自工作。
+    /// </summary>
+    private void RunWorkbenchAction(string action, long cardId, string text)
+    {
+        switch (action)
+        {
+            case "copy":
+                if (_clipboard.SetText(text))
+                {
+                    DeadDragNotice?.Invoke("已复制");
+                }
+                break;
+            case "open-uri":
+                OpenUrl(text);
+                break;
+            case "open-path":
+                if (FileEntries.Alive(text))
+                {
+                    _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(text)
+                    {
+                        UseShellExecute = true,
+                    });
+                }
+                else
+                {
+                    DeadDragNotice?.Invoke("原路径已不存在。");
+                }
+                break;
+            case "locate-path":
+                if (FileEntries.Alive(text))
+                {
+                    _ = System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{text}\"");
+                }
+                else
+                {
+                    DeadDragNotice?.Invoke("原路径已不存在。");
+                }
+                break;
+            case "copy-image":
+                if (_store.Get(cardId)?.OriginalPath is { Length: > 0 } path && File.Exists(path))
+                {
+                    _clipboard.SetImage(File.ReadAllBytes(path));
+                }
+                break;
+            case "save-as-new":
+                SelfWrite(() => _store.Append(text, "Shiyu", DateTimeOffset.UtcNow));
+                DeadDragNotice?.Invoke("已存为新条目");
+                break;
+        }
     }
 
     /// <summary>

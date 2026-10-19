@@ -95,15 +95,21 @@ internal partial class PreviewWindow : Window
         {
             source.AddHook(RefuseActivation);
         }
+
+        // 钉住工作台的指针交互（滚轮缩放、拖拽平移）。
+        MouseWheel += OnWorkbenchWheel;
+        MouseLeftButtonDown += OnWorkbenchPress;
+        MouseMove += OnWorkbenchMove;
+        MouseLeftButtonUp += OnWorkbenchRelease;
     }
 
     private const int WmMouseActivate = 0x21;
 
     private const int MaNoActivate = 3;
 
-    private static IntPtr RefuseActivation(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private IntPtr RefuseActivation(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmMouseActivate)
+        if (!Pinned && msg == WmMouseActivate)
         {
             handled = true;
             return (IntPtr)MaNoActivate;
@@ -151,6 +157,19 @@ internal partial class PreviewWindow : Window
         if (Pinned && !ReferenceEquals(card, _shown))
         {
             return;
+        }
+
+        // 钉着的预览独占：别的卡片不再夺走它（取消钉后才恢复悬停规则）。
+        if (Pinned && !ReferenceEquals(card, _shown))
+        {
+            return;
+        }
+
+        // 未钉的常态：每次显示都把「永不激活」摆回去（钉住的一轮摘过它，
+        // 同一句柄会跨显示复用——预览不能带着可激活的样子复活）。
+        if (!Pinned)
+        {
+            TransientWindow.MakeNonActivating(new System.Windows.Interop.WindowInteropHelper(this).Handle, _band);
         }
 
         var (width, height) = Measure(card, scaleX);
@@ -323,13 +342,18 @@ internal partial class PreviewWindow : Window
     private void Pin()
     {
         Pinned = true;
+
+        // 会话式窗口化：摘掉「永不激活」，点击与打字才进得来（用户点钉就是授权）。
+        TransientWindow.MakeActivatable(new System.Windows.Interop.WindowInteropHelper(this).Handle, _band);
         UpdatePinVisual();
+        SetupWorkbench();
     }
 
     /// <summary>取消钉：预览的使命到此为止——立即收起，悬停规则恢复。</summary>
     private void Unpin()
     {
         Pinned = false;
+        TransientWindow.MakeNonActivating(new System.Windows.Interop.WindowInteropHelper(this).Handle, _band);
         UpdatePinVisual();
         TakeDown(force: true);
     }
@@ -348,6 +372,15 @@ internal partial class PreviewWindow : Window
         TeachHost.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    /// <summary>
+    /// 工作台动作（用户需求 2026-10-20）：动作行的芯片点下去，带着此刻的
+    /// 文本与条目交给宿主（窄条）执行——预览自己不持有剪贴板与库。
+    /// </summary>
+    internal event Action<string, long, string>? WorkbenchAction;
+
+    /// <summary>动作行的一枚芯片：显示名 + 动作名。</summary>
+    private sealed record WorkbenchChip(string Label, string Action);
+
     internal void ProbeClickPin() =>
         PinButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
@@ -356,6 +389,217 @@ internal partial class PreviewWindow : Window
     internal bool ProbeMetaVisible => WhenText.IsVisible || KindText.IsVisible;
 
     internal bool ProbeTeachVisible => TeachHost.IsVisible;
+
+    // --- 钉住工作台（用户需求 2026-10-20）：文字可编、图片可缩放，动作按形态出 ---------
+
+    private double _imageScale = 1;
+    private Point _imageOrigin = new(0, 0);
+    private bool _imageDragging;
+    private Point _dragStart;
+
+    /// <summary>
+    /// 钉住那一刻把窗变成工作台：文本类正文换编辑框、颜色给色块、动作行按
+    /// 形态出芯片；图片初始化缩放变换。取消钉（TeardownWorkbench）全部还原。
+    /// </summary>
+    private void SetupWorkbench()
+    {
+        var card = _shown;
+        if (card is null)
+        {
+            return;
+        }
+
+        var isText = card.Kind != EntryKind.Image && card.Kind != EntryKind.Files;
+        SubtypeColor colour = default;
+        var isColour = card.Subtype == EntrySubtype.Color
+            && SubtypeColor.TryParse(card.Text, out colour);
+        if (isColour)
+        {
+            SwatchHost.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(colour.A, colour.R, colour.G, colour.B));
+        }
+        SwatchHost.Visibility = isColour ? Visibility.Visible : Visibility.Collapsed;
+
+        EditHost.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
+        TextHost.Visibility = isText ? Visibility.Collapsed : TextHost.Visibility;
+        EditHost.Text = card.Text;
+
+        ActionRow.Items.Clear();
+
+        // 芯片点击走附加事件：模板里的按钮点下去，带着自己的动作名。
+        ActionRow.AddHandler(
+            System.Windows.Controls.Primitives.ButtonBase.ClickEvent,
+            new RoutedEventHandler((sender, _) =>
+            {
+                if (sender is System.Windows.Controls.Button { DataContext: WorkbenchChip chip }
+                    && _shown is { } card)
+                {
+                    WorkbenchAction?.Invoke(chip.Action, card.Id, WorkbenchText());
+                }
+            }));
+
+        foreach (var chip in WorkbenchChipsFor(card))
+        {
+            ActionRow.Items.Add(chip);
+        }
+
+        ActionRow.Visibility = Visibility.Visible;
+        TeachHost.Visibility = Visibility.Collapsed;
+        WhenText.Visibility = Visibility.Collapsed;
+        KindText.Visibility = Visibility.Collapsed;
+    }
+
+    private void TeardownWorkbench()
+    {
+        ActionRow.Items.Clear();
+        ActionRow.Visibility = Visibility.Collapsed;
+        EditHost.Visibility = Visibility.Collapsed;
+        SwatchHost.Visibility = Visibility.Collapsed;
+        _imageScale = 1;
+        _imageOrigin = new Point(0, 0);
+        ApplyImageTransform();
+    }
+
+    /// <summary>按形态给动作芯片（评审方案 2026-10-20 的每形态表）。</summary>
+    private static IReadOnlyList<WorkbenchChip> WorkbenchChipsFor(BarCard card)
+    {
+        return card.Kind switch
+        {
+            EntryKind.Files =>
+            [
+                new WorkbenchChip("打开", "open-path"),
+                new WorkbenchChip("定位", "locate-path"),
+                new WorkbenchChip("复制路径", "copy"),
+            ],
+            EntryKind.Image =>
+            [
+                new WorkbenchChip("复制图片", "copy-image"),
+            ],
+            _ => card.Subtype switch
+            {
+                EntrySubtype.Link =>
+                [
+                    new WorkbenchChip("打开", "open-uri"),
+                    new WorkbenchChip("复制", "copy"),
+                    new WorkbenchChip("存为新条目", "save-as-new"),
+                ],
+                EntrySubtype.Email =>
+                [
+                    new WorkbenchChip("写邮件", "open-uri"),
+                    new WorkbenchChip("复制", "copy"),
+                    new WorkbenchChip("存为新条目", "save-as-new"),
+                ],
+                EntrySubtype.LocalPath =>
+                [
+                    new WorkbenchChip("打开", "open-path"),
+                    new WorkbenchChip("定位", "locate-path"),
+                    new WorkbenchChip("复制", "copy"),
+                ],
+                EntrySubtype.Color =>
+                [
+                    new WorkbenchChip("复制色值", "copy"),
+                ],
+                _ =>
+                [
+                    new WorkbenchChip("复制", "copy"),
+                    new WorkbenchChip("存为新条目", "save-as-new"),
+                ],
+            },
+        };
+    }
+
+    /// <summary>动作行此刻的文本：编辑框里改过的算数，没编辑就是原文。</summary>
+    private string WorkbenchText()
+        => EditHost.Visibility == Visibility.Visible ? EditHost.Text : (_shown?.Text ?? string.Empty);
+
+    private void ApplyImageTransform()
+    {
+        var group = new TransformGroup();
+        group.Children.Add(new ScaleTransform(_imageScale, _imageScale));
+        group.Children.Add(new TranslateTransform(_imageOrigin.X, _imageOrigin.Y));
+        ImageHost.RenderTransform = group;
+    }
+
+    private void OnWorkbenchWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!Pinned || _shown is not { Kind: EntryKind.Image })
+        {
+            return;
+        }
+
+        var position = e.GetPosition(ImageHost);
+        var newScale = Math.Clamp(_imageScale * (e.Delta > 0 ? 1.25 : 0.8), 1.0, 8.0);
+
+        // 朝光标缩放：光标下的图像点，缩放后仍落在光标下。
+        _imageOrigin = new Point(
+            position.X - (position.X - _imageOrigin.X) * newScale / _imageScale,
+            position.Y - (position.Y - _imageOrigin.Y) * newScale / _imageScale);
+        _imageScale = newScale;
+
+        if (_imageScale <= 1.001)
+        {
+            _imageScale = 1;
+            _imageOrigin = new Point(0, 0);
+        }
+
+        ApplyImageTransform();
+        e.Handled = true;
+    }
+
+    private void OnWorkbenchPress(object sender, MouseButtonEventArgs e)
+    {
+        if (!Pinned || _shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
+        {
+            return;
+        }
+
+        // 放大之后才有得拖：原始比例下拖动没有意义，点击穿到下面去。
+        if (_imageScale > 1.001)
+        {
+            _imageDragging = true;
+            _dragStart = e.GetPosition(ImageHost);
+            ImageHost.CaptureMouse();
+            e.Handled = true;
+        }
+    }
+
+    private void OnWorkbenchMove(object sender, MouseEventArgs e)
+    {
+        if (!_imageDragging)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(ImageHost);
+        _imageOrigin = new Point(
+            _imageOrigin.X + position.X - _dragStart.X,
+            _imageOrigin.Y + position.Y - _dragStart.Y);
+        ApplyImageTransform();
+        e.Handled = true;
+    }
+
+    private void OnWorkbenchRelease(object sender, MouseButtonEventArgs e)
+    {
+        if (_imageDragging)
+        {
+            _imageDragging = false;
+            ImageHost.ReleaseMouseCapture();
+            e.Handled = true;
+        }
+    }
+
+    private void OnWorkbenchDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!Pinned || _shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
+        {
+            return;
+        }
+
+        _imageScale = 1;
+        _imageOrigin = new Point(0, 0);
+        ApplyImageTransform();
+        e.Handled = true;
+    }
 
     private void OnMouseEnter(object sender, MouseEventArgs e) => PointerRestingOnPanel?.Invoke();
 
