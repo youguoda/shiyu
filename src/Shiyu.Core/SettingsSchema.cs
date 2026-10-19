@@ -173,6 +173,12 @@ public static class SettingsSchema
                     "bar.pinned", "常驻钉住", SettingsControl.Toggle,
                     Hint: "窄条由快速粘贴在输入光标旁呼出。关闭时选一条贴完就收起，点别处也收起；开启后贴完、点别处都不收，留在原地并保持在其他窗口之上，按 Esc 收起。窄条右上角的图钉随时切换。",
                     Keywords: ["钉住", "常驻", "图钉", "置顶", "最前", "保持在最前", "不消失", "一直显示", "收起", "遮挡", "浮在最上层"],
+                    Icon: "E718"),
+                new SettingsItem(
+                    "bar.edge-dock", "贴边隐藏", SettingsControl.Toggle,
+                    Parent: "bar.pinned",
+                    Hint: "常驻钉住的窄条缩进屏幕顶缘，只露一条细边；鼠标靠近顶缘时展开。看全屏视频/游戏时不展开。拖动窄条视为改位置，贴边自动关闭。需要窄条常在、又不想常占屏幕时开。",
+                    Keywords: ["贴边", "隐藏", "自动隐藏", "顶", "顶部", "边缘", "吸附", "展开", "细条", "常驻"],
                     Icon: "E718")),
             new SettingsSection("bar.density", "密度",
                 new SettingsItem(

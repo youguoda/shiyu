@@ -81,6 +81,8 @@ internal sealed partial class BarModule
         // 整理归管理窗。
         // 前台此刻是窄条自己，「粘贴全部」该贴回的是窄条记着的那扇（评审 2026-10-16 F-12）。
         _bar.LibraryRequested += () => shell.ShowLibraryFor?.Invoke(_bar.ReturnTarget);
+        _bar.EdgeDockWanted += wanted => shell.TryUpdateSettings(s =>
+            s with { BarEdgeDock = wanted, BarPinned = wanted || s.BarPinned });
 
         // The header's pin reports only what it wants (票 39/O-20，用户需求
         // 2026-10-10 起是「常驻钉住」): this side turns it into a one-field

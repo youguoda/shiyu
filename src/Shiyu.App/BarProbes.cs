@@ -481,5 +481,21 @@ internal partial class BarWindow
         log.AppendLine(previewLine);
         return log.ToString();
     }
+
+    /// <summary>贴边收起时的可见条高（DIP；用户需求 2026-10-20 的探针读数）。</summary>
+    internal double ProbeVisibleStrip()
+    {
+        var workTop = SystemParameters.WorkArea.Top;
+        return Math.Max(0, Top + ActualHeight - workTop);
+    }
+
+    /// <summary>贴边展开态的读数：没收着就是展开（用户需求 2026-10-20 的探针读数）。</summary>
+    internal bool ProbeDockExpanded() => !_edgeCollapsed;
+
+    /// <summary>探针：模拟鼠标进窗（贴边展开）。</summary>
+    internal void ProbeDockMouseEnter() => OnDockMouseEnter(this, null!);
+
+    /// <summary>探针：模拟鼠标离窗（贴边收回）。</summary>
+    internal void ProbeDockMouseLeave() => OnDockMouseLeave(this, null!);
 }
 #endif

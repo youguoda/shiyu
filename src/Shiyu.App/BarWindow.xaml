@@ -13,6 +13,8 @@
         TextElement.Foreground="{DynamicResource Brush.Text}"
         PreviewKeyDown="OnPreviewKeyDown"
         PreviewKeyUp="OnPreviewKeyUp"
+        MouseEnter="OnDockMouseEnter"
+        MouseLeave="OnDockMouseLeave"
         Deactivated="OnLostFocus"
         MouseLeftButtonDown="OnBackgroundPressed">
     <!--

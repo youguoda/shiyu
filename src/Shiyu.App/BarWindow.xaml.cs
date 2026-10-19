@@ -74,6 +74,13 @@ internal partial class BarWindow : Window
     /// </summary>
     private ForegroundWindow _returnTo;
 
+    // --- 贴边隐藏（用户需求 2026-10-20）：常驻钉住的窄条缩进顶缘只露细条，
+    //     鼠标进细条展开、离开收回；全屏应用在前台时不展开。拖动窄条视为
+    //     改位置，贴边自动关闭。 ----------
+    private bool _edgeCollapsed;
+    private bool EdgeDockActive => _settings.BarEdgeDock && _settings.BarPinned;
+    private const double DockedStrip = 3;
+
     /// <summary>窄条记着要贴回的那扇窗：品牌钮打开历史窗口时交给它（评审 2026-10-16 F-12「粘贴全部」）。</summary>
     internal ForegroundWindow ReturnTarget => _returnTo;
 
@@ -226,6 +233,7 @@ internal partial class BarWindow : Window
             || settings.ShowSourceIcons != _settings.ShowSourceIcons
             || !settings.BarActions.SequenceEqual(_settings.BarActions);
         var pinChanged = settings.BarPinned != _settings.BarPinned;
+        var edgeChanged = settings.BarEdgeDock != _settings.BarEdgeDock;
 
         _settings = settings;
 
@@ -244,6 +252,19 @@ internal partial class BarWindow : Window
             if (!settings.BarPinned && _summoned && IsVisible && !IsActive)
             {
                 HideAfterFocusLost();
+            }
+        }
+
+        // 贴边开关变了：开着且窄条可见（非召唤中）就收到细条；关了就展开回位。
+        if (edgeChanged)
+        {
+            if (settings.BarEdgeDock && settings.BarPinned && IsVisible && !_summoned)
+            {
+                DockCollapse();
+            }
+            else if (!settings.BarEdgeDock && _edgeCollapsed)
+            {
+                DockExpand();
             }
         }
 
@@ -305,6 +326,10 @@ internal partial class BarWindow : Window
     /// </summary>
     public Func<long, Task<string?>>? OcrTextOf { get; set; }
 
+    /// <summary>贴边隐藏的意愿（用户需求 2026-10-20）：拖动窄条视为改位置，
+    /// 由拥有者写成设置——窄条自己不持有设置存储。</summary>
+    public event Action<bool>? EdgeDockWanted;
+
     private void OnBrandClicked(object sender, RoutedEventArgs e) => LibraryRequested?.Invoke();
 
     /// <summary>
@@ -312,6 +337,7 @@ internal partial class BarWindow : Window
     /// 没有位移的这一次按点击算——打开管理窗。HTCAPTION 的系统移动循环
     /// 而非 DragMove：DragMove 吞掉抬起，点击与拖动无法在同一枚钮上区分；
     /// 这也不是第二条 DragMove（背景拖动仍是一处，见 OnBackgroundPressed）。
+    /// 拖过就算改位置（用户需求 2026-10-20）：贴边隐藏自动关闭。
     /// </summary>
     private void OnBrandPressed(object sender, MouseButtonEventArgs e)
     {
@@ -324,6 +350,16 @@ internal partial class BarWindow : Window
             || (after.Left == before.Left && after.Top == before.Top))
         {
             LibraryRequested?.Invoke();
+            return;
+        }
+
+        if (_edgeCollapsed
+            && _settings.BarEdgeDock
+            && (after.Left != before.Left || after.Top != before.Top))
+        {
+            // 拖过 = 用户明确改位置：贴边自动关闭（设置跟着走）。
+            _edgeCollapsed = false;
+            EdgeDockWanted?.Invoke(false);
         }
     }
 
@@ -512,6 +548,15 @@ internal partial class BarWindow : Window
         // reason to hide (and NOT restore focus) a second time.
         _summoned = false;
 
+        // 贴边模式（用户需求 2026-10-20）：不隐藏——回到顶缘细条。Esc/粘贴
+        // 都算「收回」；预览还开着时也不收（读完自然收）。
+        if (EdgeDockActive && IsVisible && _preview is not { IsVisible: true })
+        {
+            RunPreviewCommand(_previewPolicy.BarHidden());
+            DockCollapse();
+            return;
+        }
+
         RunPreviewCommand(_previewPolicy.BarHidden());
 
         // Instant hide, matching the instant summon. Fading a layered window
@@ -562,6 +607,81 @@ internal partial class BarWindow : Window
         _previewTick.Interval = wait;
         _previewTick.Stop();
         _previewTick.Start();
+    }
+
+    // --- 贴边隐藏（用户需求 2026-10-20）：常驻钉住的窄条缩进顶缘只露细条，
+    //     鼠标进细条展开、离开收回；全屏应用在前台时不展开。 ----------
+
+    /// <summary>收起：窗口上移到只有细条落在工作区顶部（细条按该屏 DPI 换算）。
+    /// 预览还开着时等它收（预览自己关闭会再触发一次收回）。</summary>
+    private void DockCollapse()
+    {
+        if (!EdgeDockActive || !IsVisible || _summoned)
+        {
+            return;
+        }
+
+        if (_preview is { IsVisible: true })
+        {
+            return;
+        }
+
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (!WindowRects.TryGet(handle, out var rect))
+        {
+            return;
+        }
+
+        var corner = new ScreenPoint(rect.Left, rect.Top);
+        var work = ScreenGeometry.WorkAreaAt(corner);
+        var (_, scaleY) = ScreenGeometry.ScaleAt(corner);
+        var strip = (int)Math.Round(DockedStrip * scaleY);
+
+        _edgeCollapsed = true;
+        var targetTop = work.Top - (rect.Height - strip);
+        TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, targetTop),
+            ZBandPolicy.FollowsHost(Topmost));
+    }
+
+    /// <summary>展开：完整落回工作区顶部。全屏应用在前台时不展开——鼠标扫过
+    /// 顶缘不该把窄条滑到视频画面上。</summary>
+    private void DockExpand()
+    {
+        if (FullScreenOverlay.IsForeground())
+        {
+            return;
+        }
+
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (!WindowRects.TryGet(handle, out var rect))
+        {
+            return;
+        }
+
+        var corner = new ScreenPoint(rect.Left, rect.Top);
+        var work = ScreenGeometry.WorkAreaAt(corner);
+        _edgeCollapsed = false;
+        TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, work.Top),
+            ZBandPolicy.FollowsHost(Topmost));
+    }
+
+    /// <summary>鼠标进窗：贴边收着就展开。</summary>
+    private void OnDockMouseEnter(object sender, MouseEventArgs e)
+    {
+        if (EdgeDockActive && _edgeCollapsed && !_summoned && !FullScreenOverlay.IsForeground())
+        {
+            DockExpand();
+        }
+    }
+
+    /// <summary>鼠标离窗：收回细条。预览开着时等它收。</summary>
+    private void OnDockMouseLeave(object sender, MouseEventArgs e)
+    {
+        if (EdgeDockActive && !_edgeCollapsed && !_summoned
+            && _preview is not { IsVisible: true })
+        {
+            DockCollapse();
+        }
     }
 
     /// <summary>

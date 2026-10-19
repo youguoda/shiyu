@@ -46,4 +46,14 @@ public static class BarPlacement
 
     /// <summary>鼠标指针作锚点：指针尖，一个零大小的矩形。</summary>
     public static ScreenRect Pointer(ScreenPoint tip) => new(tip.X, tip.Y, tip.X, tip.Y);
+
+    /// <summary>
+    /// 贴边隐藏（用户需求 2026-10-20）收起时的窗口 Y：工作区顶在屏幕上只露
+    /// <paramref name="strip"/> DIP 的细条，其余留在屏幕外。
+    /// </summary>
+    public static double DockedTop(double workTop, double height, double strip)
+        => workTop - Math.Max(0, height - strip);
+
+    /// <summary>贴边隐藏展开时的窗口 Y：完整落回工作区顶部。</summary>
+    public static double ExpandedTop(double workTop) => workTop;
 }

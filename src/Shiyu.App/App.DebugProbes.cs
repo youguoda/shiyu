@@ -500,6 +500,72 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 bar-dock（用户需求 2026-10-20：贴边隐藏，鼠标进细条展开）：
+    /// 开贴边 + 钉住 → 呼出展开在光标旁 → 收回贴边（只露条）→ 模拟鼠标进窗
+    /// 展开 → 离窗收回 → 关贴边还原。判断在应用里做完，日志只有真假与数值。
+    /// </summary>
+    private async void ProbeBarDock()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var shell = _shell!;
+            shell.TryUpdateSettings(s => s with
+            {
+                BarPinned = true,
+                BarEdgeDock = true,
+                LightweightWhenHidden = false,
+            });
+            _modules.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { IsVisible: true } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            // 粘贴完成照常收回 → 贴边模式回到细条。
+            bar.Dismiss(Shiyu.Core.BarHideReason.Pasted);
+            await Task.Delay(400);
+            var strip = bar.ProbeVisibleStrip();
+            log.AppendLine(FormattableString.Invariant($"collapsed|strip={strip:F0}"));
+
+            // 模拟鼠标进窗：贴边展开。
+            bar.ProbeDockMouseEnter();
+            await Task.Delay(400);
+            var expandedTop = bar.Top;
+            log.AppendLine(FormattableString.Invariant($"expanded|top={expandedTop:F0}"));
+
+            // 离窗收回。
+            bar.ProbeDockMouseLeave();
+            await Task.Delay(400);
+            var recollapsed = !bar.ProbeDockExpanded();
+            log.AppendLine(FormattableString.Invariant($"recollapsed|ok={recollapsed}"));
+
+            // 关贴边：还原完整位置。
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
+            await Task.Delay(400);
+            log.AppendLine(FormattableString.Invariant($"restored|top={bar.Top:F0}"));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "bar-dock.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
     /// 探针命令 preview-pin 的入口（用户需求 2026-10-19：预览弹窗加钉，钉住不自动收起、
     /// 只留干净内容。验收用）：开窄条（种子数据已备），走真实悬停路径出预览 → 钉上 →
     /// 模拟收起被挡 → 取消钉收场。判断在应用里做完，日志只有真假。
@@ -1623,6 +1689,11 @@ public partial class App
             // 预览弹窗的钉（用户需求 2026-10-19）：钉住就不自动收起、只留干净内容。
             case "preview-pin":
                 ProbePreviewPin();
+                break;
+
+            // 贴边隐藏（用户需求 2026-10-20）：收到细条、鼠标进窗展开。
+            case "bar-dock":
+                ProbeBarDock();
                 break;
 
             // 文件夹的打开/定位复现（用户实录 2026-10-19）：不碰剪贴板、不真开资源管理器。

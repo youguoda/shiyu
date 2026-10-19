@@ -74,6 +74,7 @@ internal static class SettingsBindings
         "look.lightweight" => settings.LightweightWhenHidden,
         "look.source-icons" => settings.ShowSourceIcons,
         "bar.pinned" => settings.BarPinned,
+        "bar.edge-dock" => settings.BarEdgeDock,
         "record.images" => settings.RecordImages,
         "record.files" => settings.RecordFiles,
         "winv.takeover" => settings.TakeOverWinV,
@@ -105,7 +106,16 @@ internal static class SettingsBindings
         "look.content-size" => current with { ContentFontSize = (ContentFontSize)choice },
         "service.backend-kind" => current with { TranslationBackend = TranslationBackendChoices.At(choice) },
         "action.sound" => current with { ActionSound = AsBool(text) },
-        "bar.pinned" => current with { BarPinned = AsBool(text) },
+        "bar.pinned" => current with
+        {
+            BarPinned = AsBool(text),
+            BarEdgeDock = AsBool(text) && current.BarEdgeDock,
+        },
+        "bar.edge-dock" => current with
+        {
+            BarEdgeDock = AsBool(text),
+            BarPinned = AsBool(text) || current.BarPinned,
+        },
         "look.lightweight" => current with { LightweightWhenHidden = AsBool(text) },
         "look.source-icons" => current with { ShowSourceIcons = AsBool(text) },
         "record.images" => current with { RecordImages = AsBool(text) },

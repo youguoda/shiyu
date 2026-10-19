@@ -185,6 +185,12 @@ public sealed record AppSettings
     /// </summary>
     public bool BarPinned { get; init; }
 
+    /// <summary>
+    /// 贴边隐藏（用户需求 2026-10-20）：常驻钉住的窄条缩进屏幕顶缘只露细条，
+    /// 鼠标靠近顶缘展开。隐含钉住——关钉住时一并关。
+    /// </summary>
+    public bool BarEdgeDock { get; init; }
+
     /// <summary>Whether copied file lists are recorded.</summary>
     public bool RecordFiles { get; init; } = true;
 

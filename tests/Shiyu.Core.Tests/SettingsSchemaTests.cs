@@ -38,6 +38,7 @@ public class SettingsSchemaTests
             // 窄条：原“动作”页并入；密度随行。常驻钉住（用户需求 2026-10-10）
             // 接替了「光标旁呼出」与「保持在最前」。
             ["bar.pinned"] = "bar",
+            ["bar.edge-dock"] = "bar",
             ["bar.text-lines"] = "bar",
             ["bar.image-height"] = "bar",
             ["bar.file-count"] = "bar",
