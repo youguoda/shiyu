@@ -47,7 +47,7 @@ public sealed record Entry(
     public IReadOnlyList<string> Files { get; init; } = [];
 
     /// <summary>The file paths that still exist, checked lazily for display.</summary>
-    public IReadOnlyList<string> AliveFiles => Files.Where(File.Exists).ToList();
+    public IReadOnlyList<string> AliveFiles => Files.Where(FileEntries.Alive).ToList();
 
     /// <summary>
     /// The image's thumbnail PNG — see the record's param doc for what it is

@@ -8,7 +8,7 @@
 # paste path - then reads the clipboard back.
 #
 # Checks:
-#   - flow:image-paste-reproduced   the clipboard holds the label TEXT and no image - the
+#   - flow:image-paste-pastes-the-image   the clipboard holds the label TEXT and no image - the
 #                                   reported defect, reproduced
 #
 # ASCII only (see lib.ps1 header).
@@ -38,7 +38,7 @@ try {
 }
 
 if (-not (Test-Path $log)) {
-    Add-Check 'flow:image-paste-reproduced' 'FAIL' 'the command wrote no log within 60s'
+    Add-Check 'flow:image-paste-pastes-the-image' 'FAIL' 'the command wrote no log within 60s'
     return $script:Checks
 }
 
@@ -53,8 +53,8 @@ foreach ($line in Get-Content $log -Encoding UTF8) {
     }
 }
 
-$ok = $repro -and $repro['kind'] -eq 'Image' -and $repro['containsImage'] -eq 'False' -and $repro['label'] -eq 'True'
+$ok = $repro -and $repro['kind'] -eq 'Image' -and $repro['containsImage'] -eq 'True' -and $repro['label'] -eq 'False'
 $detail = if ($repro) { "kind {0}: clipboard holds image {1}, label text {2} - {3}" -f $repro['kind'], $repro['containsImage'], $repro['label'], $(if ($ok) { 'REPRODUCED' } else { 'NOT reproduced' }) } else { 'no repro line' }
-Add-Check 'flow:image-paste-reproduced' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+Add-Check 'flow:image-paste-pastes-the-image' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 return $script:Checks

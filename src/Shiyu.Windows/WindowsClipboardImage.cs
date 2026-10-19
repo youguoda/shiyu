@@ -173,6 +173,52 @@ public sealed class WindowsClipboardImage : IClipboardImage
     }
 
     /// <summary>
+    /// 把位图打包成剪贴板的 CF_DIB：BITMAPINFOHEADER（40 字节）+ 自下而上的 BGRA 像素——
+    /// 读取方向 <see cref="WrapDibWithFileHeader"/> 的逆过程。32 位 BI_RGB，头里没有调色板
+    /// 也没有掩码：贴回的接收端（本应用与绝大多数应用）都按这个最朴素的形状解。Bgra32 的
+    /// 内存序本来就是 B、G、R、A，逐行倒序拷入即成。
+    /// </summary>
+    internal static byte[] BuildDib(BitmapSource bitmap)
+    {
+        var width = bitmap.PixelWidth;
+        var height = bitmap.PixelHeight;
+        var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+        converted.Freeze();
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        converted.CopyPixels(pixels, stride, 0);
+
+        var dib = new byte[40 + pixels.Length];
+        WriteInt32(dib, 0, 40);
+        WriteInt32(dib, 4, width);
+        WriteInt32(dib, 8, height);
+        WriteInt16(dib, 12, 1);
+        WriteInt16(dib, 14, 32);
+        WriteInt32(dib, 20, pixels.Length);
+
+        for (var y = 0; y < height; y++)
+        {
+            Buffer.BlockCopy(pixels, (height - 1 - y) * stride, dib, 40 + y * stride, stride);
+        }
+
+        return dib;
+
+        static void WriteInt32(byte[] at, int position, int value)
+        {
+            at[position] = (byte)value;
+            at[position + 1] = (byte)(value >> 8);
+            at[position + 2] = (byte)(value >> 16);
+            at[position + 3] = (byte)(value >> 24);
+        }
+
+        static void WriteInt16(byte[] at, int position, short value)
+        {
+            at[position] = (byte)value;
+            at[position + 1] = (byte)(value >> 8);
+        }
+    }
+
+    /// <summary>
     /// A fingerprint of the decoded pixels, used to recognise the same copy
     /// arriving twice — which it reliably does, because applications publish
     /// a bitmap in several clipboard formats in turn and each one raises a

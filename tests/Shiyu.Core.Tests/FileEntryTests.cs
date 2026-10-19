@@ -88,4 +88,46 @@ public class FileEntryTests
         Assert.Null(FileEntries.PreviewImagePath([@"C:\a.txt"]));
         Assert.Null(FileEntries.PreviewImagePath([]));
     }
+
+    // ── 文件与目录都算「在」（用户实录 2026-10-19：文件夹的打开/定位没反应）──
+
+    [Fact]
+    public void Alive_counts_directories_as_well_as_files()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "shiyu-alive-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var file = Path.Combine(folder, "a.txt");
+            File.WriteAllText(file, "x");
+
+            Assert.True(FileEntries.Alive(folder));
+            Assert.True(FileEntries.Alive(file));
+            Assert.False(FileEntries.Alive(Path.Combine(folder, "missing.txt")));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FirstAlive_returns_the_first_survivor_and_null_when_all_are_gone()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "shiyu-alive-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var file = Path.Combine(folder, "a.txt");
+            File.WriteAllText(file, "x");
+
+            // 文件夹排在后面也按列表顺序取第一个活着的。
+            Assert.Equal(file, FileEntries.FirstAlive([@"C:\gone\z.txt", file, folder]));
+            Assert.Null(FileEntries.FirstAlive([@"C:\gone\z.txt"]));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

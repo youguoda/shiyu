@@ -69,4 +69,16 @@ public static class FileEntries
 
         return paths[0];
     }
+
+    /// <summary>
+    /// 文件与目录都算「在」：复制对象可以是文件夹，打开与定位对目录一样有效。
+    /// 裸 <c>File.Exists</c> 对目录恒为 false——文件夹的打开/定位因此一直没反应
+    /// （用户实录 2026-10-19）。
+    /// </summary>
+    public static bool Alive(string path)
+        => File.Exists(path) || Directory.Exists(path);
+
+    /// <summary>列表里第一个还「在」的路径；都不在了为 null。</summary>
+    public static string? FirstAlive(IReadOnlyList<string> paths)
+        => paths.FirstOrDefault(Alive);
 }

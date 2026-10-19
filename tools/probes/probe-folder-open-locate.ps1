@@ -4,7 +4,7 @@
 # opens the quick paste, and re-runs the exact target resolution Open and Locate use.
 #
 # Checks:
-#   - flow:folder-open-locate-reproduced   the resolution yields no target for a directory
+#   - flow:folder-open-locate-resolves   the resolution yields no target for a directory
 #                                          (File.Exists is false for folders), while the
 #                                          directory itself is alive
 #
@@ -31,7 +31,7 @@ try {
 }
 
 if (-not (Test-Path $log)) {
-    Add-Check 'flow:folder-open-locate-reproduced' 'FAIL' 'the command wrote no log within 60s'
+    Add-Check 'flow:folder-open-locate-resolves' 'FAIL' 'the command wrote no log within 60s'
     return $script:Checks
 }
 
@@ -46,8 +46,8 @@ foreach ($line in Get-Content $log -Encoding UTF8) {
     }
 }
 
-$ok = $repro -and $repro['kind'] -eq 'Files' -and $repro['resolved'] -eq 'False' -and $repro['directoryAlive'] -eq 'True'
+$ok = $repro -and $repro['kind'] -eq 'Files' -and $repro['resolved'] -eq 'True' -and $repro['directoryAlive'] -eq 'True'
 $detail = if ($repro) { "kind {0}: open/locate resolve to nothing {1}, while the directory is alive {2} - {3}" -f $repro['kind'], $repro['resolved'], $repro['directoryAlive'], $(if ($ok) { 'REPRODUCED' } else { 'NOT reproduced' }) } else { 'no repro line' }
-Add-Check 'flow:folder-open-locate-reproduced' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+Add-Check 'flow:folder-open-locate-resolves' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 return $script:Checks

@@ -812,11 +812,35 @@ internal partial class BarWindow
     /// payload table on the spot — a listed card does not carry them (O-22).
     /// </summary>
     private bool CopyCard(BarCard card)
-        => card.Files.Count > 0
+    {
+        // 图片复制图片本身（原图字节，PNG + DIB 双格式）；原图没了返回 false，
+        // 由调用方说一声——占位标签「图片 宽×高」贴出去没有任何用处。
+        if (card.Kind == EntryKind.Image)
+        {
+            var path = _store.Get(card.Id)?.OriginalPath;
+            if (path is not { Length: > 0 } || !File.Exists(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return _clipboard.SetImage(File.ReadAllBytes(path));
+            }
+            catch (Exception failure)
+            {
+                // expected: 原图读不出（被占用/损坏）——照失败办，不留假成功。
+                Log.Event(LogEvent.OpenLinkFailed, failure, ("copy-image", 1));
+                return false;
+            }
+        }
+
+        return card.Files.Count > 0
             ? _clipboard.SetFiles(card.Files)
             : _store.Get(card.Id) is { } full && (full.Html is { Length: > 0 } || full.Rtf is { Length: > 0 })
                 ? _clipboard.SetRich(card.Text, full.Html, full.Rtf)
                 : _clipboard.SetText(card.Text);
+    }
 
     /// <summary>
     /// Pastes into the window the user was in before summoning the bar. The
@@ -892,6 +916,36 @@ internal partial class BarWindow
                 _capture.PasteCurrentClipboard();
             }
         }
+        else if (card.Kind == EntryKind.Image && card.HasOriginal)
+        {
+            // 图片贴图片本身（用户实录 2026-10-19：按 Enter 贴出去的是「图片 宽×高」标签）：
+            // 原图字节上剪贴板（PNG + DIB 双格式），Ctrl+V 进目标窗口。
+            SelfWrite(() => _store.BumpUse(card.Id));
+            var imagePath = _store.Get(card.Id)?.OriginalPath;
+            try
+            {
+                if (imagePath is { Length: > 0 } && _clipboard.SetImage(File.ReadAllBytes(imagePath)))
+                {
+                    _capture.PasteCurrentClipboard();
+                    return;
+                }
+            }
+            catch (Exception failure)
+            {
+                // expected: 原图读不出（被占用/损坏）——落进下面的说明，不贴标签。
+                Log.Event(LogEvent.OpenLinkFailed, failure, ("paste-image", 1));
+            }
+
+            var notice = "这张图片的原图已被清理或无法读取，无法粘贴。";
+            if (_settings.BarPinned)
+            {
+                ShowFeedback(notice);
+            }
+            else
+            {
+                DeadDragNotice?.Invoke(notice);
+            }
+        }
         else if (_store.Get(card.Id) is { } full
             && (full.Html is { Length: > 0 } || full.Rtf is { Length: > 0 }))
         {
@@ -910,11 +964,13 @@ internal partial class BarWindow
 
     private void OpenOriginal(BarCard card)
     {
-        var target = card.Files.FirstOrDefault(File.Exists)
-            ?? (card.OriginalPath is { Length: > 0 } path && File.Exists(path) ? path : null);
+        var target = FileEntries.FirstAlive(card.Files)
+            ?? (card.OriginalPath is { Length: > 0 } path && FileEntries.Alive(path) ? path : null);
 
         if (target is null)
         {
+            // 解析不到目标（原对象已被移动或删除）也不再一声不吭：点了就要有下文。
+            DeadDragNotice?.Invoke("原文件可能已被移动或删除。");
             return;
         }
 
@@ -937,11 +993,13 @@ internal partial class BarWindow
 
     private void LocateOriginal(BarCard card)
     {
-        var target = card.Files.FirstOrDefault(File.Exists)
-            ?? (card.OriginalPath is { Length: > 0 } path && File.Exists(path) ? path : null);
+        var target = FileEntries.FirstAlive(card.Files)
+            ?? (card.OriginalPath is { Length: > 0 } path && FileEntries.Alive(path) ? path : null);
 
         if (target is null)
         {
+            // 解析不到目标（原对象已被移动或删除）也不再一声不吭：点了就要有下文。
+            DeadDragNotice?.Invoke("原文件可能已被移动或删除。");
             return;
         }
 

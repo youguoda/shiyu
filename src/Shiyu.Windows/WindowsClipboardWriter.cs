@@ -30,6 +30,11 @@ public sealed class WindowsClipboardWriter(MessageWindow window)
     private static readonly uint CloudFormat =
         NativeMethods.RegisterClipboardFormatW("CanUploadToCloudClipboard");
 
+    private static readonly uint PngFormat =
+        NativeMethods.RegisterClipboardFormatW("PNG");
+
+    private const uint CfDib = 8;
+
     /// <summary>
     /// Returns whether the text made it onto the clipboard. Failure here is
     /// ordinary contention — another process holding the clipboard — and the
@@ -208,6 +213,80 @@ public sealed class WindowsClipboardWriter(MessageWindow window)
                 // Ownership rules as for text: a failure to place is tolerated
                 // rather than throwing, because the plain fallback carries the
                 // paste on its own.
+                NativeMethods.SetClipboardData(format, handle);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes an image back as both the "PNG" registered format and CF_DIB:
+    /// modern targets (browsers, chat apps) read the PNG, everything else the
+    /// DIB. The bytes are decoded and packed before the clipboard is opened —
+    /// the expensive half never runs under the open.
+    /// </summary>
+    public bool SetImage(byte[] png)
+    {
+        byte[] dib;
+        try
+        {
+            using var stream = new System.IO.MemoryStream(png);
+            var decoded = System.Windows.Media.Imaging.BitmapFrame.Create(
+                stream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            dib = WindowsClipboardImage.BuildDib(decoded);
+        }
+        catch (Exception failure)
+        {
+            // expected: 字节解不出一张图——调用方按失败说一声。
+            Shiyu.Core.Log.Event(Shiyu.Core.LogEvent.OpenLinkFailed, failure, ("clipboard", 3));
+            return false;
+        }
+
+        for (var attempt = 0; attempt < OpenAttempts; attempt++)
+        {
+            if (!NativeMethods.OpenClipboard(window.Handle))
+            {
+                Thread.Sleep(RetryDelay);
+                continue;
+            }
+
+            try
+            {
+                if (!NativeMethods.EmptyClipboard())
+                {
+                    return false;
+                }
+
+                var placed = false;
+
+                // PNG first (exact bytes, alpha intact), DIB as the universal
+                // fallback — the same pair applications publish when a user
+                // copies an image, and the same order the reader takes them.
+                Place(PngFormat, png);
+                Place(CfDib, dib);
+                if (NativeMethods.GetClipboardData(PngFormat) != IntPtr.Zero)
+                {
+                    placed = true;
+                }
+
+                return placed;
+            }
+            finally
+            {
+                NativeMethods.CloseClipboard();
+            }
+        }
+
+        return false;
+
+        void Place(uint format, byte[] bytes)
+        {
+            var handle = AllocateBytes(bytes);
+            if (handle != IntPtr.Zero)
+            {
+                // Ownership rules as for text: a failure to place is tolerated
+                // — the other format carries the paste on its own.
                 NativeMethods.SetClipboardData(format, handle);
             }
         }

@@ -429,7 +429,8 @@ internal partial class BarWindow
             return "repro|card=False\n";
         }
 
-        var resolved = card.Files.FirstOrDefault(File.Exists);
+        var resolved = Shiyu.Core.FileEntries.FirstAlive(card.Files)
+            ?? (card.OriginalPath is { Length: > 0 } path && Shiyu.Core.FileEntries.Alive(path) ? path : null);
         var directoryAlive = card.Files.Any(System.IO.Directory.Exists);
         return FormattableString.Invariant(
             $"repro|kind={card.Kind}|resolved={resolved is not null}|directoryAlive={directoryAlive}|paths={string.Join(",", card.Files)}");
