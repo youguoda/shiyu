@@ -147,6 +147,12 @@ internal partial class PreviewWindow : Window
             Opacity = 1;
         }
 
+        // 钉着的预览独占：别的卡片不再夺走它（取消钉后才恢复悬停规则）。
+        if (Pinned && !ReferenceEquals(card, _shown))
+        {
+            return;
+        }
+
         var (width, height) = Measure(card, scaleX);
         Width = width;
         Height = height;
@@ -261,13 +267,23 @@ internal partial class PreviewWindow : Window
     /// <summary>A fade-out is running; <see cref="ShowFor"/> calling the panel back cancels it.</summary>
     private bool _takingDown;
 
-    /// <summary>Removes the panel. The fade starts from a painted surface, so it composites.</summary>
-    public void TakeDown()
+    /// <summary>Removes the panel. The fade starts from a painted surface, so it composites.
+    /// 钉住（用户需求 2026-10-19）挡住一切自动收起；结构性的收起（宿主关闭、钉着的卡片被删）
+    /// 带 force 照常执行——预览不能比宿主活得久，也不能钉着一张已删条目当幽灵。</summary>
+    public void TakeDown(bool force = false)
     {
         if (!IsVisible)
         {
             return;
         }
+
+        if (Pinned && !force)
+        {
+            // 钉着：任何自动收起都无效。
+            return;
+        }
+
+        Pinned = false;
 
         _takingDown = true;
         var fade = Motion.Fade(0);
@@ -286,6 +302,60 @@ internal partial class PreviewWindow : Window
         };
         BeginAnimation(OpacityProperty, fade);
     }
+
+    // --- 钉住（用户需求 2026-10-19）：钉着就不随悬停收起，一直在屏幕最上 ---------
+
+    /// <summary>钉着时不走任何收起，也不被其他卡片夺走；只显示预览正文（元信息行与教学行收起）。</summary>
+    private bool Pinned { get; set; }
+
+    private void OnPinToggle(object sender, RoutedEventArgs e)
+    {
+        if (Pinned)
+        {
+            Unpin();
+        }
+        else
+        {
+            Pin();
+        }
+    }
+
+    private void Pin()
+    {
+        Pinned = true;
+        UpdatePinVisual();
+    }
+
+    /// <summary>取消钉：预览的使命到此为止——立即收起，悬停规则恢复。</summary>
+    private void Unpin()
+    {
+        Pinned = false;
+        UpdatePinVisual();
+        TakeDown(force: true);
+    }
+
+    private void UpdatePinVisual()
+    {
+        PinGlyphFull.Visibility = Pinned ? Visibility.Visible : Visibility.Collapsed;
+        PinGlyphEmpty.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
+        var state = Pinned ? "已钉住：保持显示 · 点一下取消" : "钉住，保持显示";
+        PinButton.ToolTip = state;
+        System.Windows.Automation.AutomationProperties.SetName(PinButton, state);
+
+        // 干净模式：钉着只留预览正文，元信息行与教学行都收。
+        WhenText.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
+        KindText.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
+        TeachHost.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    internal void ProbeClickPin() =>
+        PinButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    internal bool ProbePinned => Pinned;
+
+    internal bool ProbeMetaVisible => WhenText.IsVisible || KindText.IsVisible;
+
+    internal bool ProbeTeachVisible => TeachHost.IsVisible;
 
     private void OnMouseEnter(object sender, MouseEventArgs e) => PointerRestingOnPanel?.Invoke();
 
@@ -417,7 +487,8 @@ internal partial class PreviewWindow : Window
         // 教学行（2026-10-05 迁入，同日改为键帽 + 短动作）：气泡退役后的唯一
         // 教学位，由 bar.card-tooltips 决定显隐——设置关掉就是一点提示都不剩。
         TeachRow.ItemsSource = card.Teaching;
-        TeachHost.Visibility = ShowsTeaching(card) ? Visibility.Visible : Visibility.Collapsed;
+        // 钉着只留正文：教学行不回来（同卡刷新路径会重算这行）。
+        TeachHost.Visibility = ShowsTeaching(card) && !Pinned ? Visibility.Visible : Visibility.Collapsed;
 
         if (card.Kind == EntryKind.Image)
         {

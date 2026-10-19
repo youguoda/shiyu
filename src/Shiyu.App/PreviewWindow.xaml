@@ -44,6 +44,20 @@
             </Grid.RowDefinitions>
 
             <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                <!-- 钉住（用户需求 2026-10-19）：钉着就不随悬停收起，一直在屏幕最上；
+                     元信息与教学行随之收起，只留干净的预览正文。 -->
+                <Button x:Name="PinButton" Style="{DynamicResource IconButton}"
+                        Height="{DynamicResource Control.Height}" Padding="4,0" Margin="0,0,4,0"
+                        Focusable="False" Cursor="Hand" Click="OnPinToggle"
+                        AutomationProperties.Name="钉住，保持显示">
+                    <Grid>
+                        <TextBlock x:Name="PinGlyphEmpty" Text="&#xE718;" FontFamily="{DynamicResource Font.Icon}"
+                                   FontSize="{DynamicResource Size.IconS}"/>
+                        <TextBlock x:Name="PinGlyphFull" Text="&#xE77A;" FontFamily="{DynamicResource Font.Icon}"
+                                   FontSize="{DynamicResource Size.IconS}" Visibility="Collapsed"
+                                   Foreground="{DynamicResource Brush.Accent}"/>
+                    </Grid>
+                </Button>
                 <TextBlock x:Name="WhenText" DockPanel.Dock="Right"
                            FontSize="{DynamicResource Type.Caption}"
                            Foreground="{DynamicResource Brush.TextTertiary}"

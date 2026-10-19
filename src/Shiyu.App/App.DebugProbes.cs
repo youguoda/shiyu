@@ -500,6 +500,38 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 preview-pin 的入口（用户需求 2026-10-19：预览弹窗加钉，钉住不自动收起、
+    /// 只留干净内容。验收用）：开窄条（种子数据已备），走真实悬停路径出预览 → 钉上 →
+    /// 模拟收起被挡 → 取消钉收场。判断在应用里做完，日志只有真假。
+    /// </summary>
+    private async void ProbePreviewPin()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _modules!.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbePreviewPin());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-pin.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
     /// 探针命令 folder-open-locate 的入口（用户实录 2026-10-19：复制的是文件夹时，「打开」与
     /// 「定位」没有反应。复现用）：造一条指向临时**文件夹**的文件条目，开窄条，按打开/定位的解析
     /// 原样走一遍。不真开资源管理器、不碰剪贴板。
@@ -1586,6 +1618,11 @@ public partial class App
             // 面板与反向框的钉（用户需求 2026-10-19）：钉住就不自动收起。
             case "overlay-pin":
                 ProbeOverlayPin();
+                break;
+
+            // 预览弹窗的钉（用户需求 2026-10-19）：钉住就不自动收起、只留干净内容。
+            case "preview-pin":
+                ProbePreviewPin();
                 break;
 
             // 文件夹的打开/定位复现（用户实录 2026-10-19）：不碰剪贴板、不真开资源管理器。

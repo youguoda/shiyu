@@ -435,5 +435,51 @@ internal partial class BarWindow
         return FormattableString.Invariant(
             $"repro|kind={card.Kind}|resolved={resolved is not null}|directoryAlive={directoryAlive}|paths={string.Join(",", card.Files)}");
     }
+
+    /// <summary>
+    /// 探针命令 preview-pin 的管理窗一段（用户需求 2026-10-19：预览弹窗加钉，钉住不自动收起、
+    /// 只留干净内容。验收用）：挑第一条卡片走真实悬停路径出预览 → 钉上 → 核对干净模式
+    /// （元信息与教学行收起）→ 模拟策略收起被钉挡下 → 取消钉 → 收起。
+    /// 判断在应用里做完，日志只有真假。
+    /// </summary>
+    internal async Task<string> ProbePreviewPin()
+    {
+        var log = new StringBuilder();
+        var card = _cards.FirstOrDefault();
+        if (card is null)
+        {
+            return "preview|card=False\n";
+        }
+
+        EnsurePreview().ShowFor(card, PlacementAnchor(AnchorFor(card) ?? WindowRect()), slide: false,
+            scaleX: 1, scaleY: 1, band: ZBandPolicy.FollowsHost(Topmost));
+        await Task.Delay(600);
+
+        if (_preview is not { IsVisible: true } preview)
+        {
+            return "preview|notVisible\n";
+        }
+
+        var metaBefore = preview.ProbeMetaVisible;
+        preview.ProbeClickPin();
+        await Task.Delay(200);
+        var pinned = preview.ProbePinned && preview.IsVisible;
+        var clean = !preview.ProbeMetaVisible && !preview.ProbeTeachVisible;
+
+        // 钉着：模拟策略收起（无 force 的 TakeDown 路径）——应被挡下。
+        preview.TakeDown();
+        await Task.Delay(300);
+        var surviveTakeDown = preview.IsVisible;
+
+        preview.ProbeClickPin();   // 取消钉 → 立即收起。
+        await Task.Delay(400);
+        var closedAfterUnpin = !preview.IsVisible;
+
+        var previewLine =
+            $"preview|metaBefore={metaBefore}|pinned={pinned}|clean={clean}"
+            + $"|surviveTakeDown={surviveTakeDown}|closedAfterUnpin={closedAfterUnpin}";
+        log.AppendLine(previewLine);
+        return log.ToString();
+    }
 }
 #endif

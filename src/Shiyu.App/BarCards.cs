@@ -761,6 +761,8 @@ internal partial class BarWindow
         // ghost; it comes down before the row does.
         if (_preview is { IsVisible: true, CardId: var shown } && shown == card.Id)
         {
+            // 卡片正在被删：钉着的预览也强制收起——钉着一张已删条目的预览是幽灵。
+            _preview.TakeDown(force: true);
             RunPreviewCommand(_previewPolicy.Escape());
         }
 

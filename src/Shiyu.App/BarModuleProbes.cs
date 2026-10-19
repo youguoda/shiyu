@@ -237,5 +237,8 @@ internal sealed partial class BarModule
         log.AppendLine("done");
         File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "summon-timing.log"), log.ToString());
     }
+    /// <summary>探针命令 preview-pin 的窄条一段（见 BarWindow.ProbePreviewPin）。</summary>
+    internal async Task<string> ProbePreviewPin()
+        => _bar is null ? "preview|bar-missing\n" : await _bar.ProbePreviewPin();
 }
 #endif
