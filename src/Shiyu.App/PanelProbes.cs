@@ -18,6 +18,14 @@ public partial class PanelWindow
     /// 探针命令 translation-log 的面板一段（用户需求 2026-10-09：翻译框能拖）：文字与语言名是
     /// 拖动的把手；按钮、模板列表各管自己的按下。
     /// </summary>
+    /// <summary>探针：点一下钉、读钉状态、模拟 Esc 一击（用户需求 2026-10-19 的验收）。</summary>
+    internal void ProbeClickPin() =>
+        PinButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    internal bool ProbePinned => Pinned;
+
+    internal void ProbeEscape() => OnEscape();
+
     internal string ProbeGrips()
         => FormattableString.Invariant(
             $"panelGrip|original={DragGrip.IsGrip(OriginalText, Shell, TemplateList)}|label={DragGrip.IsGrip(SourceLabel, Shell, TemplateList)}|copy={DragGrip.IsGrip(CopyButton, Shell, TemplateList)}|close={DragGrip.IsGrip(CloseButton, Shell, TemplateList)}|list={DragGrip.IsGrip(TemplateList, Shell, TemplateList)}")

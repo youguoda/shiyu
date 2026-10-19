@@ -413,6 +413,195 @@ public partial class App
     }
 
     /// <summary>
+    /// 探针命令 overlay-pin（用户需求 2026-10-19：反向输入框与翻译面板加钉，钉住就不自动收起）：
+    /// 面板与反向框各走一遍——钉上，焦点被别处夺走 / 按 Esc，核对每一步之后的可见性。
+    /// 判断在应用里做完，日志只有真假。
+    /// </summary>
+    private async void ProbeOverlayPin()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        var elsewhere = new Window
+        {
+            Width = 120,
+            Height = 80,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.ToolWindow,
+        };
+        try
+        {
+            // 面板：假后端出一句译文 → 钉上 → Esc 第一击（取消钉，面板留下）→ 第二击（关）。
+            _modules!.Translation.ShowPanel("probe overlay pin");
+            for (var waited = 0; waited < 50 && Windows.OfType<PanelWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<PanelWindow>().FirstOrDefault() is { } panel)
+            {
+                await Task.Delay(600);
+                var pinnedVisible = panel.IsVisible;
+                panel.ProbeClickPin();
+                await Task.Delay(200);
+                panel.ProbeEscape();
+                await Task.Delay(200);
+                var surviveEsc1 = panel.IsVisible;
+                panel.ProbeEscape();
+                await Task.Delay(300);
+                log.AppendLine(FormattableString.Invariant(
+                    $"panel|pinnedVisible={pinnedVisible}|surviveEsc1={surviveEsc1}|closedAfterEsc2={!panel.IsVisible}"));
+            }
+            else
+            {
+                log.AppendLine("panel|missing");
+            }
+
+            // 反向框：呼出（夺走焦点的是它自己）→ 钉上 → 让别处的窗口抢走焦点 → 仍在。
+            elsewhere.Show();
+            elsewhere.Activate();
+            await Task.Delay(300);
+            _shell!.ShowReverseInput?.Invoke();
+            for (var waited = 0; waited < 50 && Windows.OfType<ReverseInputWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<ReverseInputWindow>().FirstOrDefault() is { } reverse)
+            {
+                await Task.Delay(400);
+                reverse.ProbeClickPin();
+                await Task.Delay(200);
+                elsewhere.Activate();
+                await Task.Delay(500);
+                var surviveFocusLoss = reverse.IsVisible;
+                reverse.ProbeEscapeKey();
+                await Task.Delay(200);
+                var surviveEsc1 = reverse.IsVisible;
+                reverse.ProbeEscapeKey();
+                await Task.Delay(300);
+                log.AppendLine(FormattableString.Invariant(
+                    $"reverse|surviveFocusLoss={surviveFocusLoss}|surviveEsc1={surviveEsc1}|closedAfterEsc2={!reverse.IsVisible}"));
+            }
+            else
+            {
+                log.AppendLine("reverse|missing");
+            }
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "overlay-pin.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
+    /// 探针命令 folder-open-locate 的入口（用户实录 2026-10-19：复制的是文件夹时，「打开」与
+    /// 「定位」没有反应。复现用）：造一条指向临时**文件夹**的文件条目，开窄条，按打开/定位的解析
+    /// 原样走一遍。不真开资源管理器、不碰剪贴板。
+    /// </summary>
+    private async void ProbeFolderOpenLocate()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var shell = _shell!;
+            var folder = System.IO.Path.Combine(directory, "probe-folder", "nested");
+            System.IO.Directory.CreateDirectory(folder);
+            var entry = shell.Store.AppendFiles([folder], "probe", DateTimeOffset.UtcNow);
+
+            _modules!.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsLoaded); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(800);
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            log.Append(bar.ProbeFolderOpenLocate(entry.Id));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "folder-open-locate.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
+    /// 探针命令 image-paste 的入口（用户实录 2026-10-19：窄条图片卡按 Enter，贴出的是
+    /// 「图片 宽×高」标签。复现用；会动真剪贴板，脚本不进 run-all）：先在探测库里造一条真图片
+    /// （缩略图 + 原图 + 尺寸），再开窄条、选中它、走 PasteEntry，读回剪贴板核对。
+    /// </summary>
+    private async void ProbeImagePaste()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var shell = _shell!;
+            var now = DateTimeOffset.UtcNow;
+
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(0, 0, 800, 500));
+                context.DrawRectangle(System.Windows.Media.Brushes.SteelBlue, null, new System.Windows.Rect(40, 40, 720, 420));
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(800, 500, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var pngStream = new MemoryStream();
+            encoder.Save(pngStream);
+            var png = pngStream.ToArray();
+
+            var path = shell.Images.Save(png, now);
+            var entry = shell.Store.AppendImage($"图片 {800}×{500}", png, path, "probe", now, 800, 500);
+
+            _modules!.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsLoaded); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(800);
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            log.Append(await bar.ProbeImagePaste(entry.Id, $"图片 {800}×{500}"));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "image-paste.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
     /// 探针命令 degraded-shell（评审 F-13 的 Win10 降级外观；用户在 Win10 虚拟机实录 2026-10-17：
     /// 三扇壳窗透出桌面）：在 Win11 上强制走 <see cref="Backdrop.DegradeShell"/>（不透明底 + 自绘描边
     /// + 阴影），渲一张窄条 PNG 给人眼核对。产品在 Win10 上走的就是这条路——DWM 拒收材质即触发。
@@ -1392,6 +1581,21 @@ public partial class App
             // 离线词典的卡（评审 2026-10-16 F-08）。配 SHIYU_FAKE_BACKEND=1 与 SHIYU_LOCAL_DICTIONARY=1。
             case "panel-dictionary":
                 _modules!.Translation.ProbeDictionaryCard();
+                break;
+
+            // 面板与反向框的钉（用户需求 2026-10-19）：钉住就不自动收起。
+            case "overlay-pin":
+                ProbeOverlayPin();
+                break;
+
+            // 文件夹的打开/定位复现（用户实录 2026-10-19）：不碰剪贴板、不真开资源管理器。
+            case "folder-open-locate":
+                ProbeFolderOpenLocate();
+                break;
+
+            // 图片卡按 Enter 的复现（用户实录 2026-10-19）：会动真剪贴板，脚本不进 run-all。
+            case "image-paste":
+                ProbeImagePaste();
                 break;
 
             // Win10 降级外观（评审 F-13；用户实录 2026-10-17）：强制走 DegradeShell 渲 PNG。

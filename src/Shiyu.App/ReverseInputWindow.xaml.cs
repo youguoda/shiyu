@@ -267,7 +267,7 @@ internal partial class ReverseInputWindow : Window
     /// </summary>
     private void OnLostFocus(object? sender, EventArgs e)
     {
-        if (!IsVisible || _templateList is { IsOpen: true } || !_session.ShouldHideOnFocusLoss())
+        if (!IsVisible || Pinned || _templateList is { IsOpen: true } || !_session.ShouldHideOnFocusLoss())
         {
             return;
         }
@@ -294,8 +294,67 @@ internal partial class ReverseInputWindow : Window
         _tick.Stop();
         CancelInFlight();
         CloseTemplateList();
+        Pinned = false;
+        UpdatePinVisual();
         Hide();
     }
+
+    // --- 钉住（用户需求 2026-10-19）：钉着就不自动收起（失焦、贴完），一直在屏幕上 ---------
+
+    /// <summary>钉着时不走任何自动收起；Esc 第一击先取消钉，第二击才收窗。</summary>
+    private bool Pinned { get; set; }
+
+    private void OnPinToggle(object sender, RoutedEventArgs e)
+    {
+        if (Pinned)
+        {
+            Unpin();
+        }
+        else
+        {
+            Pin();
+        }
+    }
+
+    private void Pin()
+    {
+        Pinned = true;
+        UpdatePinVisual();
+    }
+
+    private void Unpin()
+    {
+        Pinned = false;
+        UpdatePinVisual();
+    }
+
+    /// <summary>钉着时不被 Esc 直接关掉：第一击取消钉，第二击才收窗。</summary>
+    private void OnEscapeKey()
+    {
+        if (Pinned)
+        {
+            Unpin();
+            return;
+        }
+
+        CancelAndClose();
+    }
+
+    private void UpdatePinVisual()
+    {
+        PinGlyphFull.Visibility = Pinned ? Visibility.Visible : Visibility.Collapsed;
+        PinGlyphEmpty.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
+        var state = Pinned ? "已钉住：保持显示 · 点一下取消" : "钉住，保持显示";
+        PinButton.ToolTip = state;
+        System.Windows.Automation.AutomationProperties.SetName(PinButton, state);
+    }
+
+    internal void ProbeClickPin() =>
+        PinButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    internal bool ProbePinned => Pinned;
+
+    internal void ProbeEscapeKey() => OnEscapeKey();
 
     /// <summary>Esc：取消在途请求并关闭，不贴回；回到原来的窗口（与窄条的 Esc 同）。</summary>
     private void CancelAndClose()
@@ -342,7 +401,7 @@ internal partial class ReverseInputWindow : Window
 
             case Key.Escape:
                 e.Handled = true;
-                CancelAndClose();
+                OnEscapeKey();
                 break;
 
             case Key.Tab when (modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == 0:
@@ -519,7 +578,11 @@ internal partial class ReverseInputWindow : Window
         // 贴回的是框里看到的样子（评审 2026-10-16 F-02：原文的 `**`、`#` 贴进微信就原样留在聊天框里，
         // 已知问题挂了四个版本）。留在剪贴板上、存进历史的也是这一份——用户粘贴出来的就是它。
         text = MarkdownText.PasteText(text);
-        HideNow();
+        if (!Pinned)
+        {
+            // 钉着就不收：文字留在框里，改几个词还能再贴一次。
+            HideNow();
+        }
 
         // 上一次的还原还没轮到（400ms 内又贴了一次）：先结清，让这次的快照是用户真正的剪贴板，
         // 而不是上一次的译文。

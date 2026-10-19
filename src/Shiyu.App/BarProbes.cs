@@ -371,5 +371,68 @@ internal partial class BarWindow
 
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendMessageW")]
     private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>
+    /// 探针命令 image-paste 的管理窗一段（用户实录 2026-10-19：窄条里图片卡按 Enter，贴出去的是
+    /// 「图片 宽×高」标签而不是图片。复现用；会动真剪贴板，不进 run-all）：选中这条图片卡、
+    /// 走 PasteEntry，读回剪贴板——文本标签在、图片不在，即复现。判断在应用里做完，日志只有真假与标签。
+    /// </summary>
+    internal async Task<string> ProbeImagePaste(long entryId, string expectedLabel)
+    {
+        var log = new StringBuilder();
+        var card = _cards.FirstOrDefault(item => item.Id == entryId);
+        if (card is null)
+        {
+            ReloadData();
+            await Task.Delay(400);
+            card = _cards.FirstOrDefault(item => item.Id == entryId);
+        }
+
+        if (card is null)
+        {
+            return "repro|card=False\n";
+        }
+
+        PasteEntry(card);
+        await Task.Delay(800);
+
+        var hasImage = System.Windows.Clipboard.ContainsImage();
+        var text = System.Windows.Clipboard.GetText();
+        var line =
+            $"repro|kind={card.Kind}|containsImage={hasImage}"
+            + $"|label={Flat(text) == Flat(expectedLabel)}"
+            + $"|text={Flat(text)}";
+        log.AppendLine(line);
+        return log.ToString();
+
+        static string Flat(string value)
+            => string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
+    /// 探针命令 folder-open-locate 的管理窗一段（用户实录 2026-10-19：复制的是文件夹时，「打开」与
+    /// 「定位」没有反应。复现用）：按 OpenOriginal/LocateOriginal 的解析原样走一遍——
+    /// <c>card.Files.FirstOrDefault(File.Exists)</c>。文件夹对 File.Exists 恒为 false，解析为 null →
+    /// 静默 return，即复现。不真开资源管理器、不碰剪贴板。
+    /// </summary>
+    internal string ProbeFolderOpenLocate(long entryId)
+    {
+        var card = _cards.FirstOrDefault(item => item.Id == entryId);
+        if (card is null)
+        {
+            ReloadData();
+            card = _cards.FirstOrDefault(item => item.Id == entryId);
+        }
+
+        if (card is null)
+        {
+            return "repro|card=False\n";
+        }
+
+        var resolved = card.Files.FirstOrDefault(File.Exists);
+        var directoryAlive = card.Files.Any(System.IO.Directory.Exists);
+        return FormattableString.Invariant(
+            $"repro|kind={card.Kind}|resolved={resolved is not null}|directoryAlive={directoryAlive}|paths={string.Join(",", card.Files)}");
+    }
 }
 #endif

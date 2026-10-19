@@ -967,12 +967,18 @@ public partial class PanelWindow : Window
         TemplateList.Content = null;
     }
 
-    /// <summary>Esc：先收模板列表；没开着才关面板（列表是一层，同反向输入框）。</summary>
+    /// <summary>Esc：先收模板列表；钉着先取消钉（面板留下，恢复自动收起）；都没了才关面板（列表是一层，同反向输入框）。</summary>
     private void OnEscape()
     {
         if (TemplateList.IsVisible)
         {
             CloseTemplateList();
+            return;
+        }
+
+        if (Pinned)
+        {
+            Unpin();
             return;
         }
 
@@ -1455,6 +1461,9 @@ public partial class PanelWindow : Window
 
     private void Dismiss()
     {
+        // 钉只挡自动收起；走到这里就是用户点了明确的去处（×、Esc 第二击、去设置）。关即取消钉。
+        Pinned = false;
+        UpdatePinVisual();
         _inFlight?.Cancel();
         ReleaseEscape();
         CloseTemplateList();
@@ -1470,6 +1479,44 @@ public partial class PanelWindow : Window
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Dismiss();
+
+    // --- 钉住（用户需求 2026-10-19）：钉着就不自动收起，一直在屏幕上 -----------------
+
+    /// <summary>钉着时不走任何自动收起；Esc 第一击先取消钉，第二击才关（同反向输入框）。</summary>
+    private bool Pinned { get; set; }
+
+    private void OnPinToggle(object sender, RoutedEventArgs e)
+    {
+        if (Pinned)
+        {
+            Unpin();
+        }
+        else
+        {
+            Pin();
+        }
+    }
+
+    private void Pin()
+    {
+        Pinned = true;
+        UpdatePinVisual();
+    }
+
+    private void Unpin()
+    {
+        Pinned = false;
+        UpdatePinVisual();
+    }
+
+    private void UpdatePinVisual()
+    {
+        PinGlyphFull.Visibility = Pinned ? Visibility.Visible : Visibility.Collapsed;
+        PinGlyphEmpty.Visibility = Pinned ? Visibility.Collapsed : Visibility.Visible;
+        var state = Pinned ? "已钉住：面板保持显示 · 点一下取消" : "钉住，面板保持显示";
+        PinButton.ToolTip = state;
+        System.Windows.Automation.AutomationProperties.SetName(PinButton, state);
+    }
 
     private async void OnSwapDirection(object sender, RoutedEventArgs e)
     {
