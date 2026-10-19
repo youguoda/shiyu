@@ -252,3 +252,211 @@ public class UpdateOrchestratorTests
         }
     }
 }
+
+/// <summary>
+/// 多源下载与续传（用户反馈 2026-10-19：GitHub 直连慢、时坏）：直连打头、镜像垫后；
+/// 一个源断流换下一个，半成品字节可跨源续传。自带的假源按「直连半途断流、镜像全量
+/// 200」与「认 Range 的续传源」两种姿势演。
+/// </summary>
+public class UpdateDownloadSourceTests
+{
+    private const string AssetUrl = "https://example.invalid/shiyu-win-x64.zip";
+    private static readonly string MirrorUrl =
+        UpdateOrchestrator.DownloadMirrorPrefixes[0] + AssetUrl;
+
+    private static readonly UpdateChannel Channel = new("example", "shiyu", "shiyu-win-x64.zip");
+
+    private static (byte[] Package, byte[] Signature, string PublicKeyPem, string Checksum) SignedPackage()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("Shiyu.App.exe");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("new exe");
+        }
+
+        var package = stream.ToArray();
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var signature = key.SignData(package, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
+        var checksum = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant() + "  shiyu-win-x64.zip";
+        return (package, signature, key.ExportSubjectPublicKeyInfoPem(), checksum);
+    }
+
+    [Fact]
+    public void Candidates_put_the_direct_url_first_then_the_mirrors_in_order()
+    {
+        var candidates = UpdateOrchestrator.CandidateUrls(AssetUrl);
+
+        Assert.Equal(1 + UpdateOrchestrator.DownloadMirrorPrefixes.Length, candidates.Count);
+        Assert.Equal(AssetUrl, candidates[0]);
+        Assert.Equal(
+            UpdateOrchestrator.DownloadMirrorPrefixes.Select(prefix => prefix + AssetUrl),
+            candidates.Skip(1));
+    }
+
+    [Fact]
+    public async Task A_direct_source_breaking_mid_body_fails_over_to_the_mirror()
+    {
+        var (package, signature, pem, checksum) = SignedPackage();
+        var files = new Dictionary<string, object>
+        {
+            // 直连：报了全长却只给一半（断流）；镜像：全量。
+            ["/shiyu-win-x64.zip"] = package.Take(package.Length / 2).ToArray(),
+            ["/https://example.invalid/shiyu-win-x64.zip"] = package,
+            ["/https://example.invalid/shiyu-win-x64.zip.sig"] = signature,
+            ["/https://example.invalid/shiyu-win-x64.zip.sha256"] = checksum,
+        };
+
+        using var area = new TempDirectory();
+        var orchestrator = new UpdateOrchestrator(
+            new HttpClient(new ByPathServer(files)), area.Path, Channel, pem);
+
+        var (ok, error) = await orchestrator.DownloadAsync(Release(package.Length), null, CancellationToken.None);
+
+        Assert.True(ok, error);
+    }
+
+    [Fact]
+    public async Task A_partial_download_resumes_from_where_it_stopped()
+    {
+        var (package, signature, pem, checksum) = SignedPackage();
+        using var area = new TempDirectory();
+        var partial = UpdateStaging.InstallerPath(area.Path) + ".partial";
+        Directory.CreateDirectory(Path.GetDirectoryName(partial)!);
+        File.WriteAllBytes(partial, package[..(package.Length / 2)]);
+
+        // 认 Range 的源：从已有长度接着给尾巴。
+        using var handler = new RangeAwareServer(package, signature, checksum);
+
+        var (ok, error) = await new UpdateOrchestrator(
+            new HttpClient(handler), area.Path, Channel, pem)
+            .DownloadAsync(Release(package.Length), null, CancellationToken.None);
+
+        Assert.True(ok, error);
+        Assert.Equal(package, await File.ReadAllBytesAsync(UpdateStaging.InstallerPath(area.Path)));
+    }
+
+    [Fact]
+    public async Task A_source_that_ignores_the_range_restarts_from_zero()
+    {
+        var (package, signature, pem, checksum) = SignedPackage();
+        using var area = new TempDirectory();
+        var partial = UpdateStaging.InstallerPath(area.Path) + ".partial";
+        Directory.CreateDirectory(Path.GetDirectoryName(partial)!);
+        File.WriteAllBytes(partial, package[..(package.Length / 2)]);
+
+        // 无视 Range 的源：永远回全量——下载器应当从头重写，而不是把尾巴接到半成品上。
+        using var handler = new PlainServer(package, signature, checksum);
+
+        var (ok, error) = await new UpdateOrchestrator(
+            new HttpClient(handler), area.Path, Channel, pem)
+            .DownloadAsync(Release(package.Length), null, CancellationToken.None);
+
+        Assert.True(ok, error);
+        Assert.Equal(package, await File.ReadAllBytesAsync(UpdateStaging.InstallerPath(area.Path)));
+    }
+
+    private static ReleaseManifest Release(long installerSize)
+        => new(
+            new UpdateVersion(1, 4, 3),
+            "修复了若干问题。",
+            DateTimeOffset.Now,
+            [
+                new ReleaseAsset("shiyu-win-x64.zip", installerSize, AssetUrl),
+                new ReleaseAsset("shiyu-win-x64.zip.sig", 72, AssetUrl + ".sig"),
+                new ReleaseAsset("shiyu-win-x64.zip.sha256", 90, AssetUrl + ".sha256"),
+            ]);
+
+    /// <summary>认 Range 的源：安装包带 Range 回 206 尾巴；签名与校验和照字面给。</summary>
+    private sealed class RangeAwareServer(byte[] package, byte[] signature, string checksum) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellation)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith(".sig"))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(signature),
+                });
+            }
+
+            if (request.RequestUri!.AbsolutePath.EndsWith(".sha256"))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(checksum),
+                });
+            }
+
+            var range = request.Headers.Range?.Ranges.FirstOrDefault();
+            if (range is { } span && (span.From ?? 0) > 0)
+            {
+                var from = (int)(span.From ?? 0);
+                var message = new HttpResponseMessage(HttpStatusCode.PartialContent)
+                {
+                    Content = new ByteArrayContent(package[from..]),
+                };
+                message.Content.Headers.ContentRange = new System.Net.Http.Headers.ContentRangeHeaderValue(
+                    from, package.Length - 1, package.Length);
+                return Task.FromResult(message);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(package),
+            });
+        }
+    }
+
+    /// <summary>无视 Range 的源：安装包永远回 200 全量（测「从头重写」的分支）；签名与校验和照字面给。</summary>
+    private sealed class PlainServer(byte[] package, byte[] signature, string checksum) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellation)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith(".sig"))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(signature),
+                });
+            }
+
+            if (request.RequestUri!.AbsolutePath.EndsWith(".sha256"))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(checksum),
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(package),
+            });
+        }
+    }
+
+    /// <summary>按绝对路径回放文件的假源（自带一份，不借嵌套私件）。</summary>
+    private sealed class ByPathServer(Dictionary<string, object> files) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellation)
+        {
+            if (!files.TryGetValue(request.RequestUri!.AbsolutePath, out var file))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
+
+            HttpContent content = file switch
+            {
+                byte[] bytes => new ByteArrayContent(bytes),
+                string text => new StringContent(text),
+                _ => throw new InvalidOperationException("unknown fixture"),
+            };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        }
+    }
+}

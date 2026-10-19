@@ -27,6 +27,27 @@ public sealed class UpdateOrchestrator(
     private readonly string _userAgent = userAgent ?? "Shiyu";
 
     /// <summary>
+    /// 下载源：GitHub 直连打头，公共镜像垫后（直连实测 2026-10-19：gh-proxy 可用，
+    /// mirror.ghproxy 与 ghfast.top 超时——镜像可用性会漂移，所以每个源都进链、
+    /// 直连永远第一；漂了只是多花时间，不会失败）。镜像只做字节搬运：每一路的
+    /// 字节都要过内置公钥验签与 SHA-256，被篡改的源一条也进不了安装。
+    /// </summary>
+    public static readonly string[] DownloadMirrorPrefixes =
+    [
+        "https://gh-proxy.com/",
+        "https://mirror.ghproxy.com/",
+        "https://ghfast.top/",
+    ];
+
+    /// <summary>下载候选：直连打头，镜像依次垫后。</summary>
+    public static IReadOnlyList<string> CandidateUrls(string url)
+    {
+        var list = new List<string>(DownloadMirrorPrefixes.Length + 1) { url };
+        list.AddRange(DownloadMirrorPrefixes.Select(prefix => prefix + url));
+        return list;
+    }
+
+    /// <summary>
     /// GitHub refuses anonymous API calls without a User-Agent. On the shared
     /// process client the header cannot live on the client itself — it would
     /// claim every request Shiyu makes is an update check — so it rides on
@@ -99,7 +120,7 @@ public sealed class UpdateOrchestrator(
 
             // 信任之门开在一切内容检查之前：验不过，大小、校验和、zip
             // 结构一概不看了。
-            var signature = await _http.GetByteArrayAsync(signatureAsset.Url, cancel);
+            var signature = await DownloadBytesWithFailover(signatureAsset.Url, cancel);
             var installer = await File.ReadAllBytesAsync(UpdateStaging.InstallerPath(_dataDirectory), cancel);
             if (!UpdateSignature.Verify(installer, signature, _publicKeyPem))
             {
@@ -148,36 +169,157 @@ public sealed class UpdateOrchestrator(
             return null;
         }
 
-        // 带了却下不来 → 请求抛 HttpRequestException，由调用方拒绝并清空。
+        // 带了却下不来 → 换源试尽仍失败才由调用方拒绝并清空。
         // 从前的"下不来就当作没有"正是被删掉的 fail-open。
-        using var checksum = await GetAsync(
-            checksumAsset.Url, HttpCompletionOption.ResponseContentRead, cancel);
-        checksum.EnsureSuccessStatusCode();
-        return await checksum.Content.ReadAsStringAsync(cancel);
+        return await DownloadStringWithFailover(checksumAsset.Url, cancel);
     }
 
+    /// <summary>单个候选源的时间预算：跑满就换下一个源，半成品留给续传。</summary>
+    private static readonly TimeSpan SourceBudget = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// 多源下载（用户反馈 2026-10-19：GitHub 直连慢、时坏）：直连打头、镜像垫后，
+    /// 一个源出师不利或半路断流就换下一个，半成品字节留给下一个源**续传**
+    /// （Range 从已有长度接着要；各源给的是同一条字节流，换源续传不冲突，
+    /// 完整性由事后的验签与 SHA-256 把关）。全部源试尽才失败。
+    /// </summary>
     private async Task DownloadFileAsync(
+        string assetUrl, string path, long expectedSize, IProgress<double>? progress, CancellationToken cancel)
+    {
+        Exception? last = null;
+
+        foreach (var url in CandidateUrls(assetUrl))
+        {
+            try
+            {
+                await DownloadFromAsync(url, path, expectedSize, progress, cancel);
+                return;
+            }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception failure)
+            {
+                // expected: 一个源出师不利（404/被墙/断流/单源超时）——换下一个。
+                last = failure;
+            }
+        }
+
+        throw last ?? new HttpRequestException("no download source succeeded");
+    }
+
+    private async Task DownloadFromAsync(
         string url, string path, long expectedSize, IProgress<double>? progress, CancellationToken cancel)
     {
-        using var response = await GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel);
-        response.EnsureSuccessStatusCode();
+        var have = File.Exists(path) ? new FileInfo(path).Length : 0;
+        if (expectedSize > 0 && have > expectedSize)
+        {
+            // 半成品比正身还长（换过版本的残留）：不续，从头来。
+            File.Delete(path);
+            have = 0;
+        }
 
-        await using var source = await response.Content.ReadAsStreamAsync(cancel);
-        await using var target = File.Create(path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd(_userAgent);
+        if (have > 0)
+        {
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(have, null);
+        }
+
+        using var budget = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        budget.CancelAfter(SourceBudget);
+
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token);
+        if (response.StatusCode == System.Net.HttpStatusCode.OK)
+        {
+            have = 0;   // 源没理会续传：从头下。
+        }
+        else if (response.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable
+            && expectedSize > 0 && have == expectedSize)
+        {
+            return;     // 半成品恰好已经齐了。
+        }
+        else
+        {
+            response.EnsureSuccessStatusCode();
+        }
+
+        await using var source = await response.Content.ReadAsStreamAsync(budget.Token);
+        await using var target = File.Open(path, have > 0 ? FileMode.Append : FileMode.Create);
 
         var copied = 0L;
         var buffer = new byte[64 * 1024];
         int read;
 
-        while ((read = await source.ReadAsync(buffer, cancel)) > 0)
+        while ((read = await source.ReadAsync(buffer, budget.Token)) > 0)
         {
-            await target.WriteAsync(buffer.AsMemory(0, read), cancel);
+            await target.WriteAsync(buffer.AsMemory(0, read), budget.Token);
             copied += read;
 
             if (expectedSize > 0)
             {
-                progress?.Report((double)copied / expectedSize);
+                progress?.Report(Math.Min(1.0, (double)(have + copied) / expectedSize));
             }
         }
+
+        // 声明了总长却在 EOF 前短了：连接断在中途——换源重试（半成品可续传）。
+        var total = have + copied;
+        if (expectedSize > 0 && total < expectedSize)
+        {
+            throw new IOException($"下载中断：收到 {total} 字节，共 {expectedSize} 字节。");
+        }
+    }
+
+    private async Task<byte[]> DownloadBytesWithFailover(string url, CancellationToken cancel)
+    {
+        Exception? last = null;
+
+        foreach (var candidate in CandidateUrls(url))
+        {
+            try
+            {
+                using var response = await GetAsync(candidate, HttpCompletionOption.ResponseContentRead, cancel);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsByteArrayAsync(cancel);
+            }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception failure)
+            {
+                // expected: 换下一个源（签名与校验和都是 KB 级小件）。
+                last = failure;
+            }
+        }
+
+        throw last ?? new HttpRequestException("no download source succeeded");
+    }
+
+    private async Task<string> DownloadStringWithFailover(string url, CancellationToken cancel)
+    {
+        Exception? last = null;
+
+        foreach (var candidate in CandidateUrls(url))
+        {
+            try
+            {
+                using var response = await GetAsync(candidate, HttpCompletionOption.ResponseContentRead, cancel);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync(cancel);
+            }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception failure)
+            {
+                // expected: 换下一个源。
+                last = failure;
+            }
+        }
+
+        throw last ?? new HttpRequestException("no download source succeeded");
     }
 }
