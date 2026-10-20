@@ -98,3 +98,15 @@ probe-* 五枚已入 run-all；探针脚本 ASCII、PS 5.1；不碰真剪贴板�
   说一声；卸载或不再自启后用户原值原样。
 - run-all 201 检查 PASS 200 / FAIL 0 / SKIP 1；单元测试全绿（并发用例单独复跑过——
   全量并发下的已知时序敏感项）。
+
+## 追加功能（2026-10-20，用户需求：细线上弹出要有动画）
+
+- 贴边展开（DockExpand）改滑出动画：16ms 步进 ease-out，时长取 MotionPlan 全应用标准；
+  系统「减少动效」开着则一步到位。一次只滑一个方向，进出交替先停旧的。
+- 收起保持瞬时（探针确定性回归：动画化收边在负载下让 bar-dock 三项读了中途态，已回退）；
+  拖到顶缘的直接贴边也保持瞬时（拖放是明确放置）。
+- probe-bar-dock 的真光标耦合项（droptop/dropaway/livedrag/summondrop）加用户在场 SKIP
+  守卫（与锚点探针同款）——本轮 run-all 有真人在场，靠它免掉干扰假失败。
+- 已知边缘：defect:preview-zoom-jank-small 在全量负载下 p95 58ms（预算 50），负载相关
+  抖动；Linear+变换复用修复后空载测 14–22ms，继续观察。
+- run-all 201 检查 PASS 199 / FAIL 1（已知边缘项）/ SKIP 1；单元测试全绿。

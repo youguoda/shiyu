@@ -92,6 +92,9 @@ internal partial class BarWindow : Window
     private bool _barDragMoved;
     private bool _barDragClickWhenStill;  // 品牌钮：原地松手算点击（开历史窗）。
 
+    // 贴边弹出/收回的滑动画槽位（一次只有一个方向在滑；新滑动作先停旧的）。
+    private System.Windows.Threading.DispatcherTimer? _dockSlide;
+
     /// <summary>窄条记着要贴回的那扇窗：品牌钮打开历史窗口时交给它（评审 2026-10-16 F-12「粘贴全部」）。</summary>
     internal ForegroundWindow ReturnTarget => _returnTo;
 
@@ -648,8 +651,8 @@ internal partial class BarWindow : Window
         CollapseNow();
     }
 
-    /// <summary>立即收边、不看出时状态（用户实录 2026-10-20：拖到顶缘的那一下就要缩进去，
-    /// 召出状态也不例外）。调用方自行保证贴边已开启。</summary>
+    /// <summary>立即收边（收起保持瞬时——动画只给细线的弹出，用户需求 2026-10-20）。
+    /// 调用方自行保证贴边已开启。</summary>
     private void CollapseNow()
     {
         if (!IsVisible)
@@ -679,6 +682,50 @@ internal partial class BarWindow : Window
             ZBandPolicy.FollowsHost(Topmost));
     }
 
+    /// <summary>细边的滑入/滑出（用户需求 2026-10-20：细线上弹出要有动画）：16ms 步进的
+    /// ease-out 平移，时长与全应用动效一致；减少动效时一步到位。一次只滑一个方向，
+    /// 新滑动作先停旧的（进出交替不打架）。</summary>
+    private void SlideDockTo(IntPtr handle, int left, int targetTop)
+    {
+        _dockSlide?.Stop();
+        _dockSlide = null;
+
+        if (!UiAnimation.Allowed())
+        {
+            TransientWindow.MoveTo(handle, new ScreenPoint(left, targetTop),
+                ZBandPolicy.FollowsHost(Topmost));
+            return;
+        }
+
+        if (!WindowRects.TryGet(handle, out var now) || now.Top == targetTop)
+        {
+            return;
+        }
+
+        var startTop = now.Top;
+        var duration = MotionPlan.Duration(animationsAllowed: true).TotalMilliseconds;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var slide = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _dockSlide = slide;
+        slide.Tick += (_, _) =>
+        {
+            var share = Math.Min(1.0, clock.Elapsed.TotalMilliseconds / duration);
+            var eased = 1 - Math.Pow(1 - share, 3);
+            TransientWindow.MoveTo(handle,
+                new ScreenPoint(left, startTop + (int)Math.Round((targetTop - startTop) * eased)),
+                ZBandPolicy.FollowsHost(Topmost));
+            if (share >= 1.0)
+            {
+                slide.Stop();
+                if (ReferenceEquals(_dockSlide, slide))
+                {
+                    _dockSlide = null;
+                }
+            }
+        };
+        slide.Start();
+    }
+
     /// <summary>展开：完整落回工作区顶部。全屏应用在前台时不展开——鼠标扫过
     /// 顶缘不该把窄条滑到视频画面上。</summary>
     private void DockExpand()
@@ -697,8 +744,7 @@ internal partial class BarWindow : Window
         var corner = new ScreenPoint(rect.Left, rect.Top);
         var work = ScreenGeometry.WorkAreaAt(corner);
         _edgeCollapsed = false;
-        TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, work.Top),
-            ZBandPolicy.FollowsHost(Topmost));
+        SlideDockTo(handle, rect.Left, work.Top);
     }
 
     /// <summary>鼠标进窗：贴边收着就展开。</summary>

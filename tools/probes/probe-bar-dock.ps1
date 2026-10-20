@@ -21,6 +21,10 @@ param([string]$Exe = '')
 if ($Exe -eq '') { $Exe = Get-DefaultProbeExe }
 Reset-Checks
 
+# The drop/livedrag steps couple to the REAL cursor (SetCursorPos + synthetic
+# events): with someone at the machine they flake, so they stand down instead.
+$userPresent = Test-UserPresent
+
 $dataDir = Join-Path $env:TEMP 'shiyu-probe-run\bar-dock'
 & (Join-Path $PSScriptRoot 'seed.ps1') -DataDir $dataDir -AppBin (Split-Path -Parent $Exe) | Out-Null
 $log = Join-Path $dataDir 'bar-dock.log'
@@ -77,6 +81,14 @@ $detail = if ($restored) { "top restored after the setting turned off: {0}" -f $
 Add-Check 'flow:bar-dock-restore' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 $drop = $lines['drop']
+if ($userPresent) {
+    Add-Check 'flow:bar-dock-droptop' 'SKIP' 'user present (cursor moved between samples) - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-dropaway' 'SKIP' 'user present - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-livedrag' 'SKIP' 'user present - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-summondrop' 'SKIP' 'user present - cursor-coupled steps skipped'
+    return $script:Checks
+}
+
 $ok = $drop -and $drop['topCollapsed'] -eq 'True'
 $detail = if ($drop) { "a drag ending at the top docks the bar: {0}" -f $drop['topCollapsed'] } else { 'no drop line' }
 Add-Check 'flow:bar-dock-droptop' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
