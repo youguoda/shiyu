@@ -100,4 +100,9 @@ if ($livedrag -and ($livedrag.ContainsKey('xy0')) -and ($livedrag.ContainsKey('x
 }
 Add-Check 'flow:bar-dock-livedrag' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+$summondrop = $lines['summondrop']
+$ok = $summondrop -and ([double]$summondrop['strip'] -le 4)
+$detail = if ($summondrop) { "a top drop while summoned docks at once: {0} DIP strip" -f $summondrop['strip'] } else { 'no summondrop line' }
+Add-Check 'flow:bar-dock-summondrop' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 return $script:Checks

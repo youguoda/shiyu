@@ -12,11 +12,12 @@ namespace Shiyu.App;
 
 /// <summary>
 /// 浮窗的拖动（用户需求 2026-10-09：翻译框与反向输入框都能拖）。按在窗体的"非控件"处——
-/// 文字、留白、头部与底栏——就进系统的标题栏移动循环；按在按钮、输入框、滚动条、列表上的
-/// 照旧归它们自己：选字、点按钮、拖滚动条一样不少。
+/// 文字、留白、头部与底栏——就拖整窗；按在按钮、输入框、滚动条、列表上的照旧归它们自己：
+/// 选字、点按钮、拖滚动条一样不少。
 ///
-/// 走 HTCAPTION 而不是 DragMove（同窄条品牌钮，见 <see cref="WindowRects.RunCaptionDrag"/>）：
-/// 它在松手时返回，调用方比一比前后的位置就知道窗口动没动。
+/// 拖动是手动跟手（<see cref="LiveDrag"/>：按下捕获、移动即 SetWindowPos 实时平移）——
+/// 不再走 HTCAPTION 系统移动循环，透明窗上它只画轮廓不实时跟，松手才跳位
+/// （用户实录 2026-10-20）。
 /// </summary>
 internal static class DragGrip
 {
@@ -44,22 +45,11 @@ internal static class DragGrip
     }
 
     /// <summary>
-    /// 从这一下按下开始拖，松手后返回；窗口真的换了位置时为真。
+    /// 从这一下按下开始拖（手动跟手）。<paramref name="done"/> 在松手时收到
+    /// 「窗口是否真的动过」。
     /// </summary>
-    public static bool Run(Window window, MouseButtonEventArgs e)
-    {
-        var handle = new WindowInteropHelper(window).Handle;
-        if (handle == IntPtr.Zero || !WindowRects.TryGet(handle, out var before))
-        {
-            return false;
-        }
-
-        var point = window.PointToScreen(e.GetPosition(window));
-        WindowRects.RunCaptionDrag(handle, (int)point.X, (int)point.Y);
-
-        return WindowRects.TryGet(handle, out var after)
-            && (after.Left != before.Left || after.Top != before.Top);
-    }
+    public static void Run(Window window, MouseButtonEventArgs e, Action<bool>? done = null)
+        => LiveDrag.Begin(window, e, done: done);
 
     private static DependencyObject? ParentOf(DependencyObject node)
         => node is Visual or Visual3D

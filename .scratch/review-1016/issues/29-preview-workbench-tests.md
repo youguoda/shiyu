@@ -76,3 +76,15 @@ probe-* 五枚已入 run-all；探针脚本 ASCII、PS 5.1；不碰真剪贴板�
 - 根修：整窗拖动改手动跟手（按下捕获、MouseMove 即 MoveTo = 基准矩形 + 光标位移、松手判定贴边落点），两条路径共用 StartBarDrag；品牌钮原地松手仍算点击开历史窗。落点判定改在真正拖过（_barDragMoved）之后。
 - 探针 bar-dock 增 livedrag 检查（合成按住背景拖动，当帧窗口跟动 1500;630 px）；编排前置把窗挪回屏幕内（贴边姿态下窗口大半在屏外，合成落点会映射到屏外坐标）。
 - run-all 200 检查 PASS 199 / FAIL 0 / SKIP 1。
+
+## 追加修复（2026-10-20，用户实录 v0.17.6：全窗口查外框拖动；召出后拖到顶不贴边）
+
+- 全窗口拖动面普查：窄条与预览此前已改手动跟手；**翻译面板与反向输入框**仍走 HTCAPTION
+  系统循环（同款外框问题）——DragGrip.Run 改接共享的 Shiyu.Windows/LiveDrag（按下捕获、
+  移动即 SetWindowPos 实时平移、松手回调），反向框「拖过才记位置」改在松手回调里；
+  TitlebarChrome 当前无调用方（票 33 的自绘标题窗已不在拖动面上），不动。
+- 召出不贴边根因：热键呼出的窄条 _summoned=true，DockCollapse 在该状态下被跳过——设置翻了、
+  视觉不动。根修：拖到顶缘的判定直接走 CollapseNow（立即收边，召出状态也不例外）；顶缘改用
+  落点所在屏的工作区（多屏修正）。
+- 探针 bar-dock 增 summondrop 检查（召出状态拖到顶缘 → 当帧 3 DIP 细边）；run-all
+  201 检查 PASS 200 / FAIL 0 / SKIP 1。

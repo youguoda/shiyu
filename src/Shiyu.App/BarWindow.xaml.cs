@@ -363,9 +363,12 @@ internal partial class BarWindow : Window
     /// 立刻缩成细边；落在别处则取消贴边（拖过 = 改位置）。两条拖动路径共用。</summary>
     private void ApplyEdgeDockAfterDrag(ScreenRect after)
     {
-        if (after.Top - SystemParameters.WorkArea.Top <= DockCaptureDip)
+        // 顶缘用落点所在屏的工作区（多屏时主屏工作区的顶不一定是这一屏的顶）。
+        var work = ScreenGeometry.WorkAreaAt(new ScreenPoint(after.Left, after.Top));
+        if (after.Top - work.Top <= DockCaptureDip)
         {
             EdgeDockWanted?.Invoke(true);
+            CollapseNow();   // 拖到顶缘的那一下就要缩进去——召出状态也不例外。
         }
         else if (_edgeCollapsed && _settings.BarEdgeDock)
         {
@@ -633,6 +636,23 @@ internal partial class BarWindow : Window
     private void DockCollapse()
     {
         if (!EdgeDockActive || !IsVisible || _summoned)
+        {
+            return;
+        }
+
+        if (_preview is { IsVisible: true })
+        {
+            return;
+        }
+
+        CollapseNow();
+    }
+
+    /// <summary>立即收边、不看出时状态（用户实录 2026-10-20：拖到顶缘的那一下就要缩进去，
+    /// 召出状态也不例外）。调用方自行保证贴边已开启。</summary>
+    private void CollapseNow()
+    {
+        if (!IsVisible)
         {
             return;
         }

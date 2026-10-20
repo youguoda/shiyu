@@ -598,6 +598,14 @@ public partial class App
             await Task.Delay(300);
             log.AppendLine(FormattableString.Invariant(
                 $"livedrag|xy0={xy0}|xyLive={xyLive}"));
+
+            // 召出状态拖到顶缘（用户实录：呼出后拖到顶不贴边）：要当帧收边。
+            _modules!.Bar.ShowQuickPaste();
+            await Task.Delay(500);
+            bar.ProbeDragEndedAt(SystemParameters.WorkArea.Top + 4);
+            await Task.Delay(400);
+            log.AppendLine(FormattableString.Invariant(
+                $"summondrop|strip={bar.ProbeVisibleStrip():F0}"));
         }
         catch (Exception failure)
         {

@@ -95,10 +95,13 @@ internal partial class ReverseInputWindow : Window
             if (DragGrip.IsGrip(e.OriginalSource, Shell))
             {
                 e.Handled = true;
-                if (DragGrip.Run(this, e))
+                DragGrip.Run(this, e, moved =>
                 {
-                    KeepWhereDragged();
-                }
+                    if (moved)
+                    {
+                        KeepWhereDragged();
+                    }
+                });
             }
         };
 
