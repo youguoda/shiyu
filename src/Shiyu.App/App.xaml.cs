@@ -143,7 +143,14 @@ public partial class App : Application
         shell.AttachClipboardPipeline();
 
         // 托盘先于热键与钩子：它们失败时要说的话，得有地方说。
+        var dragFullWindowsFixed = DebugOverrides.IsProbe ? false : DragFullWindows.EnsureOn();
         new TrayModule().Attach(shell, quarantineNotice);
+        if (dragFullWindowsFixed)
+        {
+            // 系统关着「拖动时显示窗口内容」时，系统标题栏的窗口（历史/设置）拖动只画
+            // 轮廓不实时跟。本会话代开一次、说一声，不写回注册表（探针实例旁路）。
+            shell.TellUser("检测到系统关闭了「拖动时显示窗口内容」（拖窗口只显示外框），已在本次运行为你打开。可在 系统属性 → 性能设置 里改回。");
+        }
 
         shell.AttachCapture();
         _modules = AppModules.Attach(shell);

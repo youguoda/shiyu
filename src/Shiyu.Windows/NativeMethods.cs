@@ -528,8 +528,15 @@ internal static class NativeMethods
 
     internal const int SpiGetClientAreaAnimation = 0x1042;
 
+    internal const int SpiGetDragFullWindows = 0x0026;
+
+    internal const int SpiSetDragFullWindows = 0x0025;
+
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool SystemParametersInfo(int action, uint parameter, out bool state, uint winIni);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool SystemParametersInfoSet(int action, uint parameter, IntPtr value, uint winIni);
 
     internal const uint ShgfiIcon = 0x00000100;
     internal const uint ShgfiLargeIcon = 0x0;
