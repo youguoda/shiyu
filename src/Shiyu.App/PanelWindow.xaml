@@ -5,6 +5,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowActivated="False" ShowInTaskbar="False" Topmost="True"
         ResizeMode="NoResize" SizeToContent="Height" Width="420" Opacity="0"
+        MouseEnter="OnPanelMouseEnter" MouseLeave="OnPanelMouseLeave"
         TextElement.FontFamily="{DynamicResource Font.Ui}"
         TextElement.FontSize="{DynamicResource Type.Body}"
         TextElement.Foreground="{DynamicResource Brush.Text}"

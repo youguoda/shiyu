@@ -450,6 +450,13 @@ public partial class App
                 await Task.Delay(300);
                 log.AppendLine(FormattableString.Invariant(
                     $"panel|pinnedVisible={pinnedVisible}|surviveEsc1={surviveEsc1}|closedAfterEsc2={!panel.IsVisible}"));
+
+                // 自动收起（用户需求 2026-10-20）：取消钉后，辅助窗夺走前台 → 前台哨收起。
+                elsewhere.Show();
+                elsewhere.Activate();
+                await Task.Delay(900);
+                var autoHidden = !panel.IsVisible;
+                log.AppendLine(FormattableString.Invariant($"autohide|autoHidden={autoHidden}"));
             }
             else
             {

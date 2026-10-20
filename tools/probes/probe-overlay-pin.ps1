@@ -8,6 +8,7 @@
 #
 # Checks:
 #   - flow:panel-pin     the pinned panel survives Esc once and closes on the second
+#   - flow:panel-autohide the unpinned panel auto-hides once the foreground goes elsewhere
 #   - flow:reverse-pin   the pinned reverse box survives losing the focus and Esc once,
 #                        closes on the second
 #
@@ -54,6 +55,11 @@ $panel = $lines['panel']
 $ok = $panel -and $panel['surviveEsc1'] -eq 'True' -and $panel['closedAfterEsc2'] -eq 'True'
 $detail = if ($panel) { "pinned panel survives Esc {0}, closes on the second {1}" -f $panel['surviveEsc1'], $panel['closedAfterEsc2'] } else { 'no panel line' }
 Add-Check 'flow:panel-pin' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+$auto = $lines['autohide']
+$ok = $auto -and $auto['autoHidden'] -eq 'True'
+$detail = if ($auto) { "unpinned panel auto-hidden on foreign foreground: {0}" -f $auto['autoHidden'] } else { 'no autohide line' }
+Add-Check 'flow:panel-autohide' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 $reverse = $lines['reverse']
 $ok = $reverse -and $reverse['surviveFocusLoss'] -eq 'True' -and $reverse['surviveEsc1'] -eq 'True' -and $reverse['closedAfterEsc2'] -eq 'True'

@@ -171,6 +171,11 @@ public partial class PanelWindow : Window
     /// <summary>还在出字、节拍刷新可以碰的那一轮；结算时清空，排着没轮到的刷新就此作废。</summary>
     private TranslationSession? _streaming;
 
+    // --- 钉住与自动收起（用户需求 2026-10-20）：不钉时点别处即收（流式中、
+    //     指针悬在面板上时例外）；钉着就不收。可见期间的前台哨。 ----------
+    private System.Windows.Threading.DispatcherTimer? _foregroundTick;
+    private bool _pointerOnPanel;
+
     private string _original = string.Empty;
 
     /// <summary>星标（评审 2026-10-16 F-09）：没接上就不露面；接上了，卡到了才露面。</summary>
@@ -384,6 +389,15 @@ public partial class PanelWindow : Window
         {
             Show();
         }
+
+        // 面板可见期间的前台哨（用户需求 2026-10-20：不钉时点别处即收）。
+        _foregroundTick ??= new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(400),
+        };
+        _foregroundTick.Tick -= OnForegroundTick;
+        _foregroundTick.Tick += OnForegroundTick;
+        _foregroundTick.Start();
 
         // Full opacity immediately, no fade-in: a layered window fading in
         // from transparency never composites (ticket 04's badge finding), so
@@ -1461,6 +1475,8 @@ public partial class PanelWindow : Window
 
     private void Dismiss()
     {
+        _foregroundTick?.Stop();
+
         // 钉只挡自动收起；走到这里就是用户点了明确的去处（×、Esc 第二击、去设置）。关即取消钉。
         Pinned = false;
         UpdatePinVisual();
@@ -1516,6 +1532,34 @@ public partial class PanelWindow : Window
         var state = Pinned ? "已钉住：面板保持显示 · 点一下取消" : "钉住，面板保持显示";
         PinButton.ToolTip = state;
         System.Windows.Automation.AutomationProperties.SetName(PinButton, state);
+    }
+
+    /// <summary>指针悬在面板上（自动收起的例外之一）。</summary>
+    private void OnPanelMouseEnter(object sender, MouseEventArgs e) => _pointerOnPanel = true;
+
+    /// <summary>指针离开面板。</summary>
+    private void OnPanelMouseLeave(object sender, MouseEventArgs e) => _pointerOnPanel = false;
+
+    /// <summary>
+    /// 面板可见期间的前台哨（用户需求 2026-10-20：不钉时点别处即收）：
+    /// 前台换成别的应用、指针不在面板上、翻译已结算（不在流式中）——收起。
+    /// 钉住优先。可见才跑，收起即停。
+    /// </summary>
+    private void OnForegroundTick(object? sender, EventArgs e)
+    {
+        if (!IsVisible || Pinned || _pointerOnPanel
+            || _inFlight is not null || _streaming is not null)
+        {
+            return;
+        }
+
+        var foreground = ForegroundWindow.Current();
+        if (!foreground.IsSomething || foreground.BelongsToThisProcess)
+        {
+            return;
+        }
+
+        Dismiss();
     }
 
     private async void OnSwapDirection(object sender, RoutedEventArgs e)
