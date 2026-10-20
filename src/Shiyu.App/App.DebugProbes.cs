@@ -565,6 +565,16 @@ public partial class App
             shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
             await Task.Delay(400);
             log.AppendLine(FormattableString.Invariant($"restored|top={bar.Top:F0}"));
+
+            // 拖动落点的位置语义（用户需求 2026-10-20：拖到顶缘即贴边）：模拟两次拖动收尾。
+            bar.ProbeDragEndedAt(SystemParameters.WorkArea.Top + 4);
+            await Task.Delay(400);
+            var dropTopCollapsed = !bar.ProbeDockExpanded() && bar.ProbeVisibleStrip() <= 4;
+            bar.ProbeDragEndedAt(SystemParameters.WorkArea.Top + 200);
+            await Task.Delay(400);
+            var dropAwayUndocked = bar.ProbeDockExpanded();
+            log.AppendLine(FormattableString.Invariant(
+                $"drop|topCollapsed={dropTopCollapsed}|awayUndocked={dropAwayUndocked}"));
         }
         catch (Exception failure)
         {

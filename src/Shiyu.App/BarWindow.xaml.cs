@@ -75,11 +75,14 @@ internal partial class BarWindow : Window
     private ForegroundWindow _returnTo;
 
     // --- 贴边隐藏（用户需求 2026-10-20）：常驻钉住的窄条缩进顶缘只露细条，
-    //     鼠标进细条展开、离开收回；全屏应用在前台时不展开。拖动窄条视为
-    //     改位置，贴边自动关闭。 ----------
+    //     鼠标进细条展开、离开收回；全屏应用在前台时不展开。拖到屏幕顶缘
+    //     松手即贴边，拖离顶缘自动取消。 ----------
     private bool _edgeCollapsed;
     private bool EdgeDockActive => _settings.BarEdgeDock && _settings.BarPinned;
     private const double DockedStrip = 3;
+
+    /// <summary>拖动落点距工作区顶缘多少 DIP 内算「拖到顶了」（含越顶，用户需求 2026-10-20）。</summary>
+    private const double DockCaptureDip = 12;
 
     /// <summary>窄条记着要贴回的那扇窗：品牌钮打开历史窗口时交给它（评审 2026-10-16 F-12「粘贴全部」）。</summary>
     internal ForegroundWindow ReturnTarget => _returnTo;
@@ -353,15 +356,29 @@ internal partial class BarWindow : Window
             return;
         }
 
-        if (_edgeCollapsed
-            && _settings.BarEdgeDock
-            && (after.Left != before.Left || after.Top != before.Top))
+        ApplyEdgeDockAfterDrag(after);
+    }
+
+    /// <summary>拖动落点定去留（用户需求 2026-10-20 的位置语义）：贴着工作区顶缘
+    /// （<see cref="DockCaptureDip"/> 内，含越顶）松手 = 开启贴边隐藏，设置跟着走、
+    /// 立刻缩成细边；落在别处则取消贴边（拖过 = 改位置）。两条拖动路径共用。</summary>
+    private void ApplyEdgeDockAfterDrag(ScreenRect after)
+    {
+        if (after.Top - SystemParameters.WorkArea.Top <= DockCaptureDip)
         {
-            // 拖过 = 用户明确改位置：贴边自动关闭（设置跟着走）。
+            EdgeDockWanted?.Invoke(true);
+        }
+        else if (_edgeCollapsed && _settings.BarEdgeDock)
+        {
             _edgeCollapsed = false;
             EdgeDockWanted?.Invoke(false);
         }
     }
+
+    /// <summary>探针钩子：模拟一次拖动收尾（落点 Top = topDip）。</summary>
+    internal void ProbeDragEndedAt(double topDip)
+        => ApplyEdgeDockAfterDrag(new ScreenRect(
+            0, (int)Math.Round(topDip), (int)Math.Round(topDip) + 384, (int)Math.Round(topDip) + 320));
 
     private void Select(BarCard? card)
     {
@@ -812,5 +829,9 @@ internal partial class BarWindow : Window
         // Card presses mark themselves handled, and input controls swallow
         // their own clicks, so what reaches here is genuinely background.
         DragMove();
+        if (WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var after))
+        {
+            ApplyEdgeDockAfterDrag(after);
+        }
     }
 }

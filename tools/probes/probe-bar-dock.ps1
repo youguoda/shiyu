@@ -76,4 +76,13 @@ $ok = $restored -and $restored['top'] -eq '0'
 $detail = if ($restored) { "top restored after the setting turned off: {0}" -f $restored['top'] } else { 'no restored line' }
 Add-Check 'flow:bar-dock-restore' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+$drop = $lines['drop']
+$ok = $drop -and $drop['topCollapsed'] -eq 'True'
+$detail = if ($drop) { "a drag ending at the top docks the bar: {0}" -f $drop['topCollapsed'] } else { 'no drop line' }
+Add-Check 'flow:bar-dock-droptop' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+$ok = $drop -and $drop['awayUndocked'] -eq 'True'
+$detail = if ($drop) { "a drag ending away from the top undocks: {0}" -f $drop['awayUndocked'] } else { 'no drop line' }
+Add-Check 'flow:bar-dock-dropaway' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 return $script:Checks

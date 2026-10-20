@@ -177,7 +177,7 @@ public static class SettingsSchema
                 new SettingsItem(
                     "bar.edge-dock", "贴边隐藏", SettingsControl.Toggle,
                     Parent: "bar.pinned",
-                    Hint: "常驻钉住的窄条缩进屏幕顶缘，只露一条细边；鼠标靠近顶缘时展开。看全屏视频/游戏时不展开。拖动窄条视为改位置，贴边自动关闭。需要窄条常在、又不想常占屏幕时开。",
+                    Hint: "常驻钉住的窄条缩进屏幕顶缘，只露一条细边；鼠标靠近顶缘时展开。看全屏视频/游戏时不展开。把窄条拖到屏幕顶缘松手即开启，拖离顶缘自动取消。需要窄条常在、又不想常占屏幕时开。",
                     Keywords: ["贴边", "隐藏", "自动隐藏", "顶", "顶部", "边缘", "吸附", "展开", "细条", "常驻"],
                     Icon: "E718")),
             new SettingsSection("bar.density", "密度",

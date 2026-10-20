@@ -63,3 +63,9 @@ probe-* 五枚已入 run-all；探针脚本 ASCII、PS 5.1；不碰真剪贴板�
 - ShowFor 对钉住的预览直接返回：同卡再显（悬停回环、空格重按）不再回锚——拖走的位置归用户。
 - 探针 H 段 + 两检查：flow:preview-pin-drag（拖 60×40 DIP，实测 90×60 px 精确跟手）、flow:preview-pin-drag-persists（同卡再显零漂移）。
 - run-all 197 检查 PASS 196 / FAIL 0 / SKIP 1；Core 2120 / Windows 26 全绿。
+
+## 追加变更（2026-10-20，用户需求：窄条拖到顶缘即贴边隐藏）
+
+- 位置语义：拖动落点距工作区顶缘 12 DIP 内（含越顶）松手 = 开启贴边（设置同步为开、立即缩成细边）；落在别处 = 取消贴边。品牌钮拖动与背景拖动两条路径统一走 ApplyEdgeDockAfterDrag（背景拖动原先不参与贴边判定，一并修齐）。
+- 设置页「贴边隐藏」提示语同步新语义；设置开关保留、与拖动互相同步。
+- 探针 bar-dock 增两检查（拖到顶缘收边 True、拖离取消 True）；run-all 199 检查 PASS 198 / FAIL 0 / SKIP 1。
