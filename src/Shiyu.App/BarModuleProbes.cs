@@ -240,5 +240,25 @@ internal sealed partial class BarModule
     /// <summary>探针命令 preview-pin 的窄条一段（见 BarWindow.ProbePreviewPin）。</summary>
     internal async Task<string> ProbePreviewPin()
         => _bar is null ? "preview|bar-missing\n" : await _bar.ProbePreviewPin();
+
+    /// <summary>探针命令 preview-workbench 的窄条一段（见 BarWindow.ProbeWorkbenchMatrixAsync）。</summary>
+    internal async Task<string> ProbeWorkbenchMatrix()
+        => _bar is null ? "w|bar-missing\n" : await _bar.ProbeWorkbenchMatrixAsync();
+
+    /// <summary>探针命令 preview-anchor 的窄条一段（见 BarWindow.ProbeAnchorAsync）。</summary>
+    internal async Task<string> ProbeAnchor()
+        => _bar is null ? "anchor|bar-missing\n" : await _bar.ProbeAnchorAsync();
+
+    /// <summary>探针命令 preview-zoom-perf 的窄条一段（见 BarWindow.ProbeZoomPerfAsync）。</summary>
+    internal async Task<string> ProbeZoomPerf()
+        => _bar is null ? "zoom|bar-missing\n" : await _bar.ProbeZoomPerfAsync();
+
+    /// <summary>探针命令 preview-decode-cost 的窄条一段（见 BarWindow.ProbeDecodeCostAsync）。</summary>
+    internal async Task<string> ProbeDecodeCost()
+        => _bar is null ? "decode|bar-missing\n" : await _bar.ProbeDecodeCostAsync();
+
+    /// <summary>探针命令 preview-churn 的窄条一段（见 BarWindow.ProbeChurnAsync）。</summary>
+    internal async Task<string> ProbeChurn()
+        => _bar is null ? "churn|bar-missing\n" : await _bar.ProbeChurnAsync();
 }
 #endif

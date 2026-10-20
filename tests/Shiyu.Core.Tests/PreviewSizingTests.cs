@@ -147,4 +147,25 @@ public class PreviewSizingTests
         Assert.Equal(PreviewSizing.MaxWidth, smallWidth);
         Assert.Equal(PreviewSizing.MaxHeight, largeHeight);
     }
+
+    // 4K 截图（preview-zoom-perf / preview-decode-cost 探针的期望值依据，2026-10-20）。
+
+    [Fact]
+    public void A_4k_screenshot_fits_the_box_at_whole_screen_pixels()
+    {
+        var (width, height) = PreviewSizing.FitImage(3840, 2160,
+            PreviewSizing.MaxWidth - PreviewSizing.ChromeHorizontal,
+            PreviewSizing.MaxHeight - PreviewSizing.ChromeVertical, deviceScale: 1.5);
+
+        Assert.Equal(454.0, width);
+        Assert.Equal(255.333, height, precision: 3);
+    }
+
+    [Fact]
+    public void A_4k_screenshot_decodes_to_exactly_the_screen_pixels_shown()
+    {
+        var display = PreviewSizing.ImageDisplay(3840, 2160, deviceScale: 1.5);
+
+        Assert.Equal((681, 383), PreviewSizing.DecodeSize(3840, 2160, display!.Value, 1.5));
+    }
 }

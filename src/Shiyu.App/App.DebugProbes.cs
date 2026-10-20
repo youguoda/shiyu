@@ -610,6 +610,186 @@ public partial class App
         }
     }
 
+    /// <summary>探针命令 preview-workbench 的入口（见 BarWindow.ProbeWorkbenchMatrixAsync）。</summary>
+    private async void ProbePreviewWorkbench()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _modules!.Bar.ProbeShowPinned();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbeWorkbenchMatrix());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-workbench.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 preview-anchor 的入口（见 BarWindow.ProbeAnchorAsync）。</summary>
+    private async void ProbePreviewAnchor()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _modules!.Bar.ProbeShowPinned();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbeAnchor());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-anchor.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 preview-zoom-perf 的入口（见 BarWindow.ProbeZoomPerfAsync）：先照
+    /// image-paste 的配方造一条 3840×2160 的大图（小图用种子里的 900×300）。</summary>
+    private async void ProbePreviewZoomPerf()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var shell = _shell!;
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(0, 0, 3840, 2160));
+                context.DrawRectangle(System.Windows.Media.Brushes.SteelBlue, null, new System.Windows.Rect(120, 120, 3600, 1920));
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(3840, 2160, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var pngStream = new MemoryStream();
+            encoder.Save(pngStream);
+            var png = pngStream.ToArray();
+            var now = DateTimeOffset.UtcNow;
+            var path = shell.Images.Save(png, now);
+            shell.Store.AppendImage("probe 3840x2160", png, path, "probe", now, 3840, 2160);
+
+            _modules!.Bar.ProbeShowPinned();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbeZoomPerf());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-zoom-perf.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 preview-decode-cost 的入口（见 BarWindow.ProbeDecodeCostAsync）：先照
+    /// image-paste 的配方造一条 3840×2160 的图片条目（缩略图 + 原图），再进编排量冷/暖解码。</summary>
+    private async void ProbePreviewDecodeCost()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var shell = _shell!;
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(0, 0, 3840, 2160));
+                context.DrawRectangle(System.Windows.Media.Brushes.SteelBlue, null, new System.Windows.Rect(120, 120, 3600, 1920));
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(3840, 2160, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var pngStream = new MemoryStream();
+            encoder.Save(pngStream);
+            var png = pngStream.ToArray();
+            var now = DateTimeOffset.UtcNow;
+            var path = shell.Images.Save(png, now);
+            shell.Store.AppendImage("probe 3840x2160", png, path, "probe", now, 3840, 2160);
+
+            _modules!.Bar.ProbeShowPinned();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbeDecodeCost());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-decode-cost.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 preview-churn 的入口（见 BarWindow.ProbeChurnAsync）。</summary>
+    private async void ProbePreviewChurn()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _modules!.Bar.ProbeShowPinned();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbeChurn());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-churn.log"), log.ToString());
+        }
+    }
+
     /// <summary>
     /// 探针命令 folder-open-locate 的入口（用户实录 2026-10-19：复制的是文件夹时，「打开」与
     /// 「定位」没有反应。复现用）：造一条指向临时**文件夹**的文件条目，开窄条，按打开/定位的解析
@@ -1707,6 +1887,31 @@ public partial class App
             // 贴边隐藏（用户需求 2026-10-20）：收到细条、鼠标进窗展开。
             case "bar-dock":
                 ProbeBarDock();
+                break;
+
+            // 预览工作台测试方案（用户实录 2026-10-20：叠显/串台/图片卡顿——复现与测量段）。
+            case "preview-workbench":
+                ProbePreviewWorkbench();
+                break;
+
+            // 缩放锚点漂移：动真光标，脚本侧有 Test-UserPresent 守卫。
+            case "preview-anchor":
+                ProbePreviewAnchor();
+                break;
+
+            // 滚轮/平移响应度：合成滚轮逐段量 UI 线程与渲染线程。
+            case "preview-zoom-perf":
+                ProbePreviewZoomPerf();
+                break;
+
+            // 4K 原图首显的冷/暖解码成本。
+            case "preview-decode-cost":
+                ProbePreviewDecodeCost();
+                break;
+
+            // 显/收搅拌应力：30 轮三类条目轮转，量工作集与句柄。
+            case "preview-churn":
+                ProbePreviewChurn();
                 break;
 
             // 文件夹的打开/定位复现（用户实录 2026-10-19）：不碰剪贴板、不真开资源管理器。
