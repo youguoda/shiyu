@@ -107,8 +107,11 @@ internal partial class PreviewWindow : Window
         MouseWheel += OnWorkbenchWheel;
         MouseLeftButtonDown += OnWorkbenchDoubleClick;
         MouseLeftButtonDown += OnWorkbenchPress;
+        MouseLeftButtonDown += OnWorkbenchDragWindow;
         MouseMove += OnWorkbenchMove;
+        MouseMove += OnWorkbenchDragWindowMove;
         MouseLeftButtonUp += OnWorkbenchRelease;
+        MouseLeftButtonUp += OnWorkbenchDragWindowUp;
         EditHost.KeyDown += OnWorkbenchEditKey;
     }
 
@@ -164,6 +167,13 @@ internal partial class PreviewWindow : Window
 
         // 钉着的预览独占：别的卡片不再夺走它（取消钉后才恢复悬停规则）。
         if (Pinned && !ReferenceEquals(card, _shown))
+        {
+            return;
+        }
+
+        // 钉着的预览位置归用户：拖到哪算哪，同卡再显（悬停回环、空格重按）
+        // 不再回锚——回锚会把用户拖走的位置拽回去。
+        if (Pinned)
         {
             return;
         }
@@ -418,6 +428,11 @@ internal partial class PreviewWindow : Window
     // 一次点击触发多次动作）。
     private bool _workbenchWired;
 
+    // 整窗拖动（钉住后位置归用户）：按下在空白或未放大的图片上即拖窗。
+    private bool _windowDragging;
+    private Point _windowDragStart;      // 物理像素（屏幕坐标）。
+    private ScreenRect _windowDragBase;  // 按下时的窗口矩形。
+
     /// <summary>
     /// 钉住那一刻把窗变成工作台：文本类正文换编辑框、颜色给色块、动作行按
     /// 形态出芯片；图片初始化缩放变换。取消钉（TeardownWorkbench）全部还原。
@@ -625,6 +640,62 @@ internal partial class PreviewWindow : Window
 
         EditHost.Visibility = Visibility.Collapsed;
         TextHost.Visibility = Visibility.Visible;
+        e.Handled = true;
+    }
+
+    /// <summary>钉住后整窗可拖：按在空白或未放大的图片上即拖窗（编辑框、芯片、
+    /// 滚动条、放大后的图片平移各归各）。松手即停。</summary>
+    private void OnWorkbenchDragWindow(object sender, MouseButtonEventArgs e)
+    {
+        if (!Pinned || e.Handled)
+        {
+            return;
+        }
+
+        if (e.OriginalSource is System.Windows.Controls.TextBox
+            or System.Windows.Controls.Primitives.ButtonBase
+            or System.Windows.Controls.Primitives.ScrollBar)
+        {
+            return;
+        }
+
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (!WindowRects.TryGet(handle, out _windowDragBase))
+        {
+            return;
+        }
+
+        var screen = PointToScreen(e.GetPosition(this));
+        _windowDragStart = new Point(screen.X, screen.Y);
+        _windowDragging = true;
+        CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnWorkbenchDragWindowMove(object sender, MouseEventArgs e)
+    {
+        if (!_windowDragging)
+        {
+            return;
+        }
+
+        var screen = PointToScreen(e.GetPosition(this));
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        TransientWindow.MoveTo(handle, new ScreenPoint(
+            _windowDragBase.Left + (int)Math.Round(screen.X - _windowDragStart.X),
+            _windowDragBase.Top + (int)Math.Round(screen.Y - _windowDragStart.Y)), _band);
+        e.Handled = true;
+    }
+
+    private void OnWorkbenchDragWindowUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_windowDragging)
+        {
+            return;
+        }
+
+        _windowDragging = false;
+        ReleaseMouseCapture();
         e.Handled = true;
     }
 
@@ -1172,6 +1243,12 @@ internal partial class PreviewWindow : Window
 
     internal bool ProbeCursorToScreen(double x, double y)
         => SetCursorPos((int)Math.Round(x), (int)Math.Round(y));
+
+    /// <summary>窗口当前物理位置（整窗拖动的读数）。</summary>
+    internal string ProbeWindowXY
+        => WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect)
+            ? FormattableString.Invariant($"{rect.Left};{rect.Top}")
+            : "none";
 
     internal static async Task ProbePumpAsync()
     {

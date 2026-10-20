@@ -162,4 +162,33 @@ $gScale = ConvertTo-InvariantDouble (Field $g 'scaleAfterDblClick' '-1')
 $ok = ($gScale -ge 0) -and ($gScale -le 1.001)
 Add-Check 'defect:preview-dblclick-no-reset' $(if ($ok) { 'PASS' } else { 'FAIL' }) "double-click left the zoom at: $gScale"
 
+# --- feature: the pinned preview drags by its body, and keeps its place -------
+$h = Get-Step 'H-window-drag'
+function Steps-XY([string]$Text) {
+    if ($Text -eq '?') { return @() }
+    return $Text -split ';'
+}
+$xy0 = Steps-XY (Field $h 'xy0' '?')
+$xy1 = Steps-XY (Field $h 'xy1' '?')
+$xy2 = Steps-XY (Field $h 'xy2' '?')
+$ok = $false
+$detail = 'no H-window-drag step line'
+if (($xy0.Count -eq 2) -and ($xy1.Count -eq 2)) {
+    $dx = [int]$xy1[0] - [int]$xy0[0]
+    $dy = [int]$xy1[1] - [int]$xy0[1]
+    $ok = ([math]::Abs($dx) -ge 20) -and ([math]::Abs($dy) -ge 15)
+    $detail = "dragging the pinned preview moved it by ${dx};${dy} px"
+}
+Add-Check 'flow:preview-pin-drag' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+$ok = $false
+$detail = 'no H-window-drag step line'
+if (($xy1.Count -eq 2) -and ($xy2.Count -eq 2)) {
+    $rx = [int]$xy2[0] - [int]$xy1[0]
+    $ry = [int]$xy2[1] - [int]$xy1[1]
+    $ok = ([math]::Abs($rx) -le 3) -and ([math]::Abs($ry) -le 3)
+    $detail = "re-show kept the dragged position (drift ${rx};${ry} px)"
+}
+Add-Check 'flow:preview-pin-drag-persists' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 return $script:Checks

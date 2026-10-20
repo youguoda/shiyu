@@ -290,6 +290,24 @@ internal partial class BarWindow
         log.AppendLine(FormattableString.Invariant(
             $"w|step=G-esc-dblclick|editStillVisible={editStillVisible}|scaleAfterDblClick={_preview.ProbeScale:F6}"));
         await ClosePreviewAsync();
+
+        // H. 钉住后整窗可拖：拖 (60, 40)（局部 DIP），窗口跟动；同卡再显不回锚。
+        await ProbeShowPreviewForAsync(img1);
+        _preview!.ProbeClickPin();
+        await Task.Delay(300);
+        var xy0 = _preview.ProbeWindowXY;
+        var hCenter = _preview.ProbeImageCenter;
+        await _preview.ProbePressAtAsync(hCenter.X, hCenter.Y);
+        await _preview.ProbeMoveToAsync(hCenter.X + 60, hCenter.Y + 40);
+        await _preview.ProbeReleaseAsync();
+        await Task.Delay(150);
+        var xy1 = _preview.ProbeWindowXY;
+        await ProbeShowPreviewForAsync(img1);   // 同卡再显：不许回锚。
+        await ProbeSettleAsync();
+        var xy2 = _preview.ProbeWindowXY;
+        log.AppendLine(FormattableString.Invariant(
+            $"w|step=H-window-drag|xy0={xy0}|xy1={xy1}|xy2={xy2}"));
+        await ClosePreviewAsync();
         return log.ToString();
     }
 

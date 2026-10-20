@@ -56,3 +56,10 @@ probe-* 五枚已入 run-all；探针脚本 ASCII、PS 5.1；不碰真剪贴板�
 - 滚轮锚点改图像内容坐标公式（origin += u×(s−s′)）：残漂 28.5 → 2.6（父空间版，差布局偏移项）→ **0.273 DIP**。放大拖动改父空间逐段累计（原实现在放大档多段拖动会飞图）。
 - 交互期 BitmapScalingMode 降 Linear + 变换组构造一次原地改值：小图缩放 inputP95 60/57/46 → 14–22ms；一比一展示仍 HighQuality（probe-preview-image 像素对齐保持全绿）。
 - 提纯件：Shiyu.Core/WorkbenchChips（芯片表，7 facts）+ PreviewImageTransform（缩放算术，4 facts）；Core 2120 / Windows 26 全绿；三道门禁与 PUA 扫描干净。
+
+## 追加功能（2026-10-20，用户需求：钉住之后可以拖动）
+
+- 钉住的预览整窗可拖：按在空白或未放大的图片上即拖窗（编辑框、芯片、滚动条、放大后的图片平移各归各，靠 Handled 与控件类型分流）；松手即停。
+- ShowFor 对钉住的预览直接返回：同卡再显（悬停回环、空格重按）不再回锚——拖走的位置归用户。
+- 探针 H 段 + 两检查：flow:preview-pin-drag（拖 60×40 DIP，实测 90×60 px 精确跟手）、flow:preview-pin-drag-persists（同卡再显零漂移）。
+- run-all 197 检查 PASS 196 / FAIL 0 / SKIP 1；Core 2120 / Windows 26 全绿。
