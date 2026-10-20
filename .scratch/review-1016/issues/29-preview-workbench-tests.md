@@ -46,3 +46,13 @@
 6. 提纯件：Shiyu.Core/WorkbenchChipTable + PreviewImageTransform（缩放数学可单测）。
 
 probe-* 五枚已入 run-all；探针脚本 ASCII、PS 5.1；不碰真剪贴板。
+
+## 修复（2026-10-20，用户「开始修改」）
+
+- 全部 11 项 defect 转绿：run-all 195 检查 **PASS 194 / FAIL 0 / SKIP 1**。
+- 根修：TakeDown 收尾统一调 TeardownWorkbench（草稿一并清空）+ UpdatePinVisual（强拆也走）——叠印/草稿串台/芯片残留/缩放残留/图钉过期/元信息消失/首击反转一起消。
+- 芯片 handler 改判 `args.OriginalSource` 且只登记一次——芯片第一次能用（clicked=True fired=1），handler 不再累积（5 钉后一击一发）。
+- 双击复位接线（登记在拖拽前：ClickCount≥2 或同点 500ms 两按，复位并取消拖拽）；编辑框 Esc 退出编辑、留在只读展示。
+- 滚轮锚点改图像内容坐标公式（origin += u×(s−s′)）：残漂 28.5 → 2.6（父空间版，差布局偏移项）→ **0.273 DIP**。放大拖动改父空间逐段累计（原实现在放大档多段拖动会飞图）。
+- 交互期 BitmapScalingMode 降 Linear + 变换组构造一次原地改值：小图缩放 inputP95 60/57/46 → 14–22ms；一比一展示仍 HighQuality（probe-preview-image 像素对齐保持全绿）。
+- 提纯件：Shiyu.Core/WorkbenchChips（芯片表，7 facts）+ PreviewImageTransform（缩放算术，4 facts）；Core 2120 / Windows 26 全绿；三道门禁与 PUA 扫描干净。
