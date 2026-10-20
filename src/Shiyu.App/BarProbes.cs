@@ -497,5 +497,74 @@ internal partial class BarWindow
 
     /// <summary>探针：模拟鼠标离窗（贴边收回）。</summary>
     internal void ProbeDockMouseLeave() => OnDockMouseLeave(this, null!);
+
+    /// <summary>窗口当前物理位置（整窗拖动的读数，用户实录 2026-10-20 的外框问题）。</summary>
+    internal string ProbeWindowXY
+        => Shiyu.Windows.WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect)
+            ? FormattableString.Invariant($"{rect.Left};{rect.Top}")
+            : "none";
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    private bool ProbeCursorToBar(double xDip, double yDip)
+    {
+        var screen = PointToScreen(new System.Windows.Point(xDip, yDip));
+        return SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
+    }
+
+    private static async Task ProbePumpAsync()
+    {
+        for (var round = 0; round < 4; round++)
+        {
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
+        }
+    }
+
+    /// <summary>按住背景开始拖（合成事件打在窗口上，真实光标先落位）。</summary>
+    internal async Task<bool> ProbeBarPressAtAsync(double xDip, double yDip)
+    {
+        if (!ProbeCursorToBar(xDip, yDip))
+        {
+            return false;
+        }
+
+        await ProbePumpAsync();
+        RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.InputManager.Current.PrimaryMouseDevice, Environment.TickCount,
+            System.Windows.Input.MouseButton.Left)
+        {
+            RoutedEvent = System.Windows.UIElement.MouseLeftButtonDownEvent,
+        });
+        return true;
+    }
+
+    /// <summary>拖动中移动（真实光标落位后发 MouseMove——跟手读数）。</summary>
+    internal async Task<bool> ProbeBarMoveToAsync(double xDip, double yDip)
+    {
+        if (!ProbeCursorToBar(xDip, yDip))
+        {
+            return false;
+        }
+
+        await ProbePumpAsync();
+        RaiseEvent(new System.Windows.Input.MouseEventArgs(
+            System.Windows.Input.InputManager.Current.PrimaryMouseDevice, Environment.TickCount)
+        {
+            RoutedEvent = System.Windows.UIElement.MouseMoveEvent,
+        });
+        return true;
+    }
+
+    internal async Task ProbeBarReleaseAsync()
+    {
+        await ProbePumpAsync();
+        RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.InputManager.Current.PrimaryMouseDevice, Environment.TickCount,
+            System.Windows.Input.MouseButton.Left)
+        {
+            RoutedEvent = System.Windows.UIElement.MouseLeftButtonUpEvent,
+        });
+    }
 }
 #endif

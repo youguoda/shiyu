@@ -575,6 +575,29 @@ public partial class App
             var dropAwayUndocked = bar.ProbeDockExpanded();
             log.AppendLine(FormattableString.Invariant(
                 $"drop|topCollapsed={dropTopCollapsed}|awayUndocked={dropAwayUndocked}"));
+
+            // 实时跟手（用户实录 2026-10-20 的外框问题）：按住背景拖，当帧窗口就应跟动。
+            // 先把窄条挪回屏幕内——上一步的落点判定不挪窗，贴边姿态下窗口大半在屏幕外。
+            var workTop = SystemParameters.WorkArea.Top;
+            Shiyu.Windows.TransientWindow.MoveTo(
+                new System.Windows.Interop.WindowInteropHelper(bar).Handle,
+                new Shiyu.Core.ScreenPoint(
+                    (int)SystemParameters.WorkArea.Left + 200, (int)workTop + 150),
+                Shiyu.Core.ZBandPolicy.FollowsHost(bar.Topmost));
+            await Task.Delay(200);
+            var xy0 = bar.ProbeWindowXY;
+            if (!await bar.ProbeBarPressAtAsync(200, 40))
+            {
+                log.AppendLine("livedrag|cursor=False");
+                return;
+            }
+
+            await bar.ProbeBarMoveToAsync(260, 100);
+            var xyLive = bar.ProbeWindowXY;
+            await bar.ProbeBarReleaseAsync();
+            await Task.Delay(300);
+            log.AppendLine(FormattableString.Invariant(
+                $"livedrag|xy0={xy0}|xyLive={xyLive}"));
         }
         catch (Exception failure)
         {

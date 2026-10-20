@@ -85,4 +85,19 @@ $ok = $drop -and $drop['awayUndocked'] -eq 'True'
 $detail = if ($drop) { "a drag ending away from the top undocks: {0}" -f $drop['awayUndocked'] } else { 'no drop line' }
 Add-Check 'flow:bar-dock-dropaway' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+$livedrag = $lines['livedrag']
+$ok = $false
+$detail = 'no livedrag line'
+if ($livedrag -and ($livedrag.ContainsKey('xy0')) -and ($livedrag.ContainsKey('xyLive'))) {
+    $a = $livedrag['xy0'] -split ';'
+    $b = $livedrag['xyLive'] -split ';'
+    if (($a.Count -eq 2) -and ($b.Count -eq 2)) {
+        $dx = [int]$b[0] - [int]$a[0]
+        $dy = [int]$b[1] - [int]$a[1]
+        $ok = ([math]::Abs($dx) -ge 40) -and ([math]::Abs($dy) -ge 40)
+        $detail = "the bar followed the cursor live, mid-drag move: ${dx};${dy} px"
+    }
+}
+Add-Check 'flow:bar-dock-livedrag' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 return $script:Checks

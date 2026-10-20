@@ -16,7 +16,9 @@
         MouseEnter="OnDockMouseEnter"
         MouseLeave="OnDockMouseLeave"
         Deactivated="OnLostFocus"
-        MouseLeftButtonDown="OnBackgroundPressed">
+        MouseLeftButtonDown="OnBackgroundPressed"
+        MouseMove="OnBarDragMove"
+        MouseLeftButtonUp="OnBarDragUp">
     <!--
       The narrow bar (ticket 12): summoned by the quick-paste hotkey at the
       caret, topmost, dragged by its background, resized by the grip; it

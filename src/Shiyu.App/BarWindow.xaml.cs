@@ -84,6 +84,14 @@ internal partial class BarWindow : Window
     /// <summary>拖动落点距工作区顶缘多少 DIP 内算「拖到顶了」（含越顶，用户需求 2026-10-20）。</summary>
     private const double DockCaptureDip = 12;
 
+    // 整窗拖动（手动跟手）：按下记基准，移动即 MoveTo 实时平移——不再走系统移动
+    // 循环（HTCAPTION/DragMove 在透明窗上只画轮廓不实时跟，用户实录 2026-10-20）。
+    private bool _barDragging;
+    private Point _barDragStart;          // 物理像素（屏幕坐标）。
+    private ScreenRect _barDragBase;      // 按下时的窗口矩形。
+    private bool _barDragMoved;
+    private bool _barDragClickWhenStill;  // 品牌钮：原地松手算点击（开历史窗）。
+
     /// <summary>窄条记着要贴回的那扇窗：品牌钮打开历史窗口时交给它（评审 2026-10-16 F-12「粘贴全部」）。</summary>
     internal ForegroundWindow ReturnTarget => _returnTo;
 
@@ -340,23 +348,14 @@ internal partial class BarWindow : Window
     /// 没有位移的这一次按点击算——打开管理窗。HTCAPTION 的系统移动循环
     /// 而非 DragMove：DragMove 吞掉抬起，点击与拖动无法在同一枚钮上区分；
     /// 这也不是第二条 DragMove（背景拖动仍是一处，见 OnBackgroundPressed）。
-    /// 拖过就算改位置（用户需求 2026-10-20）：贴边隐藏自动关闭。
+    /// 拖动是手动跟手：按下捕获、移动即 SetWindowPos 实时平移——不再走 HTCAPTION
+    /// 系统移动循环（透明窗上它只画轮廓不实时跟，用户实录 2026-10-20）。原地松手
+    /// 这次按点击算——打开管理窗；拖过的落点交给贴边判定。
     /// </summary>
     private void OnBrandPressed(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        WindowRects.TryGet(handle, out var before);
-        var point = PointToScreen(e.GetPosition(this));
-        WindowRects.RunCaptionDrag(handle, (int)point.X, (int)point.Y);
-        if (!WindowRects.TryGet(handle, out var after)
-            || (after.Left == before.Left && after.Top == before.Top))
-        {
-            LibraryRequested?.Invoke();
-            return;
-        }
-
-        ApplyEdgeDockAfterDrag(after);
+        StartBarDrag(e, clickWhenStill: true);
     }
 
     /// <summary>拖动落点定去留（用户需求 2026-10-20 的位置语义）：贴着工作区顶缘
@@ -828,10 +827,69 @@ internal partial class BarWindow : Window
     {
         // Card presses mark themselves handled, and input controls swallow
         // their own clicks, so what reaches here is genuinely background.
-        DragMove();
-        if (WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var after))
+        StartBarDrag(e, clickWhenStill: false);
+    }
+
+    /// <summary>开始整窗拖动：捕获鼠标，窗口随移动实时跟手（MoveTo = 基准矩形 + 光标位移）。</summary>
+    private void StartBarDrag(MouseButtonEventArgs e, bool clickWhenStill)
+    {
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (!WindowRects.TryGet(handle, out _barDragBase))
         {
-            ApplyEdgeDockAfterDrag(after);
+            return;
+        }
+
+        var screen = PointToScreen(e.GetPosition(this));
+        _barDragStart = new Point(screen.X, screen.Y);
+        _barDragClickWhenStill = clickWhenStill;
+        _barDragMoved = false;
+        _barDragging = true;
+        CaptureMouse();
+    }
+
+    /// <summary>拖动中的实时跟手：窗口 = 基准矩形 + 光标位移（物理像素）。</summary>
+    private void OnBarDragMove(object sender, MouseEventArgs e)
+    {
+        if (!_barDragging)
+        {
+            return;
+        }
+
+        var screen = PointToScreen(e.GetPosition(this));
+        var dx = (int)Math.Round(screen.X - _barDragStart.X);
+        var dy = (int)Math.Round(screen.Y - _barDragStart.Y);
+        if (dx != 0 || dy != 0)
+        {
+            _barDragMoved = true;
+        }
+
+        TransientWindow.MoveTo(
+            new System.Windows.Interop.WindowInteropHelper(this).Handle,
+            new ScreenPoint(_barDragBase.Left + dx, _barDragBase.Top + dy),
+            ZBandPolicy.FollowsHost(Topmost));
+        e.Handled = true;
+    }
+
+    private void OnBarDragUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_barDragging)
+        {
+            return;
+        }
+
+        _barDragging = false;
+        ReleaseMouseCapture();
+        e.Handled = true;
+        if (_barDragMoved)
+        {
+            if (WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var after))
+            {
+                ApplyEdgeDockAfterDrag(after);
+            }
+        }
+        else if (_barDragClickWhenStill)
+        {
+            LibraryRequested?.Invoke();
         }
     }
 }
