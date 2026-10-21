@@ -59,7 +59,7 @@ public partial class SettingsWindow
 
         string List()
         {
-            var lines = _savedProviders!.Children.OfType<Grid>().ToList();
+            var lines = _savedProviders!.Element.Children.OfType<Grid>().ToList();
             var current = lines.Select((line, index) => (line, index))
                 .Where(pair => System.Windows.Automation.AutomationProperties.GetName(pair.line).EndsWith("当前使用", StringComparison.Ordinal))
                 .Select(pair => pair.index)
