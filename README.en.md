@@ -52,7 +52,7 @@ What it does not record matters just as much:
 - when the copying app marks its content "do not record", Shiyu obeys;
 - you can add your own exclusion rules, by source app, or by content with a regular expression that starts with `re:`.
 
-Light while resident: turn on Lightweight mode (「轻量模式」) and Shiyu releases UI resources and trims its memory while the bar is hidden; recording continues.
+Light while resident: turn on Lightweight mode (「轻量模式」) and Shiyu releases UI resources and trims its memory while the bar is hidden; recording continues. For a smaller footprint still, turn off Hardware acceleration (「硬件加速」, under Settings → General → Performance → More) and the UI is drawn by the CPU instead (takes effect after restarting Shiyu).
 
 ### Layer 2 · Retrieve: the quick bar and the full history
 
