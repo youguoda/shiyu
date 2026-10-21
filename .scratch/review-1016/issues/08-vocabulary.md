@@ -1,7 +1,7 @@
 # 08 — 生词本
 
 **来源：** 评审 F-09
-**Status:** ready-for-human
+**Status:** done（2026-10-21 用户决定以委托的自动验收结案；记录见文末）
 
 **What to build:** 词典卡加星标（收进生词本）；翻译记录页加「生词」筛选；导出 CSV（Anki 可导入：词头、音标、释义、原句）。数据在 translation_log 加一列。
 
@@ -25,3 +25,7 @@
 - **PASS flow:vocabulary-csv-export**：导出的 CSV 带 Anki 文件头（#separator:Comma / #html:false / #columns:…），三行词头都在。
 - 一个值得知道的行为：收 **went** 时，生词本里记的是原形 **go**（词典卡本就是 go 的卡）——查变形词收的是它本身。
 - probe-vocabulary 加进了 run-all（不碰剪贴板）。剩下唯一人工的一步：你若用 Anki，把那份 CSV 导进去看一眼列名。
+
+## 结案（2026-10-21）
+
+- 用户决定：以 2026-10-17 受委托的自动验收（全部 PASS）结案，不再等实机验收。票面上「剩下唯一人工的一步」不阻塞结案，用户用到时顺手看。
