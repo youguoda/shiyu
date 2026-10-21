@@ -25,6 +25,12 @@ public partial class App
     /// </summary>
     private static string PrepareProbe()
     {
+        // 先于任何一扇窗：渲染方式在窗口的渲染目标建立时就定了。
+        if (DebugOverrides.SoftwareRender)
+        {
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        }
+
         if (DebugOverrides.ProbeDirectory is not { } probeDirectory)
         {
             return "Shiyu";

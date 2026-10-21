@@ -80,6 +80,13 @@ internal static class DebugOverrides
     public static bool ProbeClipboard =>
         Environment.GetEnvironmentVariable("SHIYU_PROBE_CLIPBOARD") == "1";
 
+    /// <summary>
+    /// 整个进程用 WPF 软件渲染（接手票 07 的实验）：同一套探针在硬件 / 软件渲染下各量一遍，
+    /// 看内存、句柄、流式卡顿与呼出延迟怎么换。
+    /// </summary>
+    public static bool SoftwareRender =>
+        Environment.GetEnvironmentVariable("SHIYU_SOFTWARE_RENDER") == "1";
+
     /// <summary>让设置窗直接落到某个设置项（既有深链）。</summary>
     public static string? ProbeItem =>
         Environment.GetEnvironmentVariable("SHIYU_PROBE_ITEM") is { Length: > 0 } item

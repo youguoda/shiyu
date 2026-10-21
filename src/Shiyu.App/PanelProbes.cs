@@ -98,7 +98,7 @@ public partial class PanelWindow
         }
 
         return FormattableString.Invariant(
-            $"speech|voice={_speech?.LastVoice}|stopShown={shown}|backAfter={back}{Environment.NewLine}");
+            $"speech|voice={_speech?.LastVoice}|target={_session?.CurrentRequest?.TargetLanguage ?? _target}|stopShown={shown}|backAfter={back}{Environment.NewLine}");
     }
 
     /// <summary>
