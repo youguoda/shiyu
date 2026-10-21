@@ -1,1 +1,0 @@
-创建票文件 `.scratch/shiyu-v2/issues/30-ui-win11-fluent.md`（Win11 融合 UI 改造：Mica/Acrylic 材质映射、DesignTokens v2 清单、逐界面要点、实施顺序与验收清单，Status: ready-for-agent），并单独提交该票。不改任何代码。

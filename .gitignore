@@ -2,3 +2,7 @@ bin/
 obj/
 *.user
 .vs/
+
+# agent 工具的会话产物（DAG 索引、会话计划），不进仓库
+.dag/
+.zcode/
