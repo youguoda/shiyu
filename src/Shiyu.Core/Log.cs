@@ -160,15 +160,69 @@ public static class Log
             line += " ex=" + exception.GetType().Name
                 + ": " + Flatten(exception.Message, 300);
 
-            var frames = exception.StackTrace?.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            if (frames is { Length: > 0 })
+            if (exception.StackTrace is { Length: > 0 } stack)
             {
-                // 前三帧足够指认案发现场；再往后基本是消息泵和运行时。
-                line += " frames=" + Flatten(string.Join(" | ", frames.Take(3)), 600);
+                line += " frames=" + CompactFrames(stack);
             }
         }
 
         return line;
+    }
+
+    /// <summary>
+    /// 一行里留几帧。布局里抛出的异常（虚拟化列表量尺寸）前几帧全是 WPF 自己，
+    /// 要到第五、六帧才看得出是哪种容器、哪个窗口。
+    /// </summary>
+    private const int MaxFrames = 8;
+
+    private const int FramesLimit = 900;
+
+    /// <summary>
+    /// 栈帧压成「类型.方法 文件:行」，一行 <see cref="MaxFrames"/> 帧。参数表和目录
+    /// 不帮人指认现场，却能让一帧 WPF 签名吃掉整个预算。
+    /// </summary>
+    internal static string CompactFrames(string stackTrace)
+    {
+        var frames = stackTrace
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(CompactFrame)
+            .Where(frame => frame.Length > 0)
+            .Take(MaxFrames);
+        return Flatten(string.Join(" | ", frames), FramesLimit);
+    }
+
+    private static string CompactFrame(string frame)
+    {
+        var text = frame.Trim();
+        if (text.StartsWith("---", StringComparison.Ordinal))
+        {
+            // 「--- End of stack trace from previous location ---」：异步接缝，不是帧。
+            return string.Empty;
+        }
+
+        if (text.StartsWith("at ", StringComparison.Ordinal))
+        {
+            text = text[3..];
+        }
+
+        var location = string.Empty;
+        var inAt = text.LastIndexOf(" in ", StringComparison.Ordinal);
+        var lineAt = text.LastIndexOf(":line ", StringComparison.Ordinal);
+        if (inAt >= 0 && lineAt > inAt)
+        {
+            var file = text[(inAt + 4)..lineAt];
+            var fileName = file[(file.LastIndexOfAny(['\\', '/']) + 1)..];
+            location = " " + fileName + ":" + text[(lineAt + 6)..];
+            text = text[..inAt];
+        }
+
+        var parameters = text.IndexOf('(');
+        if (parameters >= 0)
+        {
+            text = text[..parameters];
+        }
+
+        return text + location;
     }
 
     private static string Flatten(string text, int limit)

@@ -123,6 +123,47 @@ public class LogTests
         }
     }
 
+    [Fact]
+    public void A_layout_crash_keeps_enough_frames_to_name_the_list()
+    {
+        // 用户日志 2026-10-19 的形状：第一帧的参数表就有四百多字，原来三帧 600 字的
+        // 预算到第三帧就截没了，看不出是哪个列表在量尺寸。
+        var stack = string.Join("\r\n",
+            "   at System.Windows.Controls.VirtualizingStackPanel.ExtendViewport(IHierarchicalVirtualizationAndScrollInfo virtualizationInfoProvider, Boolean isHorizontal, Rect viewport, VirtualizationCacheLength cacheLength, VirtualizationCacheLengthUnit cacheUnit, Size stackPixelSizeInCacheBeforeViewport, Size stackLogicalSizeInCacheBeforeViewport, Size stackPixelSizeInCacheAfterViewport, Size stackLogicalSizeInCacheAfterViewport, Size stackPixelSize, Size stackLogicalSize, Int32& itemsInExtendedViewportCount)",
+            "   at System.Windows.Controls.VirtualizingStackPanel.IsExtendedViewportFull()",
+            "   at System.Windows.Controls.VirtualizingStackPanel.MeasureOverrideImpl(Size constraint, Nullable`1& lastPageSafeOffset, List`1& previouslyMeasuredOffsets, Nullable`1& lastPagePixelSize, Boolean remeasure)",
+            "   at System.Windows.Controls.VirtualizingStackPanel.MeasureOverride(Size constraint)",
+            "   at System.Windows.FrameworkElement.MeasureCore(Size availableSize)",
+            "   at System.Windows.Controls.GroupItem.MeasureOverride(Size constraint)",
+            "--- End of stack trace from previous location ---",
+            @"   at Shiyu.App.LibraryWindow.Reload() in D:\a\shiyu\shiyu\src\Shiyu.App\LibraryWindow.xaml.cs:line 412");
+
+        var frames = Log.CompactFrames(stack);
+
+        Assert.Equal(
+            "System.Windows.Controls.VirtualizingStackPanel.ExtendViewport"
+            + " | System.Windows.Controls.VirtualizingStackPanel.IsExtendedViewportFull"
+            + " | System.Windows.Controls.VirtualizingStackPanel.MeasureOverrideImpl"
+            + " | System.Windows.Controls.VirtualizingStackPanel.MeasureOverride"
+            + " | System.Windows.FrameworkElement.MeasureCore"
+            + " | System.Windows.Controls.GroupItem.MeasureOverride"
+            + " | Shiyu.App.LibraryWindow.Reload LibraryWindow.xaml.cs:412",
+            frames);
+    }
+
+    [Fact]
+    public void Compact_frames_stay_bounded()
+    {
+        var stack = string.Join("\n", Enumerable.Range(0, 40).Select(i =>
+            $"   at Shiyu.Core.Deep.Nested.Type{i}.Method{i}(String a, Int32 b)"));
+
+        var frames = Log.CompactFrames(stack);
+
+        Assert.Equal(8, frames.Split(" | ").Length);
+        Assert.DoesNotContain("Type8.", frames);
+        Assert.True(frames.Length <= 901);
+    }
+
     /// <summary>
     /// 钉住公开签名（O-05 的硬约束）：Log 的公开方法不接受任何 string 参数，
     /// 字段值只可能是数字或布尔。有人哪天手滑加了 string 重载，这条测试先红。
