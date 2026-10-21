@@ -521,6 +521,7 @@ public partial class App
     {
         var directory = DebugOverrides.ProbeDirectory!;
         var log = new StringBuilder();
+        var cursorAtStart = BarWindow.ProbeCursorNow();
         try
         {
             var shell = _shell!;
@@ -629,6 +630,41 @@ public partial class App
             await Task.Delay(400);
             log.AppendLine(FormattableString.Invariant(
                 $"summondrop|strip={bar.ProbeVisibleStrip():F0}"));
+
+            // 呼出状态拖到顶缘收成细条之后，鼠标进细条要能弹出来（用户实录 2026-10-21：弹不出来）。
+            await bar.ProbeHoverStripAsync();
+            log.AppendLine(FormattableString.Invariant(
+                $"summonhover|expanded={bar.ProbeDockExpanded()}|strip={bar.ProbeVisibleStrip():F0}"));
+
+            // 拖下来再往上移（用户实录 2026-10-21：会闪一下快捷键）：逐拍记下各种提示的状态。
+            // 收着就按细条（用户当时就是按它拖的），弹出来了就按品牌钮。
+            var grip = bar.ProbeDockExpanded()
+                ? bar.ProbeBrandCenter
+                : new Point(bar.ActualWidth / 2, bar.ActualHeight - 1.5);
+            if (await bar.ProbeBarPressAtAsync(grip.X, grip.Y))
+            {
+                var trace = new StringBuilder("dragdown|");
+                for (var step = 1; step <= 5; step++)
+                {
+                    await bar.ProbeBarMoveToAsync(grip.X, grip.Y + 50);
+                    trace.Append(FormattableString.Invariant($"d{step}:{bar.ProbeHintState()};"));
+                }
+
+                await bar.ProbeBarReleaseAsync();
+                trace.Append(FormattableString.Invariant($"up:{bar.ProbeHintState()};"));
+                for (var step = 1; step <= 8; step++)
+                {
+                    await bar.ProbeBarMoveToAsync(grip.X, grip.Y - (40 * step));
+                    await Task.Delay(40);
+                    trace.Append(FormattableString.Invariant($"m{step}:{bar.ProbeHintState()};"));
+                }
+
+                log.AppendLine(trace.ToString());
+            }
+            else
+            {
+                log.AppendLine("dragdown|cursor=False");
+            }
         }
         catch (Exception failure)
         {
@@ -637,6 +673,7 @@ public partial class App
         }
         finally
         {
+            BarWindow.ProbeCursorBack(cursorAtStart);
             log.AppendLine("done");
             File.WriteAllText(Path.Combine(directory, "bar-dock.log"), log.ToString());
         }

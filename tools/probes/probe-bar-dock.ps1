@@ -87,6 +87,8 @@ if ($userPresent) {
     Add-Check 'flow:bar-dock-livedrag' 'SKIP' 'user present - cursor-coupled steps skipped'
     Add-Check 'flow:bar-dock-summondrop' 'SKIP' 'user present - cursor-coupled steps skipped'
     Add-Check 'flow:bar-dock-capture-lost' 'SKIP' 'user present - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-summon-hover' 'SKIP' 'user present - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-dragdown-stays' 'SKIP' 'user present - cursor-coupled steps skipped'
     return $script:Checks
 }
 
@@ -136,5 +138,35 @@ $summondrop = $lines['summondrop']
 $ok = $summondrop -and ([double]$summondrop['strip'] -le 4)
 $detail = if ($summondrop) { "a top drop while summoned docks at once: {0} DIP strip" -f $summondrop['strip'] } else { 'no summondrop line' }
 Add-Check 'flow:bar-dock-summondrop' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+# User report 2026-10-21: a bar summoned by the hotkey and dragged to the top collapsed fine,
+# but hovering the strip never brought it back out.
+$hover = $lines['summonhover']
+$ok = $hover -and $hover['expanded'] -eq 'True'
+$detail = if ($hover) { "hovering the strip after a summoned bar docked: expanded {0}, strip {1} DIP" -f $hover['expanded'], $hover['strip'] } else { 'no summonhover line' }
+Add-Check 'flow:bar-dock-summon-hover' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+# User report 2026-10-21: dragged down from the top, the bar snapped back into the strip on
+# release (the drop rule read the collapsed window's off-screen top edge), and the hints
+# seemed to flash. The bar must stay where it was dropped, and no key hint may light up.
+$drag = $lines['dragdown']
+if ($drag -and $drag['cursor'] -eq 'False') {
+    Add-Check 'flow:bar-dock-dragdown-stays' 'SKIP' $covered
+} else {
+    $raw = (Get-Content $log -Encoding UTF8 | Where-Object { $_ -like 'dragdown|*' } | Select-Object -First 1)
+    $samples = @{}
+    if ($raw) {
+        foreach ($part in $raw.Substring('dragdown|'.Length).Split(';')) {
+            if ($part -match '^(\w+):(.*)$') { $samples[$Matches[1]] = $Matches[2] }
+        }
+    }
+    $topOf = { param($s) if ($s -match 'top=(-?\d+)') { [int]$Matches[1] } else { $null } }
+    $dropped = & $topOf $samples['d5']
+    $after = & $topOf $samples['up']
+    $lit = @($samples.Values | Where-Object { $_ -match 'keys=True|badges=[1-9]' }).Count
+    $ok = ($null -ne $dropped) -and ($null -ne $after) -and ([math]::Abs($after - $dropped) -le 2) -and ($lit -eq 0)
+    $detail = "top while dragging {0}, after release {1}; samples with key hints lit: {2}" -f $dropped, $after, $lit
+    Add-Check 'flow:bar-dock-dragdown-stays' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+}
 
 return $script:Checks

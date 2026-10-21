@@ -640,6 +640,42 @@ internal partial class BarWindow
         await SettleInputAsync();
     }
 
+    /// <summary>此刻真实光标的位置（探针收尾时放回去，免得下一轮开头被它触发悬停）。</summary>
+    internal static (int X, int Y) ProbeCursorNow()
+        => GetCursorPos(out var at) ? (at.X, at.Y) : (0, 0);
+
+    internal static void ProbeCursorBack((int X, int Y) at) => SetCursorPos(at.X, at.Y);
+
+    /// <summary>真实光标移到贴边细条的正中，停一会儿（鼠标进细条该弹出）。</summary>
+    internal async Task ProbeHoverStripAsync()
+    {
+        ProbeCursorToBar(ActualWidth / 2, ActualHeight - DockedStrip / 2);
+        await SettleInputAsync();
+        await Task.Delay(700);
+    }
+
+    /// <summary>窄条上各种「快捷键」提示此刻的状态：Ctrl 键帽、卡片编号、悬停动作托盘、悬停预览、底栏提示。</summary>
+    internal string ProbeHintState()
+    {
+        var badges = 0;
+        var trays = 0;
+        foreach (var container in RealizedContainers())
+        {
+            if (Tree.FindDescendant<RowKeyBadge>(container) is { IsVisible: true })
+            {
+                badges++;
+            }
+
+            if (Tree.FindDescendant<ActionTray>(container) is { IsVisible: true } tray && tray.Opacity > 0.01)
+            {
+                trays++;
+            }
+        }
+
+        return FormattableString.Invariant(
+            $"keys={_keyHintsOn},badges={badges},trays={trays},preview={_preview is { IsVisible: true }},footer={FeedbackHost.IsVisible},top={Top:F0}");
+    }
+
     /// <summary>拖到一半把鼠标捕获夺走（Alt+Tab、Win 键、窗被收起时系统就是这么做的）。</summary>
     internal void ProbeBarLoseCapture() => System.Windows.Input.Mouse.Capture(null);
 

@@ -363,6 +363,9 @@ internal partial class BarWindow : Window
         if (after.Top - work.Top <= DockCaptureDip)
         {
             EdgeDockWanted?.Invoke(true);
+
+            // 从这一刻起它是常驻贴边的窄条，不再是一次呼出：留着呼出标记，鼠标进细条就弹不出来。
+            _summoned = false;
             CollapseNow();   // 拖到顶缘的那一下就要缩进去——召出状态也不例外。
         }
         else if (_edgeCollapsed && _settings.BarEdgeDock)
@@ -888,7 +891,9 @@ internal partial class BarWindow : Window
     /// <paramref name="clickWhenStill"/>（品牌钮）原地松手算点击——开历史窗。
     /// </summary>
     private void StartBarDrag(MouseButtonEventArgs e, bool clickWhenStill)
-        => LiveDrag.Begin(this, e, () => ZBandPolicy.FollowsHost(Topmost), moved =>
+    {
+        PullOutForDrag();
+        LiveDrag.Begin(this, e, () => ZBandPolicy.FollowsHost(Topmost), moved =>
         {
             if (moved)
             {
@@ -902,4 +907,30 @@ internal partial class BarWindow : Window
                 LibraryRequested?.Invoke();
             }
         });
+    }
+
+    /// <summary>
+    /// 从细条（或滑出到一半）开始拖：先整条落回工作区顶，滑出动画停下。收着时窗口顶边远在屏幕上方，
+    /// 落点按顶边判「拖到顶了」，往下拖不满一整个窗口高都会被贴回去；滑出的计时器也不能和拖动抢着挪窗。
+    /// </summary>
+    private void PullOutForDrag()
+    {
+        _dockSlide?.Stop();
+        _dockSlide = null;
+
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (!WindowRects.TryGet(handle, out var rect))
+        {
+            return;
+        }
+
+        var work = ScreenGeometry.WorkAreaAt(new ScreenPoint(rect.Left, rect.Bottom));
+        if (rect.Top >= work.Top)
+        {
+            return;
+        }
+
+        _edgeCollapsed = false;
+        TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, work.Top), ZBandPolicy.FollowsHost(Topmost));
+    }
 }
