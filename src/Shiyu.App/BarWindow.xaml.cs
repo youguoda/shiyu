@@ -261,16 +261,20 @@ internal partial class BarWindow : Window
             }
         }
 
-        // 贴边开关变了：开着且窄条可见（非召唤中）就收到细条；关了就展开回位。
+        // 贴边开关变了：开着且窄条可见就收到细条；关了就展开回位。
         if (edgeChanged)
         {
-            if (settings.BarEdgeDock && settings.BarPinned && IsVisible && !_summoned)
+            if (settings.BarEdgeDock && settings.BarPinned && IsVisible)
             {
+                // 用户明说要贴边，此刻开着的那一次呼出就此结束。钉住的窄条粘贴、点别处都不收，
+                // 呼出标记要等到按 Esc 才清——不在这里清，开关就像没反应（从窄条的齿轮进设置正是这样）。
+                _summoned = false;
                 DockCollapse();
             }
             else if (!settings.BarEdgeDock && _edgeCollapsed)
             {
-                DockExpand();
+                // 关开关是明说的：全屏程序在前台也回位（DockExpand 的全屏闸只管鼠标扫过顶缘）。
+                RestoreFromDock();
             }
         }
 
@@ -725,6 +729,12 @@ internal partial class BarWindow : Window
             return;
         }
 
+        RestoreFromDock();
+    }
+
+    /// <summary>从细条滑回工作区顶部，不问前台是谁。</summary>
+    private void RestoreFromDock()
+    {
         var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
         if (!WindowRects.TryGet(handle, out var rect))
         {

@@ -665,6 +665,21 @@ public partial class App
             {
                 log.AppendLine("dragdown|cursor=False");
             }
+
+            // 设置里的贴边开关（用户问 2026-10-21：开关能不能用）。窄条此刻正以呼出的样子开着、钉着
+            // ——从窄条的齿轮进设置就是这样——打开要当即收成细条；再关掉要回到完整位置。
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
+            await Task.Delay(300);
+            _modules!.Bar.ShowQuickPaste();
+            await Task.Delay(500);
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = true });
+            await Task.Delay(400);
+            log.AppendLine(FormattableString.Invariant(
+                $"toggleon|strip={bar.ProbeVisibleStrip():F0}|collapsed={!bar.ProbeDockExpanded()}"));
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
+            await Task.Delay(600);
+            log.AppendLine(FormattableString.Invariant(
+                $"toggleoff|top={bar.Top:F0}|expanded={bar.ProbeDockExpanded()}"));
         }
         catch (Exception failure)
         {

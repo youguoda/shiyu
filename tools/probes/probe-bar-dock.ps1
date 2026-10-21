@@ -80,6 +80,18 @@ $ok = $restored -and $restored['top'] -eq '0'
 $detail = if ($restored) { "top restored after the setting turned off: {0}" -f $restored['top'] } else { 'no restored line' }
 Add-Check 'flow:bar-dock-restore' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+# The settings switch while the bar is open from a summon and pinned (the bar's gear leads to
+# settings in exactly that state): on must collapse it at once, off must bring it back whole.
+$on = $lines['toggleon']
+$ok = $on -and ([double]$on['strip'] -le 4) -and $on['collapsed'] -eq 'True'
+$detail = if ($on) { "switch turned on while the summoned bar is open: strip {0} DIP, collapsed {1}" -f $on['strip'], $on['collapsed'] } else { 'no toggleon line' }
+Add-Check 'flow:bar-dock-switch-on-summoned' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+$off = $lines['toggleoff']
+$ok = $off -and $off['top'] -eq '0' -and $off['expanded'] -eq 'True'
+$detail = if ($off) { "switch turned off again: top {0} (work-area top), expanded {1}" -f $off['top'], $off['expanded'] } else { 'no toggleoff line' }
+Add-Check 'flow:bar-dock-switch-off' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 $drop = $lines['drop']
 if ($userPresent) {
     Add-Check 'flow:bar-dock-droptop' 'SKIP' 'user present (cursor moved between samples) - cursor-coupled steps skipped'
