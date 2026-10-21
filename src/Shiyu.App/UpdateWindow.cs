@@ -56,9 +56,16 @@ internal sealed class UpdateWindow : Window
 
     private ReleaseManifest? _release;
 
+    /// <summary>
+    /// 关窗即作罢：下载停下、半成品放手。不停的话，再开一扇更新窗就是两个下载抢同一个
+    /// 暂存区（用户日志 2026-10-19），而且下完还会在用户已经关掉窗口之后重启拾语。
+    /// </summary>
+    private readonly CancellationTokenSource _closing = new();
+
     public UpdateWindow(UpdateService updates)
     {
         _updates = updates;
+        Closed += (_, _) => _closing.Cancel();
 
         Title = "拾语 · 更新";
         Width = 420;
@@ -136,7 +143,7 @@ internal sealed class UpdateWindow : Window
 
         try
         {
-            _release = await _updates.CheckAsync();
+            _release = await _updates.CheckAsync(_closing.Token);
 
             if (_release is null)
             {
@@ -154,6 +161,10 @@ internal sealed class UpdateWindow : Window
                 _status.Text = "有新版本可用。";
                 _install.IsEnabled = true;
             }
+        }
+        catch (OperationCanceledException) when (_closing.IsCancellationRequested)
+        {
+            // 窗口关了，检查随之作罢：不是故障，不进日志。
         }
         catch (Exception failure)
         {
@@ -180,7 +191,7 @@ internal sealed class UpdateWindow : Window
 
         var progress = new Progress<double>(fraction => _progress.Value = Math.Clamp(fraction, 0, 1));
 
-        var (ok, error) = await _updates.DownloadAsync(_release, progress, CancellationToken.None);
+        var (ok, error) = await _updates.DownloadAsync(_release, progress, _closing.Token);
 
         if (!ok)
         {
@@ -192,12 +203,16 @@ internal sealed class UpdateWindow : Window
 
         _status.Text = "已就绪，重启完成更新。";
 
-        // A beat so the sentence can be read, then the staged copy takes over.
+        // A beat so the sentence can be read, then the staged copy takes over —
+        // unless the window was closed in that beat: closing means "not now".
         var beat = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
         beat.Tick += (_, _) =>
         {
             beat.Stop();
-            _updates.ApplyAndRestart();
+            if (!_closing.IsCancellationRequested)
+            {
+                _updates.ApplyAndRestart();
+            }
         };
         beat.Start();
     }

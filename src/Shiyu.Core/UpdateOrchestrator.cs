@@ -99,14 +99,14 @@ public sealed class UpdateOrchestrator(
         {
             if (release.Asset(_channel.AssetName) is not { } asset)
             {
-                UpdateStaging.Reset(_dataDirectory);
+                UpdateStaging.TryReset(_dataDirectory);
                 return (false, $"这个发布（v{release.Version.Text}）没有 {_channel.AssetName}。");
             }
 
             if (release.SignatureFor(asset.Name) is not { } signatureAsset)
             {
                 // 没有签名就没有信任可言——这不是"少了一个可选附件"。
-                UpdateStaging.Reset(_dataDirectory);
+                UpdateStaging.TryReset(_dataDirectory);
                 return (false, $"这个发布（v{release.Version.Text}）没有安装包签名（{asset.Name}.sig），已拒绝安装。");
             }
 
@@ -124,7 +124,7 @@ public sealed class UpdateOrchestrator(
             var installer = await File.ReadAllBytesAsync(UpdateStaging.InstallerPath(_dataDirectory), cancel);
             if (!UpdateSignature.Verify(installer, signature, _publicKeyPem))
             {
-                UpdateStaging.Reset(_dataDirectory);
+                UpdateStaging.TryReset(_dataDirectory);
                 return (false, "更新包签名不符，已拒绝安装。");
             }
 
@@ -134,7 +134,7 @@ public sealed class UpdateOrchestrator(
                 UpdateStaging.InstallerPath(_dataDirectory), asset.Size, checksum);
             if (!ok)
             {
-                UpdateStaging.Reset(_dataDirectory);
+                UpdateStaging.TryReset(_dataDirectory);
                 return (false, error);
             }
 
@@ -145,17 +145,18 @@ public sealed class UpdateOrchestrator(
         }
         catch (OperationCanceledException)
         {
-            UpdateStaging.Reset(_dataDirectory);
+            UpdateStaging.TryReset(_dataDirectory);
             return (false, "已取消。");
         }
         catch (HttpRequestException failure)
         {
-            UpdateStaging.Reset(_dataDirectory);
+            UpdateStaging.TryReset(_dataDirectory);
             return (false, "下载失败：" + failure.Message);
         }
-        catch (IOException failure)
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
-            UpdateStaging.Reset(_dataDirectory);
+            // expected: 暂存区被占着（前一次下载没停）、磁盘满、没有权限——都收成一句话。
+            UpdateStaging.TryReset(_dataDirectory);
             return (false, "写入失败：" + failure.Message);
         }
     }

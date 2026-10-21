@@ -32,7 +32,7 @@ public static class UpdateStaging
 
     public static string PendingPath(string dataDirectory) => Path.Combine(Root(dataDirectory), "pending.json");
 
-    /// <summary>Clears every leftover: called before a fresh download and after a failed one.</summary>
+    /// <summary>Clears every leftover before a fresh download. Throws when something still holds a file.</summary>
     public static void Reset(string dataDirectory)
     {
         var root = Root(dataDirectory);
@@ -41,6 +41,13 @@ public static class UpdateStaging
             Directory.Delete(root, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Clears what it can after a refused or failed download. Never throws: the
+    /// caller is already on its way to telling the user why, and a leftover that
+    /// is still held is cleared by the next <see cref="Reset"/>.
+    /// </summary>
+    public static void TryReset(string dataDirectory) => TryDelete(Root(dataDirectory));
 
     /// <summary>
     /// Removes everything the finalizer can remove — everything except the

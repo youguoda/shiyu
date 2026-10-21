@@ -204,6 +204,38 @@ public class UpdateOrchestratorTests
     }
 
     [Fact]
+    public async Task A_staging_area_held_by_an_earlier_download_is_refused_in_words()
+    {
+        using var area = new TempDirectory();
+        var package = InstallerZip();
+        var (signature, publicKey) = Sign(package);
+        using var server = new FakeReleaseServer(new Dictionary<string, object>
+        {
+            ["/shiyu-win-x64.zip"] = package,
+            ["/shiyu-win-x64.zip.sig"] = signature,
+            ["/shiyu-win-x64.zip.sha256"] = ChecksumText(package),
+        });
+
+        // 用户日志 2026-10-19：前一次下载还开着半成品，暂存区清不掉。清理失败本身
+        // 不许变成异常逃出去——调用方拿到的永远是一句话。
+        Directory.CreateDirectory(UpdateStaging.Root(area.Path));
+        var partial = UpdateStaging.InstallerPath(area.Path) + ".partial";
+        using (new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.Read))
+        {
+            var (blocked, error) = await Orchestrator(server, area.Path, publicKey).DownloadAsync(
+                Release(package.Length), progress: null, CancellationToken.None);
+
+            Assert.False(blocked);
+            Assert.Contains("写入失败", error);
+        }
+
+        // 占着的那一份放手之后，再来一次就能装上。
+        var (ok, retryError) = await Orchestrator(server, area.Path, publicKey).DownloadAsync(
+            Release(package.Length), progress: null, CancellationToken.None);
+        Assert.True(ok, retryError);
+    }
+
+    [Fact]
     public async Task CheckAsync_reads_the_latest_release_from_the_channel()
     {
         using var server = new FakeReleaseServer(new Dictionary<string, object>
