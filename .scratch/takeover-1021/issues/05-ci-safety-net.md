@@ -15,4 +15,8 @@
 
 ## Comments
 
-- 2026-10-21 实现（14feab8），本地提交，尚未推送。
+- 2026-10-21 实现（14feab8）。
+- 2026-10-21 推送后首跑（run 39593689859，`2baaaf3`）：**平台层单测在构建机上 26 个全绿**；installer、server 两个 job 绿；
+  「Release 产物不带调试开关」红——不是扫出了什么，是扫描脚本干净时没有 `exit 0`，全新的 pwsh 里 `$LASTEXITCODE` 是
+  `$null`，`$null -ne 0` 为真。本机模拟没现形是因为同一会话里先跑过 `dotnet build`，`$LASTEXITCODE` 恰好是 0。
+  修：脚本干净时显式 `exit 0`；在全新进程里复验 Release 三个 PASS、Debug FAIL。同样的步骤在 release.yml 里也会红，一并修好。

@@ -36,3 +36,4 @@ if ($hitA -or $hitU) {
     exit 1
 }
 Write-Host "release-override-scan: clean"
+exit 0
