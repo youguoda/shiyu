@@ -1,4 +1,4 @@
-# 拾语 CI：Windows 上构建整个解决方案并跑 Core 单测，另一台 Windows 打安装包
+# 拾语 CI：Windows 上构建整个解决方案并跑 Core 与平台层单测，另一台 Windows 打安装包
 # 并真装真卸一遍；Linux 上跑公共通道 Worker 的类型检查与 vitest。三个 job
 # 互不依赖，并行执行。
 name: CI
@@ -42,6 +42,22 @@ jobs:
         id: test
         run: dotnet test tests/Shiyu.Core.Tests/Shiyu.Core.Tests.csproj -c Release --no-build --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
 
+      # 测试矩阵 G-01：平台层测试只用不显示的窗口、从不注册真热键，构建机上能跑。
+      - name: 平台层单测
+        id: windows-test
+        if: success() || steps.test.outcome == 'failure'
+        run: dotnet test tests/Shiyu.Windows.Tests/Shiyu.Windows.Tests.csproj -c Release --no-build --logger "trx;LogFileName=windows-tests.trx" --results-directory TestResults
+
+      # O-41：Release 程序集里不许有任何 SHIYU_ 字面量——调试开关的名字都不能留。
+      - name: Release 产物不带调试开关
+        shell: pwsh
+        run: |
+          $bin = 'src/Shiyu.App/bin/Release/net9.0-windows10.0.17763.0'
+          foreach ($dll in 'Shiyu.App.dll', 'Shiyu.Core.dll', 'Shiyu.Windows.dll') {
+            & tools/checks/scan-release-overrides.ps1 -Exe (Join-Path $bin $dll)
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
       # O-24：catch (Exception) 块必须接日志或声明 expected——静默即失败。
       - name: 静默 catch 检查
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/checks/no-silent-catch.ps1
@@ -52,10 +68,10 @@ jobs:
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/checks/no-hardcoded-tokens.ps1
 
       - name: 单测失败时上传结果
-        if: failure() && steps.test.outcome == 'failure'
+        if: failure() && (steps.test.outcome == 'failure' || steps.windows-test.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
-          name: core-test-results
+          name: test-results
           path: TestResults
           retention-days: 7
 

@@ -44,11 +44,23 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 测试（不过不发布）
+      - name: Core 测试（不过不发布）
         run: dotnet test tests/Shiyu.Core.Tests -c Release
+
+      - name: 平台层测试（不过不发布）
+        run: dotnet test tests/Shiyu.Windows.Tests -c Release
 
       - name: 发布 self-contained win-x64
         run: dotnet publish src/Shiyu.App/Shiyu.App.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.version.outputs.version }} -o publish
+
+      # O-41：发出去的程序集里不许有任何 SHIYU_ 字面量，扫不过不发布。
+      - name: 发布产物不带调试开关
+        shell: pwsh
+        run: |
+          foreach ($dll in 'Shiyu.App.dll', 'Shiyu.Core.dll', 'Shiyu.Windows.dll') {
+            & tools/checks/scan-release-overrides.ps1 -Exe (Join-Path publish $dll)
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
 
       - name: 打 zip 与校验和
         shell: pwsh
