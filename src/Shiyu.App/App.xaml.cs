@@ -83,6 +83,12 @@ public partial class App : Application
 
         var (settingsStore, quarantineNotice) = AppShell.LoadSettings();
 
+        // 渲染方式是进程级的，第一扇窗建起之前定下（之后再改只对新窗口部分生效，所以设置里写的是重启生效）。
+        if (!settingsStore.Current.HardwareAcceleration)
+        {
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        }
+
         // 数据目录定下来这刻起，一切后续失败都有处可写（O-05）。同步 sink：
         // 致命异常的最后一行必须在进程倒下之前落盘。
         Log.Attach(new FileLogSink(AppPaths.DataDirectory));

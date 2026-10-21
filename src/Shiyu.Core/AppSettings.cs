@@ -173,6 +173,12 @@ public sealed record AppSettings
     /// </summary>
     public bool LightweightWhenHidden { get; init; } = true;
 
+    /// <summary>
+    /// 界面用显卡绘制（WPF 硬件渲染）。关掉改用 CPU 绘制，省掉显卡驱动为 Direct3D 拉起的线程、事件与
+    /// 内存。渲染方式是进程级的、第一扇窗建起之前就得定，所以改了要重启才生效。默认开：升级上来的人什么都不变。
+    /// </summary>
+    public bool HardwareAcceleration { get; init; } = true;
+
     /// <summary>Whether copied images are recorded. Text always is — without it there is no tool.</summary>
     public bool RecordImages { get; init; } = true;
 

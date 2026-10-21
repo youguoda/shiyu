@@ -128,7 +128,15 @@ public static class SettingsSchema
                     "look.lightweight", "轻量模式", SettingsControl.Toggle,
                     Hint: "窄条隐藏后释放界面资源、压缩常驻内存；期间复制的内容照常记录。",
                     Keywords: ["内存", "占用", "轻量", "后台", "常驻"],
-                    Icon: "E713")),
+                    Icon: "E713"),
+
+                // 两类人：在意常驻内存、用远程桌面或显卡驱动不稳的人关掉；要动画最顺的人开着。
+                new SettingsItem(
+                    "look.hardware-acceleration", "硬件加速", SettingsControl.Toggle,
+                    Hint: "用显卡绘制界面。关掉改用 CPU 绘制：常驻内存与系统句柄明显减少，显卡驱动越重越明显；动画与长译文出字改由 CPU 承担。远程桌面、显卡驱动不稳或在意内存时可以关。重启拾语后生效。",
+                    Keywords: ["硬件加速", "显卡", "GPU", "渲染", "软件渲染", "绘制", "内存", "占用", "句柄", "远程桌面", "卡顿"],
+                    Icon: "E7F4",
+                    More: true)),
             new SettingsSection("general.data", "数据",
                 new SettingsItem(
                     "store.directory", "数据位置", SettingsControl.Directory,

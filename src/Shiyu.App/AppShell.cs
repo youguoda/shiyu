@@ -147,9 +147,11 @@ internal sealed class AppShell
     public void Connect()
     {
         _applied = SettingsStore.Current;
+        var renderedWithHardware = _applied.HardwareAcceleration;
 
         SettingsStore.Changed += updated =>
         {
+            var renderSwitched = updated.HardwareAcceleration != _applied.HardwareAcceleration;
             NoteApplied(updated);
             Theme.Apply(updated.Theme);
             Theme.ApplyContentSize(updated.ContentFontSize);
@@ -158,6 +160,14 @@ internal sealed class AppShell
             if (TakePendingDataMove())
             {
                 TellUser("数据位置已更改，重启拾语后生效。");
+            }
+
+            // 渲染方式在启动时定下：拨回启动时那一档就不必重启，不打扰。
+            if (renderSwitched && updated.HardwareAcceleration != renderedWithHardware)
+            {
+                TellUser(updated.HardwareAcceleration
+                    ? "硬件加速已打开，重启拾语后生效。"
+                    : "硬件加速已关闭，重启拾语后改用 CPU 绘制界面。");
             }
         };
     }

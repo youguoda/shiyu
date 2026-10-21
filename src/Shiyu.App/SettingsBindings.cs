@@ -72,6 +72,7 @@ internal static class SettingsBindings
     {
         "action.sound" => settings.ActionSound,
         "look.lightweight" => settings.LightweightWhenHidden,
+        "look.hardware-acceleration" => settings.HardwareAcceleration,
         "look.source-icons" => settings.ShowSourceIcons,
         "bar.pinned" => settings.BarPinned,
         "bar.edge-dock" => settings.BarEdgeDock,
@@ -117,6 +118,7 @@ internal static class SettingsBindings
             BarPinned = AsBool(text) || current.BarPinned,
         },
         "look.lightweight" => current with { LightweightWhenHidden = AsBool(text) },
+        "look.hardware-acceleration" => current with { HardwareAcceleration = AsBool(text) },
         "look.source-icons" => current with { ShowSourceIcons = AsBool(text) },
         "record.images" => current with { RecordImages = AsBool(text) },
         "record.files" => current with { RecordFiles = AsBool(text) },

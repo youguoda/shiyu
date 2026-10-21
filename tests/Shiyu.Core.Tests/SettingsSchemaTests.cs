@@ -28,6 +28,7 @@ public class SettingsSchemaTests
             ["look.content-size"] = "general",
             ["look.source-icons"] = "general",
             ["look.lightweight"] = "general",
+            ["look.hardware-acceleration"] = "general",
             ["store.directory"] = "general",
             ["store.usage"] = "general",
             ["store.backup"] = "general",
@@ -473,8 +474,8 @@ public class SettingsSchemaTests
     public void The_low_frequency_items_are_folded_and_nothing_else()
     {
         Assert.Equal(
-            ["look.source-icons", "bar.text-lines", "bar.image-height", "bar.file-count", "look.preview-hover",
-             "bar.card-tooltips", "action.sound", "store.retention-days"],
+            ["look.source-icons", "look.hardware-acceleration", "bar.text-lines", "bar.image-height", "bar.file-count",
+             "look.preview-hover", "bar.card-tooltips", "action.sound", "store.retention-days"],
             Items().Where(item => item.More).Select(item => item.Id));
     }
 
@@ -491,6 +492,8 @@ public class SettingsSchemaTests
     [InlineData("提示音", "action.sound")]
     [InlineData("文本行数", "bar.text-lines")]
     [InlineData("预览延迟", "look.preview-hover")]
+    [InlineData("硬件加速", "look.hardware-acceleration")]
+    [InlineData("显卡", "look.hardware-acceleration")]
     public void A_folded_item_is_still_found_by_search(string words, string id)
         => Assert.Contains(SettingsSearch.Find(words), hit => hit.Item.Id == id);
 }

@@ -53,6 +53,20 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void Hardware_acceleration_stays_on_for_older_files_and_a_switch_off_survives_a_save()
+    {
+        using var file = new TempFile();
+
+        // 升级上来的设置文件里没有这个字段：照旧用显卡绘制，什么都不变。
+        File.WriteAllText(file.Path_, """{ "TargetLanguage": "English" }""");
+        Assert.True(AppSettings.Load(file.Path_).HardwareAcceleration);
+        Assert.True(new AppSettings().HardwareAcceleration);
+
+        new AppSettings { HardwareAcceleration = false }.Save(file.Path_);
+        Assert.False(AppSettings.Load(file.Path_).HardwareAcceleration);
+    }
+
+    [Fact]
     public void Fields_of_the_retired_resident_bar_load_as_nothing()
     {
         // 用户需求 2026-10-10 撤掉常驻窄条：老设置文件里的三个字段读进来什么也
