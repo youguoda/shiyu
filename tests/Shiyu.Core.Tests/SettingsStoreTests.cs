@@ -139,6 +139,31 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal("English", AppSettings.Load(SettingsPath).TargetLanguage);
     }
 
+    [Fact]
+    public async Task A_save_waits_out_a_brief_hold_on_the_settings_file()
+    {
+        new AppSettings { TargetLanguage = "Chinese" }.Save(SettingsPath);
+        var store = SettingsStore.Load(SettingsPath).Store;
+
+        // 杀毒实时扫描的形状：刚写完的设置文件被别人开着一小会儿，没给删除共享，
+        // 替换它的那一下被拒。占用一放手，这次改动就该落盘，而不是丢掉。
+        using var held = new ManualResetEventSlim();
+        var scanner = Task.Run(() =>
+        {
+            using var scan = new FileStream(SettingsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            held.Set();
+            Thread.Sleep(150);
+        });
+        held.Wait();
+
+        store.Update(s => s with { TargetLanguage = "English" }, SettingsPath);
+        await scanner;
+
+        Assert.Equal("English", store.Current.TargetLanguage);
+        Assert.Equal("English", AppSettings.Load(SettingsPath).TargetLanguage);
+        Assert.Empty(Directory.GetFiles(_directory, "*.tmp*"));
+    }
+
     // --- 坏文件的迁移 ------------------------------------------------------------
 
     [Fact]

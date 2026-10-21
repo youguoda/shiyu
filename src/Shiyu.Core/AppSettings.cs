@@ -625,30 +625,58 @@ public sealed record AppSettings
 
         // Written beside the target and moved into place, so an interrupted
         // save leaves the previous settings rather than half a file. The tmp
-        // name is unique per save: two rapid saves reusing one name (settings
-        // window + 窄条图钉一类) raced the antivirus real-time scan, which
-        // holds the just-closed file for a beat and made the next write or
-        // move fail with Access denied (SettingsStoreTests 的并发压测实录
-        // 2026-10-19). A transient denial gets three quick tries before the
-        // caller's 人话 —— the write itself is idempotent, a retry can't
-        // double-apply anything.
-        for (var attempt = 1; ; attempt++)
+        // name is unique per save, so two rapid saves (settings window + 窄条
+        // 图钉一类) never contend for it.
+        var temporary = $"{path}.tmp-{Guid.NewGuid():N}";
+        try
         {
-            var temporary = $"{path}.tmp-{Guid.NewGuid():N}";
-            try
+            File.WriteAllText(temporary, JsonSerializer.Serialize(ToStorableNode(), Format));
+
+            // The contended file is the target: antivirus real-time scanning and
+            // the indexer open a just-written settings.json for a beat without
+            // delete sharing, and replacing it is refused until they let go.
+            // Under load that beat outlasts a couple of short tries.
+            for (var attempt = 0; ; attempt++)
             {
-                File.WriteAllText(temporary, JsonSerializer.Serialize(ToStorableNode(), Format));
-                File.Move(temporary, path, overwrite: true);
-                return;
+                try
+                {
+                    File.Move(temporary, path, overwrite: true);
+                    return;
+                }
+                catch (Exception failure) when (
+                    failure is IOException or UnauthorizedAccessException
+                    && attempt < SaveRetryDelaysMs.Length)
+                {
+                    // expected: 别人占着设置文件一小会儿——等它放手再换。永久性的拒绝
+                    // 退避用尽后原样抛出，交给调用方的人话。
+                    System.Threading.Thread.Sleep(SaveRetryDelaysMs[attempt]);
+                }
             }
-            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException && attempt < 3)
-            {
-                // expected: 杀毒/索引器占着刚关上的文件一小拍——换个名字、
-                // 缓一口气再试。永久性的拒绝三次后原样抛出，交给人话。
-                try { File.Delete(temporary); }
-                catch (IOException) { }
-                System.Threading.Thread.Sleep(20 * attempt);
-            }
+        }
+        finally
+        {
+            DeleteLeftover(temporary);
+        }
+    }
+
+    /// <summary>
+    /// Waits between attempts to replace settings.json. Bounded at under a
+    /// second in total because a save runs on the UI thread: a hold that
+    /// outlives this is a real refusal, not a scanner passing by.
+    /// </summary>
+    private static readonly int[] SaveRetryDelaysMs = [25, 50, 100, 200, 400];
+
+    private static void DeleteLeftover(string temporary)
+    {
+        try
+        {
+            File.Delete(temporary);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 
