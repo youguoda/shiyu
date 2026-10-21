@@ -47,7 +47,7 @@
 
 | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | 缺口 |
 |---|---|---|---|---|---|---|---|---|---|
-| WinVFilterTests · HotkeyPlanTests · KeyMapTests | HotkeyRegistryTests · HotkeyScopeTests · FullScreenOverlayTests（**不在 CI**） | — | tray（加速键列） | — | — | — | — | v6 D4（改键）；Win+V 卡住（0.15.0）无清单项 | G-01 · G-06 |
+| WinVFilterTests · HotkeyPlanTests · KeyMapTests | HotkeyRegistryTests · HotkeyScopeTests · FullScreenOverlayTests | — | tray（加速键列） | — | — | — | — | v6 D4（改键）；Win+V 卡住（0.15.0）无清单项 | G-01 · G-06 |
 
 ### BAR · 窄条
 
@@ -89,7 +89,7 @@
 
 | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | 缺口 |
 |---|---|---|---|---|---|---|---|---|---|
-| UpdateFeedTests · UpdateOrchestratorTests（83%）· UpdateStagingTests（60%）· UpdateApplyTests · UpdateSignatureTests · ReleasePackagingDrillTests · UserDataRemovalTests | InstallRegistrationTests（**不在 CI**） | — | — | — | 更新 feed 形状（发布清单，手动） | smoke-installer（CI 每次推送 + release）· release.yml 公钥复验 | — | release-checklist（老版本升级路径实测一次） | G-01 · G-09（UpdateStaging）· G-12 · G-23 · G-11 |
+| UpdateFeedTests · UpdateOrchestratorTests（83%）· UpdateStagingTests（60%）· UpdateApplyTests · UpdateSignatureTests · ReleasePackagingDrillTests · UserDataRemovalTests | InstallRegistrationTests | — | — | — | 更新 feed 形状（发布清单，手动） | smoke-installer（CI 每次推送 + release）· release.yml 公钥复验 | — | release-checklist（老版本升级路径实测一次） | G-01 · G-09（UpdateStaging）· G-12 · G-23 · G-11 |
 
 ### NET · 外部接口
 
@@ -117,11 +117,11 @@
 
 | # | 缺口 | 层 | 优先级 | 量 | 状态 |
 |---|---|---|---|---|---|
-| G-01 | `Shiyu.Windows.Tests` 进 CI 阻断 | L2 | P0 | S | open |
+| G-01 | `Shiyu.Windows.Tests` 进 CI 阻断 | L2 | P0 | S | done（2026-10-21，ci.yml「平台层单测」· release.yml「平台层测试」，26 个） |
 | G-02 | 覆盖率收集进 CI；`coverlet.runsettings` 剔除生成代码；`coverage-gate.ps1`（总 ≥ 90%，文件 ≥ 60%） | L0 | P0 | S | open |
 | G-03 | 探针 nightly 进 CI（含 runner 上 PrintWindow / 字体的 spike；缺字体标 `SKIP(ci-no-font)`） | L4 | P0 | S–M | open |
 | G-04 | 剪贴板平台测试：`WindowsClipboardWriter` 格式往返（含排除标记）、`WindowsClipboardMonitor` 被占重试、`WindowsCapturePlatform` 序列号 / owner；场景面加多格式还原 | L2 / L5 | P0 | M | open |
-| G-05 | 提权目标：完整性级别判定（L2）+ 管理员记事本回贴与划词场景（L5） | L2 / L5 | P0 | M | open（票 30） |
+| G-05 | 提权目标：完整性级别判定（L2）+ 管理员记事本回贴与划词场景（L5） | L2 / L5 | P0 | M | in-progress（L2：ProcessIntegrityTests 随 G-01 进 CI，2026-10-21；L5 场景未做，票 30） |
 | G-06 | 钩子线程：`LowLevelHookThread` 安装 / 失败 / 卸钩线程 / Dispose；`WinVHook` 锁屏后 Win 键状态（0.15.0 回归） | L2 / L5 | P0 | M | open |
 | G-07 | `tests/Shiyu.App.Tests` 建项并覆盖无 WPF 的 8 个文件（884 行，`SettingsBindings` 100%） | L3 | P1 | S–M | open |
 | G-08 | App STA 离屏组件：`MarkdownBox`、`TemplateMenu`、`ItemEditors` / `SettingsCards`、`BarCards` 测量、`InfoBar` | L3 | P1 | M–L | open |
@@ -149,14 +149,14 @@
 
 | 指标 | 预算 | 现状（日期） | 脚本 | 首次达标 |
 |---|---|---|---|---|
-| 热呼出：窄条隐藏后再呼出 → 可见 | P95 ≤ 150 ms | 未测 | measure-cold-summon（加 warm 模式，G-14） | — |
-| 冷呼出：轻量模式释放后首次 | P95 ≤ 600 ms | ≈ 900 ms（2026-10-03） | measure-cold-summon | — |
+| 热呼出：窄条隐藏后再呼出 → 可见 | P95 ≤ 150 ms | 215–248 ms（Debug，2026-10-16，review-1016 票 22）**超预算**。评审 F-21 的 300 ms 是「改不改轻量模式」的触发线，不是本预算 | measure-hot-summon（DEBUG 命令，Release 上暂测不了） | — |
+| 冷呼出：轻量模式释放后首次 | P95 ≤ 600 ms | 748 ms（Debug，2026-10-16，票 22；10-03 为 924 ms）**超预算** | measure-cold-summon | — |
 | 划词热键 → 面板可见（假后端） | P95 ≤ 400 ms | 未测 | measure-capture-to-panel（G-14） | — |
 | 启动 → 托盘就绪（冷） | ≤ 1.5 s | 未测 | 日志事件时间差（G-14） | — |
 | 流式：输入等待 max / p95 | ≤ 150 / ≤ 50 ms | 78 / 4 ms（2026-10-16） | probe-stream-jank | 2026-10-15 |
 | 流式：最长 UI 操作 | ≤ 100 ms | 91 ms（2026-10-16） | probe-stream-jank | 2026-10-15 |
 | 10 万条：启动首页 / 搜索 / 入库 / v11 升级 | 票 12 承诺值 | 见 `.scratch/shiyu-v3/issues/12` | storage-bench | 2026-10-02 |
-| 工作集：空闲 1 h | ≤ 120 MB | 106 MB（12 h，2026-10-16） | measure-memory（G-14） | — |
+| 工作集：空闲 1 h | ≤ 120 MB | 106 MB（12 h，2026-10-16）→ 0.17.5：168 MB、私有 294 MB（7.7 h，2026-10-21）**超预算** | measure-memory（G-14） | — |
 | 24 h soak：内存增长 / 日志 error | ≤ 20% / 0 | 未测 | soak（G-18） | — |
 
 ---
@@ -180,3 +180,4 @@
 | 版本 | 日期 | Core 用例 / 秒 | Core 行覆盖（剔除生成） | 平台 / App 用例 | 探针 PASS / FAIL / SKIP / 秒 | 契约最近绿 | 预算达标 | 人工核心回归 | 已知问题最大挂龄 | 备注 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0.16.1 | 2026-10-16 | 1963 / 7 | ≈ 94%（原始 88.5%） | 18 / 0 | 135 / 0 / 1 / 206 | 无定时 | 1 / 8 已测 | 无清单 | 7 版 | 基线 |
+| 0.17.5+ | 2026-10-21 | 2111 / 8 | 未测 | 26 / 0 | 未跑（10-20 票 26 记 162 / 0 / 1） | 无定时 | 1 / 8 达标（热、冷呼出与工作集超预算） | 无清单 | — | 接手基线（本机 .NET SDK 9.0.319）：全量 Core 原有 1 个偶发红（设置保存，cd0e769 已修），连跑 5 遍全绿 |

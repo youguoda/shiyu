@@ -251,14 +251,16 @@ Windows 11 托盘里的剪贴板历史与翻译工具。
 ### 开发
 
 ```
-src/Shiyu.Core          # 纯逻辑层（含 SQLite 存储），全部单元测试的对象
-src/Shiyu.Windows       # 平台层：Win32 / WPF 交互（剪贴板、热键、托盘、钩子、语音）
-src/Shiyu.App           # WPF 界面层（窄条、历史窗口、设置、引导、更新、备份）
-tests/Shiyu.Core.Tests  # xUnit 单元测试
-server/                 # 公共翻译通道：Cloudflare Worker（TypeScript + vitest；界面不再提供，代码冻结）
-docs/                   # ADR、评审报告、人工验收清单
-.scratch/               # 票（issue tracker）：shiyu-v1 / shiyu-v2 两个里程碑
-spikes/                 # 技术验证样例
+src/Shiyu.Core             # 纯逻辑层（含 SQLite 存储），绝大多数单元测试的对象
+src/Shiyu.Windows          # 平台层：Win32 / WPF 交互（剪贴板、热键、托盘、钩子、语音）
+src/Shiyu.App              # WPF 界面层（窄条、历史窗口、设置、引导、更新、备份）
+tests/Shiyu.Core.Tests     # xUnit 单元测试
+tests/Shiyu.Windows.Tests  # 平台层测试（窗口不显示、不注册真热键，可与正在用的拾语并排跑）
+tools/                     # 实机界面探针、静态检查、安装包与词典的构建脚本
+server/                    # 公共翻译通道：Cloudflare Worker（TypeScript + vitest；界面不再提供，代码冻结）
+docs/                      # ADR、评审报告、测试计划、人工验收清单
+.scratch/                  # 票（issue tracker）：每个里程碑或每轮评审一个目录
+spikes/                    # 技术验证样例
 ```
 
 构建与测试（与 [CI](.github/workflows/ci.yml) 相同的命令）：
@@ -267,6 +269,7 @@ spikes/                 # 技术验证样例
 dotnet restore Shiyu.sln
 dotnet build Shiyu.sln -c Release --no-restore
 dotnet test tests/Shiyu.Core.Tests/Shiyu.Core.Tests.csproj -c Release --no-build
+dotnet test tests/Shiyu.Windows.Tests/Shiyu.Windows.Tests.csproj -c Release --no-build
 
 cd server
 npm ci
@@ -280,8 +283,10 @@ npm test
 
 - [`CONTEXT.md`](CONTEXT.md) — 领域语言与已定原则（术语以此为准）。
 - [`docs/adr/`](docs/adr/) — 架构决策记录（含被推翻的备选）。
-- [`docs/review/`](docs/review/) — CTO 评审、优化计划与 UI 设计评审。
-- [`.scratch/`](.scratch/) — 两个里程碑的全部票与验收标准。
+- [`docs/review/`](docs/review/) — CTO 评审、优化计划、UI 设计评审与功能评审。
+- [`docs/testing/`](docs/testing/) — 测试计划与追溯矩阵（各功能区由哪层测试守着、还缺什么）。
+- [`tools/probes/README.md`](tools/probes/README.md) — 实机界面探针：界面改动的回归手段，跑在调试构建上。
+- [`.scratch/`](.scratch/) — 各里程碑与各轮评审的全部票与验收标准。
 - [`server/README.md`](server/README.md) — 公共通道 Worker 的契约、配额与部署。
 
 想了解界面的设计方向，可以打开 [`docs/review/mockups/`](docs/review/mockups/) 里的目标样稿（窄条 / 翻译面板 / 设置窗 / 历史窗口）。**那是设计目标稿，全部使用占位数据，不是当前界面。**

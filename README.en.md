@@ -253,14 +253,16 @@ In the translation panel: `Esc` closes it; the top lets you flip the direction a
 ### Development
 
 ```
-src/Shiyu.Core          # pure logic (including SQLite storage); the target of all unit tests
-src/Shiyu.Windows       # platform layer: Win32 / WPF interop (clipboard, hotkeys, tray, hooks, speech)
-src/Shiyu.App           # WPF UI (bar, history window, settings, onboarding, updates, backups)
-tests/Shiyu.Core.Tests  # xUnit unit tests
-server/                 # public translation relay: Cloudflare Worker (TypeScript + vitest; no longer offered in the UI, code frozen)
-docs/                   # ADRs, reviews, manual acceptance checklists
-.scratch/               # tickets (issue tracker): milestones shiyu-v1 / shiyu-v2
-spikes/                 # technical spikes
+src/Shiyu.Core             # pure logic (including SQLite storage); the target of most unit tests
+src/Shiyu.Windows          # platform layer: Win32 / WPF interop (clipboard, hotkeys, tray, hooks, speech)
+src/Shiyu.App              # WPF UI (bar, history window, settings, onboarding, updates, backups)
+tests/Shiyu.Core.Tests     # xUnit unit tests
+tests/Shiyu.Windows.Tests  # platform-layer tests (hidden windows, no real hotkeys; safe beside a running Shiyu)
+tools/                     # on-device UI probes, static checks, installer and dictionary build scripts
+server/                    # public translation relay: Cloudflare Worker (TypeScript + vitest; no longer offered in the UI, code frozen)
+docs/                      # ADRs, reviews, test plan, manual acceptance checklists
+.scratch/                  # tickets (issue tracker): one directory per milestone or review round
+spikes/                    # technical spikes
 ```
 
 Build and test (the same commands as [CI](.github/workflows/ci.yml)):
@@ -269,6 +271,7 @@ Build and test (the same commands as [CI](.github/workflows/ci.yml)):
 dotnet restore Shiyu.sln
 dotnet build Shiyu.sln -c Release --no-restore
 dotnet test tests/Shiyu.Core.Tests/Shiyu.Core.Tests.csproj -c Release --no-build
+dotnet test tests/Shiyu.Windows.Tests/Shiyu.Windows.Tests.csproj -c Release --no-build
 
 cd server
 npm ci
@@ -282,8 +285,10 @@ Where to read more (these documents are in Chinese):
 
 - [`CONTEXT.md`](CONTEXT.md) — the domain language and settled principles (the authority on terms).
 - [`docs/adr/`](docs/adr/) — architecture decision records, including the alternatives that were rejected.
-- [`docs/review/`](docs/review/) — the CTO review, the optimization plan and the UI design review.
-- [`.scratch/`](.scratch/) — every ticket and acceptance criterion for both milestones.
+- [`docs/review/`](docs/review/) — the CTO review, the optimization plan, the UI design review and the feature review.
+- [`docs/testing/`](docs/testing/) — the test plan and traceability matrix (which layer guards each area, and what is missing).
+- [`tools/probes/README.md`](tools/probes/README.md) — on-device UI probes: the regression net for UI changes, run against a Debug build.
+- [`.scratch/`](.scratch/) — every ticket and acceptance criterion, per milestone and per review round.
 - [`server/README.md`](server/README.md) — the relay Worker's contract, quotas and deployment.
 
 For the intended direction of the UI, see the target mockups in [`docs/review/mockups/`](docs/review/mockups/) (bar / translation panel / settings / history window). **They are design targets filled with placeholder data, not the current interface.**
