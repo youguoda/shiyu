@@ -75,7 +75,7 @@ internal sealed partial class BarModule
         _bar.DeadDragNotice += notice => shell.TellUser(notice);
 
         // 「复制图中文字」（评审 2026-10-16 F-07）：条只管要字，认与存都在 OcrModule。
-        _bar.OcrTextOf = id => shell.Ocr?.TextOfAsync(id);
+        _bar.OcrTextOf = id => shell.Ocr?.TextOfAsync(id) ?? Task.FromResult<string?>(null);
 
         // 品牌钮打开管理窗（票 21 §6.1 第 1 行）：窄条管"拿回"，
         // 整理归管理窗。
