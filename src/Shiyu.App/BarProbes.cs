@@ -521,25 +521,99 @@ internal partial class BarWindow
         }
     }
 
-    /// <summary>按住背景开始拖（合成事件打在窗口上，真实光标先落位）。</summary>
+    // 拖动用真实输入（SendInput 的左键按下 / 抬起）：合成的按下骗不过系统——真键没按着，捕获随即
+    // 被收回、抬起被补发，拖动在探针里走不起来（2026-10-21 跟踪实录）。按下前确认光标下的根窗口
+    // 就是这扇窄条，左右键没有对调：否则不按，免得点到用户的窗口。
+
+    private const uint InputMouse = 0;
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int Dx;
+        public int Dy;
+        public uint Data;
+        public uint Flags;
+        public uint Time;
+        public IntPtr Extra;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+    private struct NativeInput
+    {
+        [System.Runtime.InteropServices.FieldOffset(0)]
+        public uint Type;
+
+        [System.Runtime.InteropServices.FieldOffset(8)]
+        public MouseInput Mouse;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativePoint point);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(NativePoint point);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
+    private bool CursorOverThisBar()
+        => GetCursorPos(out var at)
+            && GetAncestor(WindowFromPoint(at), 2 /* GA_ROOT */) == new System.Windows.Interop.WindowInteropHelper(this).Handle;
+
+    private static void SendLeft(uint flags)
+        => SendInput(1, [new NativeInput { Type = InputMouse, Mouse = new MouseInput { Flags = flags } }],
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeInput>());
+
+    /// <summary>品牌钮（窄条的拖动把手）中心，窗口 DIP 坐标。</summary>
+    internal System.Windows.Point ProbeBrandCenter
+        => BrandButton.TranslatePoint(new System.Windows.Point(BrandButton.ActualWidth / 2, BrandButton.ActualHeight / 2), this);
+
+    /// <summary>真实左键按下（窗口 DIP 坐标）。光标下不是这扇窄条、或左右键对调时不按，返回假。</summary>
     internal async Task<bool> ProbeBarPressAtAsync(double xDip, double yDip)
     {
-        if (!ProbeCursorToBar(xDip, yDip))
+        if (GetSystemMetrics(23 /* SM_SWAPBUTTON */) != 0 || !ProbeCursorToBar(xDip, yDip))
         {
             return false;
         }
 
         await ProbePumpAsync();
-        RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
-            System.Windows.Input.InputManager.Current.PrimaryMouseDevice, Environment.TickCount,
-            System.Windows.Input.MouseButton.Left)
+        if (!CursorOverThisBar())
         {
-            RoutedEvent = System.Windows.UIElement.MouseLeftButtonDownEvent,
-        });
+            return false;
+        }
+
+        SendLeft(MouseEventLeftDown);
+        await SettleInputAsync();
         return true;
     }
 
-    /// <summary>拖动中移动（真实光标落位后发 MouseMove——跟手读数）。</summary>
+    /// <summary>
+    /// 等系统把真实输入送进来：ProbePumpAsync 让出的是 Render 优先级，比 Input 高，光是让出几拍
+    /// 输入消息还排在后面，读到的是挪动之前的窗口位置。
+    /// </summary>
+    private static async Task SettleInputAsync()
+    {
+        await ProbePumpAsync();
+        await Task.Delay(60);
+    }
+
+    /// <summary>按着键移动光标（窗口 DIP 坐标，相对窗口此刻的位置）：系统把移动送给持有捕获的窗。</summary>
     internal async Task<bool> ProbeBarMoveToAsync(double xDip, double yDip)
     {
         if (!ProbeCursorToBar(xDip, yDip))
@@ -547,25 +621,27 @@ internal partial class BarWindow
             return false;
         }
 
-        await ProbePumpAsync();
-        RaiseEvent(new System.Windows.Input.MouseEventArgs(
-            System.Windows.Input.InputManager.Current.PrimaryMouseDevice, Environment.TickCount)
-        {
-            RoutedEvent = System.Windows.UIElement.MouseMoveEvent,
-        });
+        await SettleInputAsync();
         return true;
     }
 
+    /// <summary>真实左键抬起。光标已不在窄条上（窗口没跟过来）时先挪回把手再松开。</summary>
     internal async Task ProbeBarReleaseAsync()
     {
         await ProbePumpAsync();
-        RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
-            System.Windows.Input.InputManager.Current.PrimaryMouseDevice, Environment.TickCount,
-            System.Windows.Input.MouseButton.Left)
+        if (!CursorOverThisBar())
         {
-            RoutedEvent = System.Windows.UIElement.MouseLeftButtonUpEvent,
-        });
+            var brand = ProbeBrandCenter;
+            ProbeCursorToBar(brand.X, brand.Y);
+            await SettleInputAsync();
+        }
+
+        SendLeft(MouseEventLeftUp);
+        await SettleInputAsync();
     }
+
+    /// <summary>拖到一半把鼠标捕获夺走（Alt+Tab、Win 键、窗被收起时系统就是这么做的）。</summary>
+    internal void ProbeBarLoseCapture() => System.Windows.Input.Mouse.Capture(null);
 
     /// <summary>探针钩子：模拟一次拖动收尾（落点 Top = topDip）。</summary>
     internal void ProbeDragEndedAt(double topDip)

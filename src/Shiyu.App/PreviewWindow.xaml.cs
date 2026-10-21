@@ -109,9 +109,7 @@ internal partial class PreviewWindow : Window
         MouseLeftButtonDown += OnWorkbenchPress;
         MouseLeftButtonDown += OnWorkbenchDragWindow;
         MouseMove += OnWorkbenchMove;
-        MouseMove += OnWorkbenchDragWindowMove;
         MouseLeftButtonUp += OnWorkbenchRelease;
-        MouseLeftButtonUp += OnWorkbenchDragWindowUp;
         EditHost.KeyDown += OnWorkbenchEditKey;
     }
 
@@ -419,11 +417,6 @@ internal partial class PreviewWindow : Window
     // 一次点击触发多次动作）。
     private bool _workbenchWired;
 
-    // 整窗拖动（钉住后位置归用户）：按下在空白或未放大的图片上即拖窗。
-    private bool _windowDragging;
-    private Point _windowDragStart;      // 物理像素（屏幕坐标）。
-    private ScreenRect _windowDragBase;  // 按下时的窗口矩形。
-
     /// <summary>
     /// 钉住那一刻把窗变成工作台：文本类正文换编辑框、颜色给色块、动作行按
     /// 形态出芯片；图片初始化缩放变换。取消钉（TeardownWorkbench）全部还原。
@@ -650,44 +643,10 @@ internal partial class PreviewWindow : Window
             return;
         }
 
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        if (!WindowRects.TryGet(handle, out _windowDragBase))
+        if (LiveDrag.Begin(this, e, () => _band))
         {
-            return;
+            e.Handled = true;
         }
-
-        var screen = PointToScreen(e.GetPosition(this));
-        _windowDragStart = new Point(screen.X, screen.Y);
-        _windowDragging = true;
-        CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void OnWorkbenchDragWindowMove(object sender, MouseEventArgs e)
-    {
-        if (!_windowDragging)
-        {
-            return;
-        }
-
-        var screen = PointToScreen(e.GetPosition(this));
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        TransientWindow.MoveTo(handle, new ScreenPoint(
-            _windowDragBase.Left + (int)Math.Round(screen.X - _windowDragStart.X),
-            _windowDragBase.Top + (int)Math.Round(screen.Y - _windowDragStart.Y)), _band);
-        e.Handled = true;
-    }
-
-    private void OnWorkbenchDragWindowUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_windowDragging)
-        {
-            return;
-        }
-
-        _windowDragging = false;
-        ReleaseMouseCapture();
-        e.Handled = true;
     }
 
     private void OnMouseEnter(object sender, MouseEventArgs e) => PointerRestingOnPanel?.Invoke();

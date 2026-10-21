@@ -86,6 +86,7 @@ if ($userPresent) {
     Add-Check 'flow:bar-dock-dropaway' 'SKIP' 'user present - cursor-coupled steps skipped'
     Add-Check 'flow:bar-dock-livedrag' 'SKIP' 'user present - cursor-coupled steps skipped'
     Add-Check 'flow:bar-dock-summondrop' 'SKIP' 'user present - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-capture-lost' 'SKIP' 'user present - cursor-coupled steps skipped'
     return $script:Checks
 }
 
@@ -97,20 +98,39 @@ $ok = $drop -and $drop['awayUndocked'] -eq 'True'
 $detail = if ($drop) { "a drag ending away from the top undocks: {0}" -f $drop['awayUndocked'] } else { 'no drop line' }
 Add-Check 'flow:bar-dock-dropaway' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+# The drag steps press the real left button, and only when the probe's own bar is under the
+# cursor: "cursor=False" means it was covered (or buttons are swapped) and nothing was pressed.
+$covered = 'the bar was not under the cursor (covered, or buttons swapped) - nothing was pressed'
 $livedrag = $lines['livedrag']
 $ok = $false
 $detail = 'no livedrag line'
-if ($livedrag -and ($livedrag.ContainsKey('xy0')) -and ($livedrag.ContainsKey('xyLive'))) {
-    $a = $livedrag['xy0'] -split ';'
-    $b = $livedrag['xyLive'] -split ';'
-    if (($a.Count -eq 2) -and ($b.Count -eq 2)) {
-        $dx = [int]$b[0] - [int]$a[0]
-        $dy = [int]$b[1] - [int]$a[1]
-        $ok = ([math]::Abs($dx) -ge 40) -and ([math]::Abs($dy) -ge 40)
-        $detail = "the bar followed the cursor live, mid-drag move: ${dx};${dy} px"
+if ($livedrag -and $livedrag['cursor'] -eq 'False') {
+    Add-Check 'flow:bar-dock-livedrag' 'SKIP' $covered
+} else {
+    if ($livedrag -and ($livedrag.ContainsKey('xy0')) -and ($livedrag.ContainsKey('xyLive'))) {
+        $a = $livedrag['xy0'] -split ';'
+        $b = $livedrag['xyLive'] -split ';'
+        if (($a.Count -eq 2) -and ($b.Count -eq 2)) {
+            $dx = [int]$b[0] - [int]$a[0]
+            $dy = [int]$b[1] - [int]$a[1]
+            $ok = ([math]::Abs($dx) -ge 40) -and ([math]::Abs($dy) -ge 40)
+            $detail = "the bar followed the cursor live, mid-drag move: ${dx};${dy} px"
+        }
     }
+    Add-Check 'flow:bar-dock-livedrag' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 }
-Add-Check 'flow:bar-dock-livedrag' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+# Capture taken away mid-drag (Alt+Tab, the Win key, the window hiding): the button-up never
+# arrives, so the drag must end right there - a later hover must not carry the window along.
+# The drag must have really moved the bar first, or "it stayed put" proves nothing.
+$lost = $lines['capturelost']
+if ($lost -and $lost['cursor'] -eq 'False') {
+    Add-Check 'flow:bar-dock-capture-lost' 'SKIP' $covered
+} else {
+    $ok = $lost -and $lost['xyAfterLoss'] -and ($lost['xyAfterLoss'] -ne $lost['xyStart']) -and ($lost['xyAfterLoss'] -eq $lost['xyHover'])
+    $detail = if ($lost) { "start {0}, dragged to {1} before losing capture, after hovering on: {2}" -f $lost['xyStart'], $lost['xyAfterLoss'], $lost['xyHover'] } else { 'no capturelost line' }
+    Add-Check 'flow:bar-dock-capture-lost' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+}
 
 $summondrop = $lines['summondrop']
 $ok = $summondrop -and ([double]$summondrop['strip'] -le 4)

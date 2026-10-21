@@ -84,14 +84,6 @@ internal partial class BarWindow : Window
     /// <summary>拖动落点距工作区顶缘多少 DIP 内算「拖到顶了」（含越顶，用户需求 2026-10-20）。</summary>
     private const double DockCaptureDip = 12;
 
-    // 整窗拖动（手动跟手）：按下记基准，移动即 MoveTo 实时平移——不再走系统移动
-    // 循环（HTCAPTION/DragMove 在透明窗上只画轮廓不实时跟，用户实录 2026-10-20）。
-    private bool _barDragging;
-    private Point _barDragStart;          // 物理像素（屏幕坐标）。
-    private ScreenRect _barDragBase;      // 按下时的窗口矩形。
-    private bool _barDragMoved;
-    private bool _barDragClickWhenStill;  // 品牌钮：原地松手算点击（开历史窗）。
-
     // 贴边弹出/收回的滑动画槽位（一次只有一个方向在滑；新滑动作先停旧的）。
     private System.Windows.Threading.DispatcherTimer? _dockSlide;
 
@@ -891,66 +883,23 @@ internal partial class BarWindow : Window
         StartBarDrag(e, clickWhenStill: false);
     }
 
-    /// <summary>开始整窗拖动：捕获鼠标，窗口随移动实时跟手（MoveTo = 基准矩形 + 光标位移）。</summary>
+    /// <summary>
+    /// 整窗拖动（<see cref="LiveDrag"/>，手动跟手）。拖过的落点交给贴边判定；
+    /// <paramref name="clickWhenStill"/>（品牌钮）原地松手算点击——开历史窗。
+    /// </summary>
     private void StartBarDrag(MouseButtonEventArgs e, bool clickWhenStill)
-    {
-        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        if (!WindowRects.TryGet(handle, out _barDragBase))
+        => LiveDrag.Begin(this, e, () => ZBandPolicy.FollowsHost(Topmost), moved =>
         {
-            return;
-        }
-
-        var screen = PointToScreen(e.GetPosition(this));
-        _barDragStart = new Point(screen.X, screen.Y);
-        _barDragClickWhenStill = clickWhenStill;
-        _barDragMoved = false;
-        _barDragging = true;
-        CaptureMouse();
-    }
-
-    /// <summary>拖动中的实时跟手：窗口 = 基准矩形 + 光标位移（物理像素）。</summary>
-    private void OnBarDragMove(object sender, MouseEventArgs e)
-    {
-        if (!_barDragging)
-        {
-            return;
-        }
-
-        var screen = PointToScreen(e.GetPosition(this));
-        var dx = (int)Math.Round(screen.X - _barDragStart.X);
-        var dy = (int)Math.Round(screen.Y - _barDragStart.Y);
-        if (dx != 0 || dy != 0)
-        {
-            _barDragMoved = true;
-        }
-
-        TransientWindow.MoveTo(
-            new System.Windows.Interop.WindowInteropHelper(this).Handle,
-            new ScreenPoint(_barDragBase.Left + dx, _barDragBase.Top + dy),
-            ZBandPolicy.FollowsHost(Topmost));
-        e.Handled = true;
-    }
-
-    private void OnBarDragUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_barDragging)
-        {
-            return;
-        }
-
-        _barDragging = false;
-        ReleaseMouseCapture();
-        e.Handled = true;
-        if (_barDragMoved)
-        {
-            if (WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var after))
+            if (moved)
             {
-                ApplyEdgeDockAfterDrag(after);
+                if (WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var after))
+                {
+                    ApplyEdgeDockAfterDrag(after);
+                }
             }
-        }
-        else if (_barDragClickWhenStill)
-        {
-            LibraryRequested?.Invoke();
-        }
-    }
+            else if (clickWhenStill)
+            {
+                LibraryRequested?.Invoke();
+            }
+        });
 }

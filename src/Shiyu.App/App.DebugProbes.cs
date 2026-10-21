@@ -585,19 +585,42 @@ public partial class App
                     (int)SystemParameters.WorkArea.Left + 200, (int)workTop + 150),
                 Shiyu.Core.ZBandPolicy.FollowsHost(bar.Topmost));
             await Task.Delay(200);
+            // 按在品牌钮（窄条的拖动把手）上，真实的左键按下 / 移动 / 抬起。
+            var brand = bar.ProbeBrandCenter;
             var xy0 = bar.ProbeWindowXY;
-            if (!await bar.ProbeBarPressAtAsync(200, 40))
+            if (await bar.ProbeBarPressAtAsync(brand.X, brand.Y))
+            {
+                await bar.ProbeBarMoveToAsync(brand.X + 60, brand.Y + 60);
+                var xyLive = bar.ProbeWindowXY;
+                await bar.ProbeBarReleaseAsync();
+                await Task.Delay(300);
+                log.AppendLine(FormattableString.Invariant(
+                    $"livedrag|xy0={xy0}|xyLive={xyLive}"));
+            }
+            else
             {
                 log.AppendLine("livedrag|cursor=False");
-                return;
             }
 
-            await bar.ProbeBarMoveToAsync(260, 100);
-            var xyLive = bar.ProbeWindowXY;
-            await bar.ProbeBarReleaseAsync();
-            await Task.Delay(300);
-            log.AppendLine(FormattableString.Invariant(
-                $"livedrag|xy0={xy0}|xyLive={xyLive}"));
+            // 拖到一半丢了捕获（Alt+Tab、窗被收起）：抬起不会再来，拖动必须就此结束——
+            // 之后鼠标只是经过，窗口不许跟着走。
+            var xyBeforeDrag = bar.ProbeWindowXY;
+            if (await bar.ProbeBarPressAtAsync(brand.X, brand.Y))
+            {
+                await bar.ProbeBarMoveToAsync(brand.X + 30, brand.Y + 20);
+                bar.ProbeBarLoseCapture();
+                await Task.Delay(100);
+                var xyAfterLoss = bar.ProbeWindowXY;
+                await bar.ProbeBarMoveToAsync(brand.X + 120, brand.Y + 120);
+                var xyHover = bar.ProbeWindowXY;
+                await bar.ProbeBarReleaseAsync();
+                log.AppendLine(FormattableString.Invariant(
+                    $"capturelost|xyStart={xyBeforeDrag}|xyAfterLoss={xyAfterLoss}|xyHover={xyHover}"));
+            }
+            else
+            {
+                log.AppendLine("capturelost|cursor=False");
+            }
 
             // 召出状态拖到顶缘（用户实录：呼出后拖到顶不贴边）：要当帧收边。
             _modules!.Bar.ShowQuickPaste();
