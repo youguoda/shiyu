@@ -58,6 +58,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
 
+      # 探针钩子（Probe* 成员）只许住在 #if DEBUG 的 *Probes.cs 里，Release 程序集里一个都不许有。
+      - name: Release 产物不带探针钩子
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/checks/no-release-probes.ps1
+
       # O-24：catch (Exception) 块必须接日志或声明 expected——静默即失败。
       - name: 静默 catch 检查
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/checks/no-silent-catch.ps1

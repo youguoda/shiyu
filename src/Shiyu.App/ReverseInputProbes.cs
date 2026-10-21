@@ -234,5 +234,12 @@ internal partial class ReverseInputWindow
         log.AppendLine(FormattableString.Invariant($"closed|visible={IsVisible}"));
         return log.ToString();
     }
+
+    internal void ProbeClickPin() =>
+        PinButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+    internal bool ProbePinned => Pinned;
+
+    internal void ProbeEscapeKey() => OnEscapeKey();
 }
 #endif

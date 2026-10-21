@@ -352,13 +352,6 @@ internal partial class ReverseInputWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(PinButton, state);
     }
 
-    internal void ProbeClickPin() =>
-        PinButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-
-    internal bool ProbePinned => Pinned;
-
-    internal void ProbeEscapeKey() => OnEscapeKey();
-
     /// <summary>Esc：取消在途请求并关闭，不贴回；回到原来的窗口（与窄条的 Esc 同）。</summary>
     private void CancelAndClose()
     {

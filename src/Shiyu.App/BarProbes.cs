@@ -566,5 +566,10 @@ internal partial class BarWindow
             RoutedEvent = System.Windows.UIElement.MouseLeftButtonUpEvent,
         });
     }
+
+    /// <summary>探针钩子：模拟一次拖动收尾（落点 Top = topDip）。</summary>
+    internal void ProbeDragEndedAt(double topDip)
+        => ApplyEdgeDockAfterDrag(new ScreenRect(
+            0, (int)Math.Round(topDip), (int)Math.Round(topDip) + 384, (int)Math.Round(topDip) + 320));
 }
 #endif
