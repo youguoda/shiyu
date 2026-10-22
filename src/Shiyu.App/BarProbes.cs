@@ -500,6 +500,12 @@ internal partial class BarWindow
     /// <summary>探针：模拟鼠标离窗（贴边收回）。</summary>
     internal void ProbeDockMouseLeave() => OnDockMouseLeave(this, null!);
 
+    /// <summary>探针读数：当前卡片集合（soak 的预览轮换用）。</summary>
+    internal System.Collections.Generic.IReadOnlyList<BarCard> ProbeSoakCards() => _cards;
+
+    /// <summary>探针：收起预览（soak 的开收循环用）。</summary>
+    internal void ProbeSoakTakeDown() => _preview?.TakeDown();
+
     /// <summary>窗口当前物理位置（整窗拖动的读数，用户实录 2026-10-20 的外框问题）。</summary>
     internal string ProbeWindowXY
         => Shiyu.Windows.WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect)

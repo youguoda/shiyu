@@ -934,6 +934,243 @@ public partial class App
         }
     }
 
+    /// <summary>探针命令 retention-seed（测试调研 P0-1：保留期边界联动清扫）：种下跨越
+    /// 保留期边界的数据——31 天前的普通/收藏/置顶文本各一、3 天前的一条、31 天前的图片
+    /// （含原图）与其收藏版、31 天前的翻译记录——并把三类保留期设为 7 天（保护开关开）。
+    /// 下一次应用启动的清扫（RetentionModule.Start）即按此判定。翻译记录经 store 层
+    /// 回填时间戳（UI 入口 TranslationLogger.Log 无时间注入点，见 qa-findings F-01）。</summary>
+    private void RetentionSeed()
+    {
+        var shell = _shell!;
+        var now = DateTimeOffset.UtcNow;
+        var old = now.AddDays(-31);
+        var fresh = now.AddDays(-3);
+        var e31 = shell.Store.Append("retention-old-plain-31d", "probe", old);
+        var e31f = shell.Store.Append("retention-old-favorite-31d", "probe", old);
+        var e31p = shell.Store.Append("retention-old-pinned-31d", "probe", old);
+        shell.Store.Append("retention-fresh-3d", "probe", fresh);
+        shell.Store.SetFavorite(e31f.Id, true);
+        shell.Store.SetPinned(e31p.Id, true);
+
+        foreach (var (favorite, label) in new[]
+                 {
+                     (false, "retention-old-image-31d"),
+                     (true, "retention-old-image-favorite-31d"),
+                 })
+        {
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(0, 0, 64, 48));
+                context.DrawRectangle(System.Windows.Media.Brushes.SteelBlue, null, new System.Windows.Rect(8, 8, 48, 32));
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(64, 48, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var pngStream = new MemoryStream();
+            encoder.Save(pngStream);
+            var png = pngStream.ToArray();
+
+            var path = shell.Images.Save(png, old);
+            var entry = shell.Store.AppendImage(label, png, path, "probe", old, 64, 48);
+            if (favorite)
+            {
+                shell.Store.SetFavorite(entry.Id, true);
+            }
+        }
+
+        shell.Store.LogTranslation("retention-original", "retention-translated",
+            Shiyu.Core.TranslationOrigin.Panel, "标准", old);
+
+        shell.TryUpdateSettings(s => s with
+        {
+            HistoryRetentionDays = 7,
+            TranslationLogRetentionDays = 7,
+            ImageRetentionDays = 7,
+            ProtectEntries = true,
+            ProtectFavorites = true,
+        });
+
+        var directory = DebugOverrides.ProbeDirectory!;
+        File.WriteAllText(
+            Path.Combine(directory, "retention-seed.log"),
+            FormattableString.Invariant($"seed|e31={e31.Id}|e31f={e31f.Id}|e31p={e31p.Id}"),
+            System.Text.Encoding.UTF8);
+    }
+
+    /// <summary>探针命令 retention-check：启动清扫已跑，读取并记录现状（P0-1 的断言读数）。</summary>
+    private void RetentionCheck()
+    {
+        var shell = _shell!;
+        var log = new StringBuilder();
+
+        bool Gone(string text) => shell.Store.Search(text, limit: 10).Count == 0;
+        var oldPlainGone = Gone("retention-old-plain-31d");
+        var oldFavKept = !Gone("retention-old-favorite-31d");
+        var oldPinKept = !Gone("retention-old-pinned-31d");
+        var freshKept = !Gone("retention-fresh-3d");
+
+        var imageEntry = shell.Store.Search("retention-old-image-31d", limit: 10).FirstOrDefault();
+        var imageFavEntry = shell.Store.Search("retention-old-image-favorite-31d", limit: 10).FirstOrDefault();
+        var imageFileGone = imageEntry is null
+            || (imageEntry.OriginalPath is { Length: > 0 } path && !File.Exists(path));
+        var imageFavFileKept = imageFavEntry is null
+            || imageFavEntry.OriginalPath is not { Length: > 0 } path2
+            || File.Exists(path2);
+
+        var retentionRows = shell.Store.TranslationLog().Count(row =>
+            row.Original.StartsWith("retention-", StringComparison.Ordinal));
+
+        log.AppendLine(FormattableString.Invariant(
+            $"check|oldPlainGone={oldPlainGone}|oldFavKept={oldFavKept}|oldPinKept={oldPinKept}|freshKept={freshKept}|imageGone={imageEntry is null}|imageFileGone={imageFileGone}|imageFavKept={imageFavEntry is not null}|imageFavFileKept={imageFavFileKept}|tlogRows={retentionRows}"));
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "retention-check.log"), log.ToString());
+    }
+
+    /// <summary>探针命令 backup-nonempty（测试调研 P0-2：备份还原到非空库）：导出当前库，
+    /// 再加三条「备份之后」的条目让库与归档不同，然后以 overwrite=false（并入）与
+    /// overwrite=true（整库替换）各导入一次，记录两种语义下既有条目、归档条目与
+    /// 图片原图的去留。全程在探针自己的数据目录。</summary>
+    private void BackupNonempty()
+    {
+        var shell = _shell!;
+        var log = new StringBuilder();
+        try
+        {
+            var imagesDirectory = AppPaths.ImageDirectory;
+            var backupPath = Path.Combine(DebugOverrides.ProbeDirectory!, "nonempty-backup.shiyubk");
+
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(0, 0, 64, 48));
+                context.DrawRectangle(System.Windows.Media.Brushes.SeaGreen, null, new System.Windows.Rect(8, 8, 48, 32));
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(64, 48, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var pngStream = new MemoryStream();
+            encoder.Save(pngStream);
+            var png = pngStream.ToArray();
+            var now = DateTimeOffset.UtcNow;
+            var imagePath = shell.Images.Save(png, now);
+            shell.Store.AppendImage("backup-nonempty-image", png, imagePath, "probe", now, 64, 48);
+
+            Shiyu.Core.BackupArchive.Export(backupPath, shell.Store, imagesDirectory, settingsJson: null, passwordUtf16: null);
+
+            foreach (var text in new[] { "nonempty-post-1", "nonempty-post-2", "nonempty-post-3" })
+            {
+                shell.Store.Append(text, "probe", now.AddMinutes(1));
+            }
+
+            var countBefore = shell.Store.Count();
+
+            var merge = Shiyu.Core.BackupArchive.Import(backupPath, shell.Store, imagesDirectory,
+                overwrite: false, passwordUtf16: null);
+            var postKeptAfterMerge = shell.Store.Search("nonempty-post-1", limit: 10).Count > 0;
+            log.AppendLine(FormattableString.Invariant(
+                $"merge|added={merge.Added}|skipped={merge.SkippedExisting}|countBefore={countBefore}|countAfter={shell.Store.Count()}|postKept={postKeptAfterMerge}"));
+
+            var replace = Shiyu.Core.BackupArchive.Import(backupPath, shell.Store, imagesDirectory,
+                overwrite: true, passwordUtf16: null);
+            var postGone = shell.Store.Search("nonempty-post-1", limit: 10).Count == 0;
+            var imageBack = File.Exists(imagePath);
+            log.AppendLine(FormattableString.Invariant(
+                $"replace|added={replace.Added}|count={shell.Store.Count()}|postGone={postGone}|imageBack={imageBack}"));
+        }
+        catch (Exception failure)
+        {
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "backup-nonempty.log"), log.ToString());
+    }
+
+    /// <summary>探针命令 soak（测试调研 P0 路线：长时挂机资源曲线）：按
+    /// SHIYU_PROBE_MINUTES（分钟，默认 5，上限 600）循环混合负载——历史写入、
+    /// 翻译记录写入、预览开收——每 30 秒采样工作集/私有/GC/句柄进 soak.log，
+    /// done 行收尾。过夜跑由探针脚本 -Minutes 480 驱动；判定看首尾曲线是否单调上涨。</summary>
+    private async void Soak()
+    {
+        var shell = _shell!;
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var minutes = 5.0;
+            if (double.TryParse(Environment.GetEnvironmentVariable("SHIYU_PROBE_MINUTES"),
+                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture,
+                    out var parsed) && parsed > 0)
+            {
+                minutes = Math.Min(parsed, 600);
+            }
+
+            _modules!.Bar.ProbeShowPinned();
+            await Task.Delay(800);
+
+            var process = System.Diagnostics.Process.GetCurrentProcess();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var deadline = TimeSpan.FromMinutes(minutes);
+            var random = new Random(20261023);
+            var lastSample = TimeSpan.Zero;
+
+            void Sample(string tag)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                log.AppendLine(FormattableString.Invariant(
+                    $"sample|tag={tag}|t={clock.Elapsed.TotalMinutes:F1}|ws={process.WorkingSet64 / 1048576.0:F0}|priv={process.PrivateMemorySize64 / 1048576.0:F0}|gc={GC.GetTotalMemory(false) / 1048576.0:F0}|handles={process.HandleCount}|entries={shell.Store.Count()}"));
+                File.WriteAllText(Path.Combine(directory, "soak.log"), log.ToString());
+            }
+
+            Sample("start");
+
+            for (var cycle = 1; clock.Elapsed < deadline; cycle++)
+            {
+                shell.Store.Append($"soak-cycle-{cycle} " + new string('占', 40 + random.Next(80)), "probe", DateTimeOffset.UtcNow);
+
+                if (cycle % 25 == 0)
+                {
+                    shell.TranslationLog.Log($"soak-original-{cycle}", $"soak-translated-{cycle}",
+                        Shiyu.Core.TranslationOrigin.Panel, "标准");
+                }
+
+                if (cycle % 5 == 0 && Windows.OfType<BarWindow>().FirstOrDefault() is { } bar)
+                {
+                    var cards = bar.ProbeSoakCards();
+                    if (cards.Count > 0 && await bar.ProbeShowPreviewForAsync(cards[cycle % cards.Count]))
+                    {
+                        await Task.Delay(300);
+                        bar.ProbeSoakTakeDown();
+                        await Task.Delay(200);
+                    }
+                }
+
+                if (clock.Elapsed - lastSample >= TimeSpan.FromSeconds(30))
+                {
+                    Sample($"c{cycle}");
+                    lastSample = clock.Elapsed;
+                }
+
+                await Task.Delay(250);
+            }
+
+            Sample("end");
+        }
+        catch (Exception failure)
+        {
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+            File.WriteAllText(Path.Combine(directory, "soak.log"), log.ToString());
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "soak.log"), log.ToString());
+    }
+
     /// <summary>探针命令 preview-workbench 的入口（见 BarWindow.ProbeWorkbenchMatrixAsync）。</summary>
     private async void ProbePreviewWorkbench()
     {
@@ -2231,6 +2468,24 @@ public partial class App
             // 预览工作台测试方案（用户实录 2026-10-20：叠显/串台/图片卡顿——复现与测量段）。
             case "preview-workbench":
                 ProbePreviewWorkbench();
+                break;
+
+            // 保留期边界联动清扫（测试调研 P0-1）：retention-seed 种边界数据并设保留期；
+            // retention-check 在第二次启动的清扫之后读取现状。两段由探针脚本分两次启动驱动。
+            case "retention-seed":
+                RetentionSeed();
+                break;
+
+            case "retention-check":
+                RetentionCheck();
+                break;
+
+            case "backup-nonempty":
+                BackupNonempty();
+                break;
+
+            case "soak":
+                Soak();
                 break;
 
             // 缩放锚点漂移：动真光标，脚本侧有 Test-UserPresent 守卫。

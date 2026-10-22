@@ -1,7 +1,7 @@
 # 拾语测试计划（全量）
 
 - 更新：2026-10-23
-- 基线：master @ c934178（0.18.2 发布、与 origin 合并、测试计划文档入库之后）
+- 基线：master（0.18.2 发布之后、调研报告 P0 五项探针全部落地）
 - 本文覆盖**全部**四层测试：单元测试、自动化探针、性能测量、手动验收；外加发布核验
   流程。每一枚探针、每一条检查、每一项手动步骤都列全；数值为 2026-10-23 实测。
 
@@ -13,8 +13,8 @@
 
 | 层 | 规模 | 位置 | 运行方式 |
 |---|---|---|---|
-| 单元测试 | 133 个文件 / 1522 个 `[Fact]`（实际执行 2124 例） | `tests/Shiyu.Core.Tests`、`tests/Shiyu.Windows.Tests` | `dotnet test Shiyu.sln -c Debug` |
-| 自动化探针 | 44 枚进 run-all，共 **220 项检查** | `tools/probes/probe-*.ps1` | `powershell -File tools/probes/run-all.ps1` |
+| 单元测试 | 133 个文件 / 1533 个 `[Fact]`（实际执行 Core 2180 + Windows 26 例） | `tests/Shiyu.Core.Tests`、`tests/Shiyu.Windows.Tests` | `dotnet test Shiyu.sln -c Debug` |
+| 自动化探针 | 47 枚进 run-all，共 **227 项检查** | `tools/probes/probe-*.ps1` | `powershell -File tools/probes/run-all.ps1` |
 | 性能测量 | 2 个独立测量脚本 + 探针内 perf 预算 | `tools/probes/measure-*.ps1` | 单独运行，读数比对预算 |
 | 手动验收 | 29 项（§5） | 本文档 | 人在机器前逐项过 |
 
@@ -46,10 +46,10 @@ SKIP = 有真人在场（光标移动）时，抢鼠标/真光标耦合的检查
 
 ---
 
-## 1. 单元测试（133 个文件 / 1533 个 Fact / 实际执行 2158 + 26 例）
+## 1. 单元测试（133 个文件 / 1533 个 Fact / 实际执行 Core 2180 + Windows 26 例）
 
 命令：`dotnet test Shiyu.sln -c Debug`。最新实测（2026-10-23）：
-**Core 2158 全绿 + Windows 26 全绿，0 失败**。
+**Core 2180 全绿 + Windows 26 全绿，0 失败**。
 已知时序敏感项：`SettingsStoreTests.Concurrent_updates_on_the_same_field_are_all_counted`
 在全量并发负载下偶发红，单独重跑即绿（`--filter "FullyQualifiedName~Concurrent_updates"`）。
 
@@ -143,7 +143,7 @@ InstallRegistrationTests 4、ProcessIntegrityTests 3、TrayIconImagesTests 2—�
 
 ---
 
-## 2. 自动化探针（run-all：44 枚 / 220 项检查）
+## 2. 自动化探针（run-all：47 枚 / 227 项检查）
 
 命令：
 ```
@@ -153,7 +153,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/probes/run-all.ps1
 单枚：`powershell -File tools/probes/probe-<名>.ps1`。所有探针先跑
 `seed.ps1`（固定 20 条合成数据：12 文本含链接/邮箱/色值/代码/长文、3 图
 800×500/640×640/900×300、2 文件；探针自己的数据目录）。最新全量实测
-（2026-10-23）：**PASS 199 / FAIL 1（已知边缘，见 §6）/ SKIP 1**。
+（2026-10-23）：**PASS 226 / FAIL 0 / SKIP 1**。
 
 ### 2.1 窄条（quick paste bar）
 
