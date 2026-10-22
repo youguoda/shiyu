@@ -14,8 +14,8 @@
 | 层 | 规模 | 位置 | 运行方式 |
 |---|---|---|---|
 | 单元测试 | 133 个文件 / 1533 个 `[Fact]`（实际执行 Core 2180 + Windows 26 例） | `tests/Shiyu.Core.Tests`、`tests/Shiyu.Windows.Tests` | `dotnet test Shiyu.sln -c Debug` |
-| 自动化探针 | 47 枚进 run-all，共 **227 项检查** | `tools/probes/probe-*.ps1` | `powershell -File tools/probes/run-all.ps1` |
-| 性能测量 | 2 个独立测量脚本 + 探针内 perf 预算 | `tools/probes/measure-*.ps1` | 单独运行，读数比对预算 |
+| 自动化探针 | 48 枚进 run-all，共 **237 项检查** | `tools/probes/probe-*.ps1` | `powershell -File tools/probes/run-all.ps1` |
+| 性能测量 | 2 个独立测量脚本 + 探针内 perf 预算 + bigdata 压力曲线 | `tools/probes/measure-*.ps1`、`tools/probes/probe-bigdata.ps1` | 单独运行，读数比对预算 |
 | 手动验收 | 29 项（§5） | 本文档 | 人在机器前逐项过 |
 
 ### 0.2 运行前的硬性前提
