@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using Shiyu.Core;
 
@@ -674,6 +675,68 @@ internal partial class BarWindow
 
         return FormattableString.Invariant(
             $"keys={_keyHintsOn},badges={badges},trays={trays},preview={_preview is { IsVisible: true }},footer={FeedbackHost.IsVisible},top={Top:F0}");
+    }
+
+    /// <summary>
+    /// 真实光标停到按钮正中，再触发它的 Click——菜单照真实点击那样打开、抢走鼠标捕获，窗口照样报
+    /// 「离开」，但不发真实按键。光标下的根窗口不是按钮所在的窗（被盖住、人在动鼠标）时不点，返回假：
+    /// 光标不在窗上就没有那次「离开」，点了也什么都证明不了。
+    /// </summary>
+    internal async Task<bool> ProbePointAndClickAsync(ButtonBase target)
+    {
+        if (PresentationSource.FromVisual(target) is not System.Windows.Interop.HwndSource source)
+        {
+            return false;
+        }
+
+        var screen = target.PointToScreen(new System.Windows.Point(target.ActualWidth / 2, target.ActualHeight / 2));
+        SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
+        await SettleInputAsync();
+        if (!GetCursorPos(out var at) || GetAncestor(WindowFromPoint(at), 2 /* GA_ROOT */) != source.Handle)
+        {
+            return false;
+        }
+
+        target.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, target));
+        await SettleInputAsync();
+        return true;
+    }
+
+    /// <summary>鼠标进细条却没弹出时，挡住它的几道闸此刻的状态。</summary>
+    internal string ProbeDockGate()
+        => FormattableString.Invariant(
+            $"summoned={_summoned}|fullscreen={Shiyu.Windows.FullScreenOverlay.IsForeground()}|overBar={CursorOverThisBar()}|mouseOver={IsMouseOver}|active={EdgeDockActive}");
+
+    internal ButtonBase ProbeTagFilterButton => TagFilter;
+
+    internal ButtonBase ProbeSubtypeButton => SubtypeButton;
+
+    internal bool ProbeMenuOpen => OpenMenu is not null;
+
+    /// <summary>此刻开着的菜单里的第一项（标签下拉里是「全部」）。</summary>
+    internal ButtonBase? ProbeOpenMenuFirstItem
+        => OpenMenu?.Child is { } child ? Tree.FindDescendant<Button>(child) : null;
+
+    internal void ProbeCloseMenu()
+    {
+        if (OpenMenu is { } menu)
+        {
+            menu.IsOpen = false;
+        }
+    }
+
+    /// <summary>真实光标挪到窄条右侧（右边没屏了就左侧）的空处，只挪不点。</summary>
+    internal void ProbeCursorBesideBar()
+    {
+        if (!Shiyu.Windows.WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect))
+        {
+            return;
+        }
+
+        var x = rect.Right + 80 < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth
+            ? rect.Right + 80
+            : rect.Left - 80;
+        SetCursorPos(x, rect.Top + 120);
     }
 
     /// <summary>拖到一半把鼠标捕获夺走（Alt+Tab、Win 键、窗被收起时系统就是这么做的）。</summary>

@@ -668,6 +668,9 @@ public partial class App
 
             // 设置里的贴边开关（用户问 2026-10-21：开关能不能用）。窄条此刻正以呼出的样子开着、钉着
             // ——从窄条的齿轮进设置就是这样——打开要当即收成细条；再关掉要回到完整位置。
+            // 人此刻在设置窗里：光标挪开窄条，免得停在卡片上开出悬停预览（预览开着时收边要等它）。
+            bar.ProbeCursorBesideBar();
+            await Task.Delay(300);
             shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
             await Task.Delay(300);
             _modules!.Bar.ShowQuickPaste();
@@ -689,6 +692,49 @@ public partial class App
             await Task.Delay(500);
             log.AppendLine(FormattableString.Invariant(
                 $"summoncollapsed|before={stripBefore:F0}|after={bar.ProbeVisibleStrip():F0}|expanded={bar.ProbeDockExpanded()}"));
+
+            // 贴边弹出后点标签下拉、筛选（用户实录 2026-10-22：一点窄条就缩回顶缘，只剩菜单悬在原处）。
+            // 菜单开着、选完一项都得留着；人走开、菜单收起才回细条。
+            bar.Dismiss(Shiyu.Core.BarHideReason.Pasted);
+            await Task.Delay(400);
+            var stripBeforeHover = bar.ProbeVisibleStrip();
+            await bar.ProbeHoverStripAsync();
+            var hovered = bar.ProbeDockExpanded();
+            if (!hovered)
+            {
+                log.AppendLine(FormattableString.Invariant(
+                    $"menuclick|cursor=False|hovered=False|strip={stripBeforeHover:F0}|after={bar.ProbeVisibleStrip():F0}|{bar.ProbeDockGate()}"));
+            }
+            else if (await bar.ProbePointAndClickAsync(bar.ProbeTagFilterButton))
+            {
+                await Task.Delay(400);
+                var menuOpen = bar.ProbeMenuOpen;
+                var withMenu = bar.ProbeDockExpanded();
+                // 选一项：光标还停在窄条上（菜单盖在窄条上方），菜单收了窄条也该留着。
+                var picked = false;
+                if (bar.ProbeOpenMenuFirstItem is { } item)
+                {
+                    item.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, item));
+                    picked = true;
+                }
+
+                await Task.Delay(400);
+                var afterPick = bar.ProbeDockExpanded();
+                var funnel = await bar.ProbePointAndClickAsync(bar.ProbeSubtypeButton);
+                await Task.Delay(400);
+                var withFunnel = bar.ProbeDockExpanded() && bar.ProbeMenuOpen;
+                bar.ProbeCursorBesideBar();
+                await Task.Delay(300);
+                var stillWithFunnel = bar.ProbeDockExpanded();
+                bar.ProbeCloseMenu();
+                await Task.Delay(400);
+                log.AppendLine(FormattableString.Invariant(
+                    $"menuclick|open={menuOpen}|withMenu={withMenu}|picked={picked}|afterPick={afterPick}|funnel={funnel}|withFunnel={withFunnel}|awayWithMenu={stillWithFunnel}|collapsedAfterClose={!bar.ProbeDockExpanded()}"));
+            }
+            else
+            {
+                log.AppendLine("menuclick|cursor=False|hovered=True");
+            }
         }
         catch (Exception failure)
         {

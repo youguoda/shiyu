@@ -372,8 +372,10 @@ internal partial class BarWindow : Window
             _summoned = false;
             CollapseNow();   // 拖到顶缘的那一下就要缩进去——召出状态也不例外。
         }
-        else if (_edgeCollapsed && _settings.BarEdgeDock)
+        else if (_settings.BarEdgeDock)
         {
+            // 收着拖、弹出来再拖都算（拖之前 PullOutForDrag 已把收着的整条拉出来，这里看不到收着）：
+            // 贴边还开着的话，落在下面的窄条鼠标一走又缩回顶缘，接着鼠标经过又滑出来——就是「闪一下」。
             _edgeCollapsed = false;
             EdgeDockWanted?.Invoke(false);
         }
@@ -790,14 +792,78 @@ internal partial class BarWindow : Window
         }
     }
 
+    /// <summary>窄条自己弹出的菜单里此刻开着的那个（标签、子类型、卡片右键与子菜单、托盘「更多」、分组）。</summary>
+    private Popup? OpenMenu
+        => new[] { _cardMenu, _cardSubMenu, _trayMorePopup, _subtypePopup, _tagPopup, _overflowPopup, _groupMenu, _groupChooser }
+            .FirstOrDefault(menu => menu is { IsOpen: true });
+
     /// <summary>鼠标离窗：收回细条。预览开着时等它收。</summary>
     private void OnDockMouseLeave(object sender, MouseEventArgs e)
     {
         if (EdgeDockActive && !_edgeCollapsed && !_summoned
             && _preview is not { IsVisible: true })
         {
+            // 菜单（StaysOpen=false 的 Popup）一开就把鼠标捕获拿走，窗口跟着报「离开」，人其实还在
+            // 窄条上（用户实录 2026-10-22：一点标签下拉窄条就缩回顶缘，只剩菜单悬着）。等菜单收了再看。
+            if (OpenMenu is { } menu)
+            {
+                CollapseWhenClosed(menu);
+                return;
+            }
+
             DockCollapse();
         }
+    }
+
+    private Popup? _collapseAfterMenu;
+
+    private void CollapseWhenClosed(Popup menu)
+    {
+        if (ReferenceEquals(_collapseAfterMenu, menu))
+        {
+            return;
+        }
+
+        _collapseAfterMenu = menu;
+        menu.Closed += OnDockMenuClosed;
+    }
+
+    private void OnDockMenuClosed(object? sender, EventArgs e)
+    {
+        ((Popup)sender!).Closed -= OnDockMenuClosed;
+        _collapseAfterMenu = null;
+
+        // 菜单项可能接着开下一层（卡片右键的子菜单、分组选择）：等这次点击处理完再看。
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!EdgeDockActive || _edgeCollapsed || _summoned)
+            {
+                return;
+            }
+
+            if (OpenMenu is { } next)
+            {
+                CollapseWhenClosed(next);
+                return;
+            }
+
+            if (!CursorOverBar())
+            {
+                DockCollapse();
+            }
+        }, System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    /// <summary>真实光标在不在窗口矩形里——刚收起菜单的那一拍，IsMouseOver 还没跟上。</summary>
+    private bool CursorOverBar()
+    {
+        if (!WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect))
+        {
+            return false;
+        }
+
+        var at = ScreenGeometry.CursorPosition();
+        return at.X >= rect.Left && at.X < rect.Right && at.Y >= rect.Top && at.Y < rect.Bottom;
     }
 
     /// <summary>

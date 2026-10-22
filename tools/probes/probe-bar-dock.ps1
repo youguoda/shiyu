@@ -107,6 +107,7 @@ if ($userPresent) {
     Add-Check 'flow:bar-dock-capture-lost' 'SKIP' 'user present - cursor-coupled steps skipped'
     Add-Check 'flow:bar-dock-summon-hover' 'SKIP' 'user present - cursor-coupled steps skipped'
     Add-Check 'flow:bar-dock-dragdown-stays' 'SKIP' 'user present - cursor-coupled steps skipped'
+    Add-Check 'flow:bar-dock-menu-keeps-bar' 'SKIP' 'user present - cursor-coupled steps skipped'
     return $script:Checks
 }
 
@@ -182,9 +183,28 @@ if ($drag -and $drag['cursor'] -eq 'False') {
     $dropped = & $topOf $samples['d5']
     $after = & $topOf $samples['up']
     $lit = @($samples.Values | Where-Object { $_ -match 'keys=True|badges=[1-9]' }).Count
-    $ok = ($null -ne $dropped) -and ($null -ne $after) -and ([math]::Abs($after - $dropped) -le 2) -and ($lit -eq 0)
-    $detail = "top while dragging {0}, after release {1}; samples with key hints lit: {2}" -f $dropped, $after, $lit
+    # After the release the pointer moves up but stays over the bar: the bar must not jump back
+    # to the strip and slide out again (that was the remaining "flash", 2026-10-22).
+    $moved = @(1..8 | ForEach-Object { & $topOf $samples["m$_"] } | Where-Object { ($null -eq $_) -or ([math]::Abs($_ - $dropped) -gt 2) })
+    $ok = ($null -ne $dropped) -and ($null -ne $after) -and ([math]::Abs($after - $dropped) -le 2) -and ($lit -eq 0) -and ($moved.Count -eq 0)
+    $detail = "top while dragging {0}, after release {1}; samples with key hints lit: {2}; samples after release where the bar moved: {3}" -f $dropped, $after, $lit, $moved.Count
     Add-Check 'flow:bar-dock-dragdown-stays' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+}
+
+# User report 2026-10-22: on the expanded docked bar, clicking the tag drop-down or the filter
+# button collapsed the bar into the strip and left the menu hanging alone. A menu takes the
+# mouse capture, which reads as "mouse left"; the bar must stay out while a menu is open and
+# after an item is picked, and go back to the strip only once the menu closes with the
+# pointer elsewhere.
+$menu = $lines['menuclick']
+if ($menu -and $menu['cursor'] -eq 'False') {
+    Add-Check 'flow:bar-dock-menu-keeps-bar' 'SKIP' $covered
+} else {
+    $keys = 'open', 'withMenu', 'picked', 'afterPick', 'funnel', 'withFunnel', 'awayWithMenu', 'collapsedAfterClose'
+    $ok = [bool]$menu
+    foreach ($k in $keys) { if (-not $menu -or $menu[$k] -ne 'True') { $ok = $false } }
+    $detail = if ($menu) { ($keys | ForEach-Object { "$_=$($menu[$_])" }) -join ', ' } else { 'no menuclick line' }
+    Add-Check 'flow:bar-dock-menu-keeps-bar' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 }
 
 return $script:Checks
