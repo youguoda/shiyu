@@ -44,6 +44,22 @@ internal sealed partial class BarModule
     }
 
     /// <summary>
+    /// 开着贴边就把细条放回顶缘（贴边是「常驻」的，重启不该把它弄丢）。等启动忙完再建窗：
+    /// 窄条第一扇窗的造价不该压在托盘出现之前。
+    /// </summary>
+    public void RestoreDockedStrip()
+    {
+        if (!(_shell!.Settings.BarEdgeDock && _shell.Settings.BarPinned))
+        {
+            return;
+        }
+
+        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+            () => EnsureBar()?.ShowDocked(),
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
+
+    /// <summary>
     /// The one construction site（票 26 抽出，构造与接线只此一份）。装配
     /// 守卫：没有可写剪贴板与取词平台时，粘贴无从谈起，安静返回。
     /// </summary>

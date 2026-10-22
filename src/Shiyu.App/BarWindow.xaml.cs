@@ -433,6 +433,14 @@ internal partial class BarWindow : Window
         var anchor = stayPut
             ? (ScreenRect?)null
             : ScreenGeometry.CaretBounds() ?? BarPlacement.Pointer(ScreenGeometry.CursorPosition());
+
+        // 收在顶缘细条上的窄条也「开着」、不挪，但得整条出来——只拿焦点、还缩在顶缘，呼出就像没反应。
+        // 呼出要快，不滑；贴完、Esc 再收回细条。
+        if (_edgeCollapsed)
+        {
+            RestoreFromDock(animate: false);
+        }
+
         _summoned = true;
 
         // A fresh session starts unfiltered. Clearing arms the debounce; the
@@ -732,8 +740,8 @@ internal partial class BarWindow : Window
         RestoreFromDock();
     }
 
-    /// <summary>从细条滑回工作区顶部，不问前台是谁。</summary>
-    private void RestoreFromDock()
+    /// <summary>从细条回到工作区顶部，不问前台是谁。</summary>
+    private void RestoreFromDock(bool animate = true)
     {
         var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
         if (!WindowRects.TryGet(handle, out var rect))
@@ -744,7 +752,33 @@ internal partial class BarWindow : Window
         var corner = new ScreenPoint(rect.Left, rect.Top);
         var work = ScreenGeometry.WorkAreaAt(corner);
         _edgeCollapsed = false;
-        SlideDockTo(handle, rect.Left, work.Top);
+        if (animate)
+        {
+            SlideDockTo(handle, rect.Left, work.Top);
+            return;
+        }
+
+        _dockSlide?.Stop();
+        _dockSlide = null;
+        TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, work.Top), ZBandPolicy.FollowsHost(Topmost));
+    }
+
+    /// <summary>
+    /// 启动时把贴边的窄条放回顶缘细条：贴边是「常驻」的，不该等第一次呼出才出现。不抢焦点、
+    /// 不算一次呼出（鼠标到边照常滑出）；列表按此刻的历史读一遍。
+    /// </summary>
+    public void ShowDocked()
+    {
+        if (!EdgeDockActive || IsVisible)
+        {
+            return;
+        }
+
+        RunRefresh(_refreshPolicy.Shown());
+        ShowActivated = false;
+        Show();
+        ShowActivated = true;
+        CollapseNow();
     }
 
     /// <summary>鼠标进窗：贴边收着就展开。</summary>

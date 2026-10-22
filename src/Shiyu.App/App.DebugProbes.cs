@@ -680,6 +680,15 @@ public partial class App
             await Task.Delay(600);
             log.AppendLine(FormattableString.Invariant(
                 $"toggleoff|top={bar.Top:F0}|expanded={bar.ProbeDockExpanded()}"));
+
+            // 收着细条时按快速粘贴：窄条得整条出来，不能只拿了焦点、还缩在顶缘。
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = true });
+            await Task.Delay(400);
+            var stripBefore = bar.ProbeVisibleStrip();
+            _modules!.Bar.ShowQuickPaste();
+            await Task.Delay(500);
+            log.AppendLine(FormattableString.Invariant(
+                $"summoncollapsed|before={stripBefore:F0}|after={bar.ProbeVisibleStrip():F0}|expanded={bar.ProbeDockExpanded()}"));
         }
         catch (Exception failure)
         {
@@ -691,6 +700,50 @@ public partial class App
             BarWindow.ProbeCursorBack(cursorAtStart);
             log.AppendLine("done");
             File.WriteAllText(Path.Combine(directory, "bar-dock.log"), log.ToString());
+        }
+    }
+
+    /// <summary>
+    /// 探针命令 bar-dock-start（用户需求 2026-10-21）：设置里开着钉住与贴边的一次启动，什么都不呼出——
+    /// 细条要自己出现在顶缘、不抢焦点、不算呼出（模拟鼠标进窗就展开）。判断在应用里做完，日志只有真假与数值。
+    /// </summary>
+    private async void ProbeBarDockStart()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            BarWindow? bar = null;
+            for (var waited = 0; waited < 50 && bar is null; waited++)
+            {
+                await Task.Delay(100);
+                bar = Windows.OfType<BarWindow>().FirstOrDefault(window => window.IsVisible);
+            }
+
+            if (bar is null)
+            {
+                log.AppendLine("start|visible=False");
+                return;
+            }
+
+            await Task.Delay(300);
+            log.AppendLine(FormattableString.Invariant(
+                $"start|visible=True|strip={bar.ProbeVisibleStrip():F0}|active={bar.IsActive}"));
+
+            bar.ProbeDockMouseEnter();
+            await Task.Delay(600);
+            log.AppendLine(FormattableString.Invariant(
+                $"starthover|expanded={bar.ProbeDockExpanded()}|top={bar.Top:F0}"));
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "bar-dock-start.log"), log.ToString());
         }
     }
 
@@ -2003,6 +2056,11 @@ public partial class App
             // 贴边隐藏（用户需求 2026-10-20）：收到细条、鼠标进窗展开。
             case "bar-dock":
                 ProbeBarDock();
+                break;
+
+            // 开着贴边重启（用户需求 2026-10-21）：细条自己回到顶缘，不抢焦点，鼠标进来能弹出。
+            case "bar-dock-start":
+                ProbeBarDockStart();
                 break;
 
             // 预览工作台测试方案（用户实录 2026-10-20：叠显/串台/图片卡顿——复现与测量段）。

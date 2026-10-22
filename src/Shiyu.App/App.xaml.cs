@@ -172,6 +172,7 @@ public partial class App : Application
         _modules.Retention.Start(shell);
         _modules.AutoBackup.Start(shell);
         _modules.Ocr.Start(shell);
+        _modules.Bar.RestoreDockedStrip();
         StartupPreference.Apply(shell.Settings);
 
 #if !DEBUG

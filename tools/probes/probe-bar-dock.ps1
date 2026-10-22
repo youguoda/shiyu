@@ -92,6 +92,12 @@ $ok = $off -and $off['top'] -eq '0' -and $off['expanded'] -eq 'True'
 $detail = if ($off) { "switch turned off again: top {0} (work-area top), expanded {1}" -f $off['top'], $off['expanded'] } else { 'no toggleoff line' }
 Add-Check 'flow:bar-dock-switch-off' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
+# Quick paste while the bar sits as a strip: it must come out whole, not take focus up there.
+$sc = $lines['summoncollapsed']
+$ok = $sc -and ([double]$sc['before'] -le 4) -and ([double]$sc['after'] -gt 100) -and $sc['expanded'] -eq 'True'
+$detail = if ($sc) { "quick paste on the strip: visible {0} DIP before, {1} DIP after, expanded {2}" -f $sc['before'], $sc['after'], $sc['expanded'] } else { 'no summoncollapsed line' }
+Add-Check 'flow:bar-dock-summon-from-strip' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
 $drop = $lines['drop']
 if ($userPresent) {
     Add-Check 'flow:bar-dock-droptop' 'SKIP' 'user present (cursor moved between samples) - cursor-coupled steps skipped'
