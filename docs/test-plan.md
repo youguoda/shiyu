@@ -1,9 +1,9 @@
 # 拾语测试计划（全量）
 
-- 更新：2026-10-22
-- 基线：master @ d9790a6（0.17.6 手动验证包之后、与 origin 合并完成的那个提交）
+- 更新：2026-10-23
+- 基线：master @ c934178（0.18.2 发布、与 origin 合并、测试计划文档入库之后）
 - 本文覆盖**全部**四层测试：单元测试、自动化探针、性能测量、手动验收；外加发布核验
-  流程。每一枚探针、每一条检查、每一项手动步骤都列全；数值为 2026-10-22 实测。
+  流程。每一枚探针、每一条检查、每一项手动步骤都列全；数值为 2026-10-23 实测。
 
 ---
 
@@ -14,7 +14,7 @@
 | 层 | 规模 | 位置 | 运行方式 |
 |---|---|---|---|
 | 单元测试 | 133 个文件 / 1522 个 `[Fact]`（实际执行 2124 例） | `tests/Shiyu.Core.Tests`、`tests/Shiyu.Windows.Tests` | `dotnet test Shiyu.sln -c Debug` |
-| 自动化探针 | 36 枚进 run-all，共 **201 项检查** | `tools/probes/probe-*.ps1` | `powershell -File tools/probes/run-all.ps1` |
+| 自动化探针 | 44 枚进 run-all，共 **220 项检查** | `tools/probes/probe-*.ps1` | `powershell -File tools/probes/run-all.ps1` |
 | 性能测量 | 2 个独立测量脚本 + 探针内 perf 预算 | `tools/probes/measure-*.ps1` | 单独运行，读数比对预算 |
 | 手动验收 | 29 项（§5） | 本文档 | 人在机器前逐项过 |
 
@@ -46,10 +46,10 @@ SKIP = 有真人在场（光标移动）时，抢鼠标/真光标耦合的检查
 
 ---
 
-## 1. 单元测试（133 个文件 / 1522 个 Fact / 实际执行 2124 例）
+## 1. 单元测试（133 个文件 / 1533 个 Fact / 实际执行 2158 + 26 例）
 
-命令：`dotnet test Shiyu.sln -c Debug`。最新实测（2026-10-22）：
-**Core 2124 全绿 + Windows 26 全绿，0 失败**。
+命令：`dotnet test Shiyu.sln -c Debug`。最新实测（2026-10-23）：
+**Core 2158 全绿 + Windows 26 全绿，0 失败**。
 已知时序敏感项：`SettingsStoreTests.Concurrent_updates_on_the_same_field_are_all_counted`
 在全量并发负载下偶发红，单独重跑即绿（`--filter "FullyQualifiedName~Concurrent_updates"`）。
 
@@ -110,7 +110,7 @@ SKIP = 有真人在场（光标移动）时，抢鼠标/真光标耦合的检查
 | PreviewPolicyTests | 28 | 悬停预览的完整开/转/收时序状态机 |
 | PreviewPlacementTests 5 / PreviewSizingTests 16 / PreviewTeachingTests 4 / PreviewImageTransformTests 4 / CardImageFitTests 6 | | 预览摆放、尺寸、教学行、图片缩放算术 |
 | WorkbenchChipsTests | 7 | 每形态动作芯片表 |
-| BarPlacementTests 3 / BarRefreshPolicyTests 11 / BarKeyboardTests 3 / ZBandTests 2 | | 窄条摆放、刷新策略、键序、Z 序 |
+| BarPlacementTests 3 / BarRefreshPolicyTests 11 / BarKeyboardTests 5 / ZBandTests 2 | | 窄条摆放、刷新策略、按键路由（搜索 vs 选中）、Z 序 |
 | HoverActionTests 11 / WinVFilterTests 11 | | 悬停动作与 Win+V 筛选 |
 | MotionTokenTests 4 / DesignTokenTests 10 | | 动效时长与设计令牌 |
 | RenderCadenceTests 6 | | 渲染节拍 |
@@ -143,7 +143,7 @@ InstallRegistrationTests 4、ProcessIntegrityTests 3、TrayIconImagesTests 2—�
 
 ---
 
-## 2. 自动化探针（run-all：36 枚 / 201 项检查）
+## 2. 自动化探针（run-all：44 枚 / 220 项检查）
 
 命令：
 ```
@@ -153,7 +153,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/probes/run-all.ps1
 单枚：`powershell -File tools/probes/probe-<名>.ps1`。所有探针先跑
 `seed.ps1`（固定 20 条合成数据：12 文本含链接/邮箱/色值/代码/长文、3 图
 800×500/640×640/900×300、2 文件；探针自己的数据目录）。最新全量实测
-（2026-10-22）：**PASS 199 / FAIL 1（已知边缘，见 §4）/ SKIP 1**。
+（2026-10-23）：**PASS 199 / FAIL 1（已知边缘，见 §6）/ SKIP 1**。
 
 ### 2.1 窄条（quick paste bar）
 
@@ -178,13 +178,35 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/probes/run-all.ps1
 - **probe-bar-sharp**——窄条图片按屏清晰：过保留期的图留在缩略图
   `flow:bar-sharp-expired`；在屏的换上按屏像素解码的原图
   `flow:bar-sharp-originals`；图充满卡宽 `flow:bar-sharp-fills-screen`。
-- **probe-bar-dock**——贴边隐藏 8 检查：收起只露 3 DIP 细条
+- **probe-bar-dock**——贴边隐藏 17 检查。基础四项：收起只露 3 DIP 细条
   `flow:bar-dock-strip`；鼠标进窗滑出动画展开到工作区顶 `flow:bar-dock-expand`；
-  离窗收回 `flow:bar-dock-recollapse`；关开关还原 `flow:bar-dock-restore`；
-  拖到顶缘松手即贴边 `flow:bar-dock-droptop`；拖离取消 `flow:bar-dock-dropaway`；
-  整窗拖动实时跟手 `flow:bar-dock-livedrag`（当帧位移实测 +90;+90 px）；
-  召出状态拖到顶缘也当帧收边 `flow:bar-dock-summondrop`（实测 3 DIP）。
-  后四项耦合真光标：用户在场即 SKIP。
+  离窗收回 `flow:bar-dock-recollapse`；关开关还原 `flow:bar-dock-restore`。
+  开关即时性四项：召出开着时开关到开 → 当帧收边 `flow:bar-dock-switch-on-summoned`；
+  窄条在别处时开开关 → 原地不挪、托盘提示拖上去一次 `flow:bar-dock-switch-on-away`；
+  钉住与贴边都关时拖到顶缘 → 设置不被误开 `flow:bar-dock-drop-leaves-settings`；
+  开关到关 → 完整回工作区顶 `flow:bar-dock-switch-off`。
+  拖动与落点五项：拖到顶缘松手即贴边 `flow:bar-dock-droptop`；拖离顶缘窄条仍显示且
+  贴边保持开启、鼠标离开不收回 `flow:bar-dock-dropaway`；整窗拖动实时跟手
+  `flow:bar-dock-livedrag`（实测 +90;+90 px）；拖动中捕获被夺（Alt+Tab/Win 键）→
+  拖动即止、之后的悬停不携带窗口 `flow:bar-dock-capture-lost`；召出状态拖到顶缘
+  当帧收边 `flow:bar-dock-summondrop`（实测 3 DIP）。
+  召出与菜单三项：召出收边后悬停细线仍弹出 `flow:bar-dock-summon-hover`；从顶缘
+  拖下松手不闪回、键帽不闪烁 `flow:bar-dock-dragdown-stays`；展开态点标签下拉/
+  筛选按钮不收窄条、菜单关闭且指针在别处才收回 `flow:bar-dock-menu-keeps-bar`。
+  **全程用户在场守卫**：真人在场（光标移动）时 17 项全体 SKIP——悬停/拖动检查
+  会与真实光标打架。
+- **probe-bar-dock-start**——重启后细边自动回位 3 检查：上次关闭时窄条停在顶缘 →
+  启动即细边且不抢焦点 `flow:bar-dock-start-strip`（实测 3 DIP）；指针进细线展开
+  `flow:bar-dock-start-hover`；上次停在离顶 300 DIP 的别处 → 启动不出现
+  `flow:bar-dock-start-away`（贴边只作用于停在顶缘的窄条）。
+- **probe-bar-slide**——细边滑出的节奏 1 检查：贴边窄条收起/滑出十次，记录每帧
+  落点与每次窗口移动耗时 `perf:bar-slide-cadence`（实测 14.8 帧/次、帧隙中位
+  13.4ms 最大 27ms、单次移动均 1.15ms、全程 162ms）；系统关动画时检查让位。
+- **probe-bar-keys**——按键路由 5 检查（窄条非「搜索」即「选中」两种键态）：
+  点卡片即进选中 `flow:bar-keys-click-picks`；选中态字母键直接动作（P 钉住）
+  `flow:bar-keys-letter-acts`；打字回搜索框 `flow:bar-keys-typing-returns`；
+  搜索框里 Ctrl+字母恒动作 `flow:bar-keys-ctrl-acts`；空搜索方向键进选中
+  `flow:bar-keys-arrow-picks`。
 
 ### 2.2 预览（悬停预览 + 钉住工作台）
 
@@ -412,7 +434,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/probes/run-all.ps1
 
 | 项 | 现象 | 状态 |
 |---|---|---|
-| 图片缩放输入 p95 | 负载下 46–60ms 摆动（预算 50），空载 14–31ms | Linear 重采样 + 变换复用已改善 3 倍；继续观察，触发即查 |
+| 图片缩放输入 p95 | 负载下 46–60ms 摆动（预算 50），空载 14–31ms；大图小图都会碰 | Linear 重采样 + 变换复用已改善 3 倍；继续观察，触发即查 |
 | 设置并发压测 | 全量负载下偶发红，单独复跑绿 | 已知时序敏感项 |
 | 既往 defect 复现位 | 票 29 的 13 项 + 各视觉 P0 | 修复后全部转绿（2026-10-22 实测 FAIL 1 = 仅边缘项） |
 
