@@ -125,6 +125,30 @@ $origin = Field $clamps 'origin' '?'
 $ok = ([math]::Abs($up - 8.0) -le 0.001) -and ([math]::Abs($down - 1.0) -le 0.001) -and ($origin -eq '0.000;0.000')
 Add-Check 'flow:preview-zoom-clamps' $(if ($ok) { 'PASS' } else { 'FAIL' }) "120 ticks up -> $up, 40 down -> $down, origin=$origin"
 
+# User report 2026-10-22: zooming in only magnified the box-sized decode and got blurrier.
+# Once zoomed, the panel must swap in the original's full pixels.
+$sharp = @{}
+$actual = @{}
+foreach ($line in Get-Content $log -Encoding UTF8) {
+    if ($line -match '^(sharp|actual)\|img=large\|(.*)$') {
+        $target = if ($Matches[1] -eq 'sharp') { $sharp } else { $actual }
+        foreach ($pair in $Matches[2].Split('|')) {
+            $kv = $pair.Split('=', 2)
+            if ($kv.Count -eq 2) { $target[$kv[0]] = $kv[1] }
+        }
+    }
+}
+$ok = $sharp.Count -gt 0 -and $sharp['zoomPx'] -eq $sharp['cardPx'] -and $sharp['fitPx'] -ne $sharp['cardPx']
+$detail = if ($sharp.Count -gt 0) { "3840x2160 source pixels at fit {0}, after zooming {1} (original {2})" -f $sharp['fitPx'], $sharp['zoomPx'], $sharp['cardPx'] } else { 'no sharp line' }
+Add-Check 'flow:preview-zoom-sharp' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+# Double-click at fit goes to one image pixel per screen pixel, and back to fit again.
+$expected = ConvertTo-InvariantDouble (Field $actual 'expected' '-1')
+$scale = ConvertTo-InvariantDouble (Field $actual 'scale' '-1')
+$back = ConvertTo-InvariantDouble (Field $actual 'back' '-1')
+$ok = ($expected -gt 1.01) -and ([math]::Abs($scale - $expected) -le 0.01) -and ([math]::Abs($back - 1.0) -le 0.001)
+Add-Check 'flow:preview-dblclick-actual-size' $(if ($ok) { 'PASS' } else { 'FAIL' }) "double-click at fit -> $scale (1:1 is $expected), again -> $back"
+
 $longest = ConvertTo-InvariantDouble (Field $zoomLarge 'longestOpMs' '-1')
 $ok = ($longest -ge 0) -and ($longest -le 150)
 Add-Check 'perf:preview-transform-ui-cost' $(if ($ok) { 'PASS' } else { 'FAIL' }) "zoom transform stays off the UI thread budget: longestOpMs=$longest"

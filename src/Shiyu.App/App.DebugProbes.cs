@@ -544,7 +544,9 @@ public partial class App
                 return;
             }
 
-            // 粘贴完成照常收回 → 贴边模式回到细条。
+            // 贴边只管停在顶缘的窄条：先把呼出在光标旁的窄条摆到顶缘，粘贴完成照常收回 → 回到细条。
+            bar.ProbeParkAt(SystemParameters.WorkArea.Top);
+            await Task.Delay(200);
             bar.Dismiss(Shiyu.Core.BarHideReason.Pasted);
             await Task.Delay(400);
             var strip = bar.ProbeVisibleStrip();
@@ -567,15 +569,28 @@ public partial class App
             await Task.Delay(400);
             log.AppendLine(FormattableString.Invariant($"restored|top={bar.Top:F0}"));
 
-            // 拖动落点的位置语义（用户需求 2026-10-20：拖到顶缘即贴边）：模拟两次拖动收尾。
+            // 拖动只改位置、不改开关（用户实录 2026-10-22：钉住关着时拖到顶端，钉住和贴边都被打开了）。
+            // 贴边关着（钉住也关着）拖到顶缘：停在顶缘，不收，两个开关原样。
+            shell.TryUpdateSettings(s => s with { BarPinned = false, BarEdgeDock = false });
+            await Task.Delay(300);
+            bar.ProbeDragEndedAt(SystemParameters.WorkArea.Top + 4);
+            await Task.Delay(400);
+            log.AppendLine(FormattableString.Invariant(
+                $"dropoff|pinned={shell.Settings.BarPinned}|dock={shell.Settings.BarEdgeDock}|expanded={bar.ProbeDockExpanded()}|strip={bar.ProbeVisibleStrip():F0}"));
+
+            // 贴边开着：拖到顶缘收成细条；拖到别处停在那里照常显示，开关不动，鼠标离开也不收。
+            shell.TryUpdateSettings(s => s with { BarPinned = true, BarEdgeDock = true });
+            await Task.Delay(300);
             bar.ProbeDragEndedAt(SystemParameters.WorkArea.Top + 4);
             await Task.Delay(400);
             var dropTopCollapsed = !bar.ProbeDockExpanded() && bar.ProbeVisibleStrip() <= 4;
             bar.ProbeDragEndedAt(SystemParameters.WorkArea.Top + 200);
             await Task.Delay(400);
-            var dropAwayUndocked = bar.ProbeDockExpanded();
+            var awayExpanded = bar.ProbeDockExpanded() && bar.ProbeVisibleStrip() > 100;
+            bar.ProbeDockMouseLeave();
+            await Task.Delay(400);
             log.AppendLine(FormattableString.Invariant(
-                $"drop|topCollapsed={dropTopCollapsed}|awayUndocked={dropAwayUndocked}"));
+                $"drop|topCollapsed={dropTopCollapsed}|awayExpanded={awayExpanded}|awaySettingOn={shell.Settings.BarEdgeDock}|awayStaysOnLeave={bar.ProbeDockExpanded()}"));
 
             // 实时跟手（用户实录 2026-10-20 的外框问题）：按住背景拖，当帧窗口就应跟动。
             // 先把窄条挪回屏幕内——上一步的落点判定不挪窗，贴边姿态下窗口大半在屏幕外。
@@ -660,6 +675,7 @@ public partial class App
                 }
 
                 log.AppendLine(trace.ToString());
+                log.AppendLine(FormattableString.Invariant($"dragdownsetting|dock={shell.Settings.BarEdgeDock}"));
             }
             else
             {
@@ -667,7 +683,8 @@ public partial class App
             }
 
             // 设置里的贴边开关（用户问 2026-10-21：开关能不能用）。窄条此刻正以呼出的样子开着、钉着
-            // ——从窄条的齿轮进设置就是这样——打开要当即收成细条；再关掉要回到完整位置。
+            // ——从窄条的齿轮进设置就是这样。停在别处时打开：不挪、提示一次拖到顶端（用户需求 2026-10-22）；
+            // 停在顶缘时打开：当即收成细条，不再提示；再关掉要回到完整位置。
             // 人此刻在设置窗里：光标挪开窄条，免得停在卡片上开出悬停预览（预览开着时收边要等它）。
             bar.ProbeCursorBesideBar();
             await Task.Delay(300);
@@ -675,10 +692,25 @@ public partial class App
             await Task.Delay(300);
             _modules!.Bar.ShowQuickPaste();
             await Task.Delay(500);
+            bar.ProbeParkAt(SystemParameters.WorkArea.Top + 250);
+            bar.ProbeCursorBesideBar();
+            await Task.Delay(300);
+            var hintsBefore = _modules.Bar.ProbeDockHints;
             shell.TryUpdateSettings(s => s with { BarEdgeDock = true });
             await Task.Delay(400);
             log.AppendLine(FormattableString.Invariant(
-                $"toggleon|strip={bar.ProbeVisibleStrip():F0}|collapsed={!bar.ProbeDockExpanded()}"));
+                $"toggleaway|expanded={bar.ProbeDockExpanded()}|strip={bar.ProbeVisibleStrip():F0}|hints={_modules.Bar.ProbeDockHints - hintsBefore}"));
+
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
+            await Task.Delay(300);
+            bar.ProbeParkAt(SystemParameters.WorkArea.Top);
+            bar.ProbeCursorBesideBar();
+            await Task.Delay(300);
+            hintsBefore = _modules.Bar.ProbeDockHints;
+            shell.TryUpdateSettings(s => s with { BarEdgeDock = true });
+            await Task.Delay(400);
+            log.AppendLine(FormattableString.Invariant(
+                $"toggleon|strip={bar.ProbeVisibleStrip():F0}|collapsed={!bar.ProbeDockExpanded()}|hints={_modules.Bar.ProbeDockHints - hintsBefore}"));
             shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
             await Task.Delay(600);
             log.AppendLine(FormattableString.Invariant(
@@ -746,6 +778,48 @@ public partial class App
             BarWindow.ProbeCursorBack(cursorAtStart);
             log.AppendLine("done");
             File.WriteAllText(Path.Combine(directory, "bar-dock.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 bar-slide：贴边窄条收起、滑出十轮，量滑动每帧的节奏与挪窗耗时。</summary>
+    private async void ProbeBarSlide()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _shell!.TryUpdateSettings(s => s with { BarPinned = true, BarEdgeDock = true, LightweightWhenHidden = false });
+            _modules.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { IsVisible: true } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            bar.ProbeParkAt(SystemParameters.WorkArea.Top);
+            bar.ProbeCursorBesideBar();
+            await Task.Delay(300);
+            log.AppendLine(await bar.ProbeMeasureSlideAsync(rounds: 10));
+            foreach (var trace in bar.ProbeSlideTrace)
+            {
+                log.AppendLine("trace|" + trace);
+            }
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "bar-slide.log"), log.ToString());
         }
     }
 
@@ -2107,6 +2181,11 @@ public partial class App
             // 开着贴边重启（用户需求 2026-10-21）：细条自己回到顶缘，不抢焦点，鼠标进来能弹出。
             case "bar-dock-start":
                 ProbeBarDockStart();
+                break;
+
+            // 细条滑出的节奏（用户反馈 2026-10-22：弹出发卡）。
+            case "bar-slide":
+                ProbeBarSlide();
                 break;
 
             // 预览工作台测试方案（用户实录 2026-10-20：叠显/串台/图片卡顿——复现与测量段）。

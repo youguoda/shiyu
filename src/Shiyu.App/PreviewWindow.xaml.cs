@@ -183,6 +183,11 @@ internal partial class PreviewWindow : Window
             TransientWindow.MakeNonActivating(new System.Windows.Interop.WindowInteropHelper(this).Handle, _band);
         }
 
+        var work = ScreenGeometry.WorkAreaAt(new ScreenPoint(
+            (anchor.Left + anchor.Right) / 2,
+            (anchor.Top + anchor.Bottom) / 2));
+        ImageBounds = PreviewSizing.ImageBounds(work.Width / scaleX, work.Height / scaleY);
+
         var (width, height) = Measure(card, scaleX);
         Width = width;
         Height = height;
@@ -199,6 +204,7 @@ internal partial class PreviewWindow : Window
             // Everything this panel had in flight describes the previous card;
             // its results are dropped the moment the panel moves on (O-36).
             _backfills.Invalidate();
+            _fullOriginalFor = null;
             Fill(card, scaleX);
             _shown = card;
             CardId = card.Id;
@@ -208,9 +214,7 @@ internal partial class PreviewWindow : Window
             anchor,
             (int)Math.Ceiling(width * scaleX),
             (int)Math.Ceiling(height * scaleY),
-            ScreenGeometry.WorkAreaAt(new ScreenPoint(
-                (anchor.Left + anchor.Right) / 2,
-                (anchor.Top + anchor.Bottom) / 2)),
+            work,
             gap: (int)Math.Round(PreviewPlacement.Gap * scaleX));
 
         if (!wasVisible)
@@ -485,6 +489,7 @@ internal partial class PreviewWindow : Window
         _imageScale = 1;
         _imageOrigin = new Point(0, 0);
         ApplyImageTransform();
+        _fullOriginalFor = null;
     }
 
     /// <summary>按形态给动作芯片（评审方案 2026-10-20 的每形态表）。表本体提纯在
@@ -513,6 +518,82 @@ internal partial class PreviewWindow : Window
 
         RenderOptions.SetBitmapScalingMode(
             ImageHost, _imageScale > 1.001 ? BitmapScalingMode.Linear : BitmapScalingMode.HighQuality);
+
+        if (_imageScale > 1.001)
+        {
+            LoadFullOriginal();
+        }
+    }
+
+    /// <summary>
+    /// 放大时换上原图的全部像素（用户反馈 2026-10-22：放大越看越糊）。面板里的原图只解码到适应框那么多
+    /// 像素，放大的是这张缩过的位图；第一次放大时在后台按原尺寸再解一遍（长边封顶 8192），落位后放大
+    /// 就是真像素。只留当前这一张：4K 截图解开约 33 MB，换下一张就放手。
+    /// </summary>
+    private void LoadFullOriginal()
+    {
+        if (_shown is not { Kind: EntryKind.Image, OriginalPath: { Length: > 0 } path } card
+            || _fullOriginalFor == card.Id)
+        {
+            return;
+        }
+
+        _fullOriginalFor = card.Id;
+        var wanted = card.Id;
+        var generation = _backfills.Epoch;
+        var dispatcher = Dispatcher;
+
+        // 长边超了封顶只定长边，另一边按比例；没超就原样（两边给 0）。
+        var (width, height) = Math.Max(card.PixelWidth, card.PixelHeight) <= FullOriginalCap ? (0, 0)
+            : card.PixelWidth >= card.PixelHeight ? (FullOriginalCap, 0)
+            : (0, FullOriginalCap);
+
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            BitmapSource? full = null;
+            try
+            {
+                full = File.Exists(path) ? DecodeFull(new Uri(path), width, height) : null;
+            }
+            catch (Exception failure) when (
+                failure is IOException or UnauthorizedAccessException
+                or NotSupportedException or System.IO.FileFormatException)
+            {
+                // expected: 原图损坏或刚被清掉——放大照旧用面板里那张，只是没那么清楚。
+            }
+
+            if (full is null)
+            {
+                return;
+            }
+
+            dispatcher.BeginInvoke(() =>
+            {
+                if (_backfills.IsCurrent(generation) && CardId == wanted && Pinned)
+                {
+                    ImageHost.Source = full;
+                }
+            });
+        });
+    }
+
+    private const int FullOriginalCap = 8192;
+
+    /// <summary>已经在为哪张卡解全尺寸原图（每张只解一次，换卡、取消钉住清零）。</summary>
+    private long? _fullOriginalFor;
+
+    /// <summary>按原尺寸解（给 0 的一边按比例；两边都 0 就是原样）。</summary>
+    private static BitmapSource DecodeFull(Uri source, int width, int height)
+    {
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.DecodePixelWidth = width;
+        image.DecodePixelHeight = height;
+        image.UriSource = source;
+        image.EndInit();
+        image.Freeze();
+        return image;
     }
 
     private void OnWorkbenchWheel(object sender, MouseWheelEventArgs e)
@@ -606,8 +687,21 @@ internal partial class PreviewWindow : Window
             return;
         }
 
-        _imageScale = 1;
-        _imageOrigin = new Point(0, 0);
+        // 适应 ⇄ 一比一（用户需求 2026-10-22）：放大着就回到适应；适应时放大到一个图像像素占一个
+        // 屏幕像素，绕双击点；本来就一比一的小图放大两倍。
+        if (_imageScale > 1.001)
+        {
+            _imageScale = 1;
+            _imageOrigin = new Point(0, 0);
+        }
+        else
+        {
+            var actual = PreviewSizing.ActualSizeScale(_shown.PixelWidth, ImageHost.ActualWidth, _deviceScale);
+            (_imageScale, var ox, var oy) = PreviewImageTransform.Zoom(
+                1, 0, 0, at.X, at.Y, actual > 1.01 ? actual : 2.0);
+            _imageOrigin = new Point(ox, oy);
+        }
+
         ApplyImageTransform();
         _imageDragging = false;
         ImageHost.ReleaseMouseCapture();
@@ -655,6 +749,12 @@ internal partial class PreviewWindow : Window
 
     // --- sizing -------------------------------------------------------------------
 
+    /// <summary>图片面板此刻的上限（DIP）：按预览所在屏的工作区放宽，见 <see cref="PreviewSizing.ImageBounds"/>。</summary>
+    internal (double Width, double Height) ImageBounds { get; private set; } = (PreviewSizing.MaxWidth, PreviewSizing.MaxHeight);
+
+    /// <summary>上一次 Fill 用的屏幕缩放：双击一比一按它换算。</summary>
+    private double _deviceScale = 1.0;
+
     /// <summary>
     /// The panel's final size, from <see cref="PreviewSizing"/> with the
     /// caller-measured text numbers. Images hand in their stored pixels; files
@@ -670,16 +770,17 @@ internal partial class PreviewWindow : Window
 
         var size = card.Kind switch
         {
-            EntryKind.Image => PreviewSizing.ForImage(card.PixelWidth, card.PixelHeight, deviceScale),
+            EntryKind.Image => PreviewSizing.ForImage(card.PixelWidth, card.PixelHeight, deviceScale, ImageBounds),
             EntryKind.Files => PreviewSizing.ForFiles(card.Files.Count, FileRowHeight),
             _ => TextSize(card, lineHeight),
         };
 
         if (ShowsTeaching(card))
         {
-            var width = Math.Min(
-                PreviewSizing.MaxWidth,
-                Math.Max(size.Width, TeachRowWidth(card.Teaching) + PreviewSizing.ChromeHorizontal));
+            // 只加宽、不收窄：图片面板本身可以比 MaxWidth 宽（按屏放宽），教学行不该把它压回去。
+            var width = Math.Max(
+                size.Width,
+                Math.Min(PreviewSizing.MaxWidth, TeachRowWidth(card.Teaching) + PreviewSizing.ChromeHorizontal));
             size = (width, size.Height + TeachRowHeight);
         }
 
@@ -787,7 +888,8 @@ internal partial class PreviewWindow : Window
             // One box for both pictures: the thumbnail and the original fill
             // exactly the same rectangle, so the upgrade never shifts a pixel.
             // The box is the image at one image pixel per screen pixel at most.
-            var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, deviceScale);
+            var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, deviceScale, ImageBounds);
+            _deviceScale = deviceScale;
             ImageHost.MaxWidth = display?.Width ?? double.PositiveInfinity;
             ImageHost.MaxHeight = display?.Height ?? double.PositiveInfinity;
 

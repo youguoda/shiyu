@@ -15,13 +15,33 @@ internal sealed partial class BarModule
     private BarWindow? _bar;
     private System.Windows.Threading.DispatcherTimer? _geometrySave;
 
+    /// <summary>上一次看到的贴边开关：只在它从关变开的那一下提示。</summary>
+    private bool _edgeDockWas;
+
+    /// <summary>「拖到顶端」提示说过几次（探针读数）。</summary>
+    private int _dockHints;
+
     public void Attach(AppShell shell)
     {
         _shell = shell;
+        _edgeDockWas = shell.Settings.BarEdgeDock;
 
         // The bar's density knobs take effect on the spot（原单体应用函数的
         // 一段，O-20）。
-        shell.SettingsChanged += s => _bar?.ApplySettings(s);
+        shell.SettingsChanged += s =>
+        {
+            _bar?.ApplySettings(s);
+
+            // 贴边只对停在顶缘的窄条起作用（用户需求 2026-10-22）：打开开关时窄条不在顶缘，
+            // 什么都不会发生，得说一声怎么让它生效。
+            if (s.BarEdgeDock && !_edgeDockWas && _bar?.IsDocked != true)
+            {
+                _dockHints++;
+                shell.TellUser("贴边隐藏已打开：把窄条拖到屏幕顶端，它就会收进顶缘。");
+            }
+
+            _edgeDockWas = s.BarEdgeDock;
+        };
     }
 
     /// <summary>
@@ -97,9 +117,6 @@ internal sealed partial class BarModule
         // 整理归管理窗。
         // 前台此刻是窄条自己，「粘贴全部」该贴回的是窄条记着的那扇（评审 2026-10-16 F-12）。
         _bar.LibraryRequested += () => shell.ShowLibraryFor?.Invoke(_bar.ReturnTarget);
-        _bar.EdgeDockWanted += wanted => shell.TryUpdateSettings(s =>
-            s with { BarEdgeDock = wanted, BarPinned = wanted || s.BarPinned });
-
         // The header's pin reports only what it wants (票 39/O-20，用户需求
         // 2026-10-10 起是「常驻钉住」): this side turns it into a one-field
         // update through the store, and the pin's visual state comes back via

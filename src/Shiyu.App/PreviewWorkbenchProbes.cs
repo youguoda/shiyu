@@ -496,6 +496,9 @@ internal partial class BarWindow
                 $"{name}|img={label}|ms={watch.Elapsed.TotalMilliseconds:F0}|pings={input.Count}|inputMaxMs={At(input, 0.999):F0}|inputP95Ms={At(input, 0.95):F0}|longestOpMs={longestMs:F0}|busyPct={busyPct:F0}|frames={frame.Count}|gapMaxMs={At(frame, 0.999):F0}|gapP95Ms={At(frame, 0.95):F0}"));
         }
 
+        // 适应时图源的像素数：放大一开始就会换全尺寸原图，得在放大前记下。
+        var fitPixels = preview.ProbeSourcePixels;
+
         // 放大段。
         var busyFrom = busy;
         var latFrom = latencies.Count;
@@ -510,6 +513,15 @@ internal partial class BarWindow
         await Task.Delay(150);
         var scaleAfterUp = preview.ProbeScale;
         Emit("zoom", watch, latFrom, gapFrom, busyFrom);
+
+        // 放大后换上原图全部像素（用户反馈 2026-10-22：放大越看越糊）：等后台解码落位。
+        for (var waited = 0; waited < 60 && preview.ProbeSourcePixels == fitPixels; waited++)
+        {
+            await Task.Delay(50);
+        }
+
+        log.AppendLine(FormattableString.Invariant(
+            $"sharp|img={label}|fitPx={fitPixels}|zoomPx={preview.ProbeSourcePixels}|cardPx={card.PixelWidth}x{card.PixelHeight}"));
 
         if (withPan)
         {
@@ -545,6 +557,18 @@ internal partial class BarWindow
         Emit("wind", watch, latFrom, gapFrom, busyFrom);
         log.AppendLine(FormattableString.Invariant(
             $"clamps|img={label}|scaleAfterUp={scaleAfterUp:F6}|scaleAfterDown={preview.ProbeScale:F6}|origin={preview.ProbeOrigin}"));
+
+        // 适应时双击 → 一比一，再双击 → 回到适应（用户需求 2026-10-22）。
+        await Task.Delay(600);
+        var expectedActual = preview.ProbeActualSizeScale;
+        await preview.ProbeDoubleClickAtAsync(center.X, center.Y);
+        await Task.Delay(250);
+        var actualScale = preview.ProbeScale;
+        await Task.Delay(600);
+        await preview.ProbeDoubleClickAtAsync(center.X, center.Y);
+        await Task.Delay(250);
+        log.AppendLine(FormattableString.Invariant(
+            $"actual|img={label}|expected={expectedActual:F4}|scale={actualScale:F4}|back={preview.ProbeScale:F4}"));
 
         CompositionTarget.Rendering -= OnRendering;
         Dispatcher.Hooks.OperationStarted -= OnStarted;

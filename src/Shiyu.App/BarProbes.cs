@@ -195,7 +195,7 @@ internal partial class BarWindow
             await Task.Delay(5);
         }
 
-        var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, scale);
+        var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, scale, _preview?.ImageBounds);
         var expected = display is { } box ? PreviewSizing.DecodeSize(card.PixelWidth, card.PixelHeight, box, scale) : (0, 0);
         var final = last as System.Windows.Media.Imaging.BitmapSource;
         log.AppendLine(FormattableString.Invariant(
@@ -702,6 +702,67 @@ internal partial class BarWindow
         return true;
     }
 
+    private List<(double At, double Move)>? _slideFrames;
+
+    /// <summary>前三轮逐帧的「距上一帧 ms / 挪窗 ms」。</summary>
+    private readonly List<string> _slideTrace = [];
+
+    internal IReadOnlyList<string> ProbeSlideTrace => _slideTrace;
+
+    partial void NoteSlideFrame(double atMs, double moveMs) => _slideFrames?.Add((atMs, moveMs));
+
+    /// <summary>
+    /// 量细条滑出的节奏（用户反馈 2026-10-22：弹出发卡）：收起、滑出，重复几轮，记下每帧的时刻与挪窗耗时。
+    /// 返回一行读数：动画是否开着、平均每轮几帧、帧间隔的中位数 / 最大值、挪窗耗时的平均 / 最大值、整轮用时。
+    /// </summary>
+    internal async Task<string> ProbeMeasureSlideAsync(int rounds)
+    {
+        var intervals = new List<double>();
+        var moves = new List<double>();
+        var spans = new List<double>();
+        var firstGaps = new List<double>();
+        var firstMoves = new List<double>();
+        var frames = 0;
+        for (var round = 0; round < rounds; round++)
+        {
+            CollapseNow();
+            await Task.Delay(300);
+            _slideFrames = [];
+            RestoreFromDock();
+            await Task.Delay(500);
+            var got = _slideFrames;
+            _slideFrames = null;
+            frames += got.Count;
+            if (round < 3)
+            {
+                _slideTrace.Add(string.Join(",", got.Select((frame, index)
+                    => FormattableString.Invariant($"{(index == 0 ? 0 : frame.At - got[index - 1].At):F0}/{frame.Move:F1}"))));
+            }
+            moves.AddRange(got.Select(frame => frame.Move));
+            for (var index = 1; index < got.Count; index++)
+            {
+                intervals.Add(got[index].At - got[index - 1].At);
+            }
+
+            if (got.Count > 0)
+            {
+                spans.Add(got[^1].At);
+                firstMoves.Add(got[0].Move);
+            }
+
+            if (got.Count > 1)
+            {
+                firstGaps.Add(got[1].At - got[0].At);
+            }
+        }
+
+        static double Median(List<double> values)
+            => values.Count == 0 ? 0 : values.OrderBy(value => value).ElementAt(values.Count / 2);
+
+        return FormattableString.Invariant(
+            $"slide|animated={Shiyu.Windows.UiAnimation.Allowed()}|frames={(double)frames / rounds:F1}|gapMedian={Median(intervals):F1}|gapMax={(intervals.Count > 0 ? intervals.Max() : 0):F1}|moveAvg={(moves.Count > 0 ? moves.Average() : 0):F2}|moveMax={(moves.Count > 0 ? moves.Max() : 0):F2}|span={Median(spans):F0}|firstGap={Median(firstGaps):F1}|firstMove={Median(firstMoves):F2}");
+    }
+
     /// <summary>鼠标进细条却没弹出时，挡住它的几道闸此刻的状态。</summary>
     internal string ProbeDockGate()
         => FormattableString.Invariant(
@@ -742,9 +803,32 @@ internal partial class BarWindow
     /// <summary>拖到一半把鼠标捕获夺走（Alt+Tab、Win 键、窗被收起时系统就是这么做的）。</summary>
     internal void ProbeBarLoseCapture() => System.Windows.Input.Mouse.Capture(null);
 
-    /// <summary>探针钩子：模拟一次拖动收尾（落点 Top = topDip）。</summary>
+    /// <summary>
+    /// 探针钩子：模拟一次完整的拖动——按下时从细条拉出、窗口挪到落点（Top = topDip，按离工作区顶的
+    /// 距离换到窗口所在屏）、松手走落点判定。
+    /// </summary>
     internal void ProbeDragEndedAt(double topDip)
-        => ApplyEdgeDockAfterDrag(new ScreenRect(
-            0, (int)Math.Round(topDip), (int)Math.Round(topDip) + 384, (int)Math.Round(topDip) + 320));
+    {
+        PullOutForDrag();
+        ProbeParkAt(topDip);
+        if (Shiyu.Windows.WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var after))
+        {
+            ApplyEdgeDockAfterDrag(after);
+        }
+    }
+
+    /// <summary>只把窗口挪到 Top = topDip（不走拖动判定）：给后面的步骤摆好起点。</summary>
+    internal void ProbeParkAt(double topDip)
+    {
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (!Shiyu.Windows.WindowRects.TryGet(handle, out var rect))
+        {
+            return;
+        }
+
+        var work = Shiyu.Windows.ScreenGeometry.WorkAreaAt(new ScreenPoint(rect.Left, Math.Max(rect.Top, rect.Bottom - 1)));
+        var top = work.Top + (int)Math.Round(topDip - SystemParameters.WorkArea.Top);
+        Shiyu.Windows.TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, top), ZBandPolicy.FollowsHost(Topmost));
+    }
 }
 #endif

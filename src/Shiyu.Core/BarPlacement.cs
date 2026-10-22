@@ -56,4 +56,13 @@ public static class BarPlacement
 
     /// <summary>贴边隐藏展开时的窗口 Y：完整落回工作区顶部。</summary>
     public static double ExpandedTop(double workTop) => workTop;
+
+    /// <summary>窗口顶边离工作区顶多近（像素，越过顶不限）算「停在顶缘」。</summary>
+    public const int TopEdgeCapture = 12;
+
+    /// <summary>
+    /// 窄条停在顶缘上（用户需求 2026-10-22）：贴边隐藏只对停在这里的窄条起作用——开着开关、
+    /// 拖到别处的窄条照常显示。收起的、滑到一半的窗口顶边都在工作区顶之上，同样算。
+    /// </summary>
+    public static bool RestsAtTopEdge(int windowTop, int workTop) => windowTop - workTop <= TopEdgeCapture;
 }

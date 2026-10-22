@@ -77,6 +77,15 @@ internal partial class PreviewWindow
 
     internal int ProbeOriginalsCount => _originals.Count;
 
+    /// <summary>当前图源真正的像素数（ProbeImagePixelSize 读的是 DIP 尺寸，随图里的 DPI 变）。</summary>
+    internal string ProbeSourcePixels => ImageHost.Source is System.Windows.Media.Imaging.BitmapSource bitmap
+        ? FormattableString.Invariant($"{bitmap.PixelWidth}x{bitmap.PixelHeight}")
+        : "none";
+
+    /// <summary>此刻适应框下放大到一比一要的倍数（双击该落到的位置）。</summary>
+    internal double ProbeActualSizeScale
+        => Shiyu.Core.PreviewSizing.ActualSizeScale(_shown?.PixelWidth ?? 0, ImageHost.ActualWidth, _deviceScale);
+
     /// <summary>图片内容坐标系的中心（驱动滚轮/拖拽用的落点）。</summary>
     internal Point ProbeImageCenter => new(ImageHost.ActualWidth / 2, ImageHost.ActualHeight / 2);
 

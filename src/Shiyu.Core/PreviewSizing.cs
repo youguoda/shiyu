@@ -50,29 +50,54 @@ public static class PreviewSizing
     /// the fact, because the pixels' shape is known before anything loads.
     /// </summary>
     /// <param name="deviceScale">屏幕像素 / DIP（150% 屏为 1.5）：小图按屏幕像素一比一摆，见 <see cref="FitImage"/>。</param>
-    public static (double Width, double Height) ForImage(int pixelWidth, int pixelHeight, double deviceScale = 1.0)
+    /// <param name="bounds">面板上限（DIP），见 <see cref="ImageBounds"/>；不给就是文字面板那一档。</param>
+    public static (double Width, double Height) ForImage(
+        int pixelWidth, int pixelHeight, double deviceScale = 1.0, (double Width, double Height)? bounds = null)
     {
-        if (ImageDisplay(pixelWidth, pixelHeight, deviceScale) is not { } image)
+        var (maxWidth, maxHeight) = bounds ?? (MaxWidth, MaxHeight);
+        if (ImageDisplay(pixelWidth, pixelHeight, deviceScale, bounds) is not { } image)
         {
             // A row that predates the size columns and lost its thumbnail:
             // the smallest honest panel, filled by whatever can be decoded.
             return (MinWidth, MinHeight);
         }
 
-        var width = image.Width + ChromeHorizontal;
-        var height = image.Height + ChromeVertical;
+        // 向上取整：图片框在高缩放屏上是小数 DIP（800 px ÷ 1.5 = 533.33），面板舍掉的那点会让
+        // 布局取整把图压窄两个像素，一比一就又糊了。
+        var width = Math.Ceiling(image.Width + ChromeHorizontal - 0.001);
+        var height = Math.Ceiling(image.Height + ChromeVertical - 0.001);
 
-        return (Math.Round(Math.Clamp(width, MinWidth, MaxWidth)), Math.Round(Math.Clamp(height, MinHeight, MaxHeight)));
+        return (Math.Clamp(width, MinWidth, maxWidth), Math.Clamp(height, MinHeight, maxHeight));
     }
+
+    /// <summary>
+    /// 图片面板的上限随所在屏放宽（用户需求 2026-10-22：截图塞进 480×560 缩了三四倍，字看不清）：
+    /// 工作区一半宽、六成高——悬停时不至于盖住太多东西——但不小于文字面板那一档。
+    /// </summary>
+    public static (double Width, double Height) ImageBounds(double workWidth, double workHeight)
+        => (Math.Max(MaxWidth, Math.Floor(workWidth * 0.5)), Math.Max(MaxHeight, Math.Floor(workHeight * 0.6)));
 
     /// <summary>
     /// 预览面板里图片自己的显示尺寸（DIP）：塞进面板的图片区；没有尺寸的旧行为 null，
     /// 由解码出来的图自己定。缩略图与原图都画进这同一个框——换图时不挪、不跳。
     /// </summary>
-    public static (double Width, double Height)? ImageDisplay(int pixelWidth, int pixelHeight, double deviceScale)
-        => pixelWidth > 0 && pixelHeight > 0
-            ? FitImage(pixelWidth, pixelHeight, MaxWidth - ChromeHorizontal, MaxHeight - ChromeVertical, deviceScale)
+    public static (double Width, double Height)? ImageDisplay(
+        int pixelWidth, int pixelHeight, double deviceScale, (double Width, double Height)? bounds = null)
+    {
+        var (maxWidth, maxHeight) = bounds ?? (MaxWidth, MaxHeight);
+        return pixelWidth > 0 && pixelHeight > 0
+            ? FitImage(pixelWidth, pixelHeight, maxWidth - ChromeHorizontal, maxHeight - ChromeVertical, deviceScale)
             : null;
+    }
+
+    /// <summary>
+    /// 放大到「一个图像像素占一个屏幕像素」要的倍数（相对适应框的显示宽度）；本来就一比一的给 1。
+    /// 钉住后双击在适应与一比一之间切换（用户需求 2026-10-22）。
+    /// </summary>
+    public static double ActualSizeScale(int pixelWidth, double displayWidth, double deviceScale)
+        => pixelWidth > 0 && displayWidth > 0
+            ? Math.Max(1.0, pixelWidth / Math.Max(1.0, deviceScale) / displayWidth)
+            : 1.0;
 
     /// <summary>
     /// 一张图在一个框里显示多大（DIP）：等比塞进框，而且一个图像像素至多占一个屏幕像素。

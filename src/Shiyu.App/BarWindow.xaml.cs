@@ -75,17 +75,35 @@ internal partial class BarWindow : Window
     private ForegroundWindow _returnTo;
 
     // --- 贴边隐藏（用户需求 2026-10-20）：常驻钉住的窄条缩进顶缘只露细条，
-    //     鼠标进细条展开、离开收回；全屏应用在前台时不展开。拖到屏幕顶缘
-    //     松手即贴边，拖离顶缘自动取消。 ----------
+    //     鼠标进细条展开、离开收回；全屏应用在前台时不展开。只对停在顶缘的
+    //     窄条起作用；拖动只改位置，从不改开关（用户需求 2026-10-22）。 ----------
     private bool _edgeCollapsed;
     private bool EdgeDockActive => _settings.BarEdgeDock && _settings.BarPinned;
+
+    /// <summary>贴边真正生效：开关开着，窄条也停在顶缘（收着、滑到一半都算）。</summary>
+    private bool Docked => EdgeDockActive && (_edgeCollapsed || RestsAtTopEdge());
+
+    /// <summary>窄条此刻贴边生效——拥有者据此决定打开开关时要不要提示「拖到顶端」。</summary>
+    internal bool IsDocked => IsVisible && Docked;
+
+    private bool RestsAtTopEdge()
+        => WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect)
+            && RestsAtTopEdge(rect);
+
+    /// <summary>顶缘按窗口底边所在屏的工作区算：收起时顶边在屏幕外，按顶边找屏会找错。</summary>
+    private static bool RestsAtTopEdge(ScreenRect rect)
+        => BarPlacement.RestsAtTopEdge(rect.Top, ScreenGeometry.WorkAreaAt(new ScreenPoint(rect.Left, rect.Bottom - 1)).Top);
+
     private const double DockedStrip = 3;
 
-    /// <summary>拖动落点距工作区顶缘多少 DIP 内算「拖到顶了」（含越顶，用户需求 2026-10-20）。</summary>
-    private const double DockCaptureDip = 12;
+    // 贴边弹出的滑动画：停下它的办法（一次只有一个在滑；新滑动作、收起、拖动都先停旧的）。
+    private Action? _stopSlide;
 
-    // 贴边弹出/收回的滑动画槽位（一次只有一个方向在滑；新滑动作先停旧的）。
-    private System.Windows.Threading.DispatcherTimer? _dockSlide;
+    private void StopSlide()
+    {
+        _stopSlide?.Invoke();
+        _stopSlide = null;
+    }
 
     /// <summary>窄条记着要贴回的那扇窗：品牌钮打开历史窗口时交给它（评审 2026-10-16 F-12「粘贴全部」）。</summary>
     internal ForegroundWindow ReturnTarget => _returnTo;
@@ -261,10 +279,11 @@ internal partial class BarWindow : Window
             }
         }
 
-        // 贴边开关变了：开着且窄条可见就收到细条；关了就展开回位。
+        // 贴边开关变了：开着、窄条停在顶缘就收到细条（停在别处的不挪，拥有者提示拖到顶端）；
+        // 关了就展开回位。
         if (edgeChanged)
         {
-            if (settings.BarEdgeDock && settings.BarPinned && IsVisible)
+            if (IsVisible && Docked)
             {
                 // 用户明说要贴边，此刻开着的那一次呼出就此结束。钉住的窄条粘贴、点别处都不收，
                 // 呼出标记要等到按 Esc 才清——不在这里清，开关就像没反应（从窄条的齿轮进设置正是这样）。
@@ -336,10 +355,6 @@ internal partial class BarWindow : Window
     /// </summary>
     public Func<long, Task<string?>>? OcrTextOf { get; set; }
 
-    /// <summary>贴边隐藏的意愿（用户需求 2026-10-20）：拖动窄条视为改位置，
-    /// 由拥有者写成设置——窄条自己不持有设置存储。</summary>
-    public event Action<bool>? EdgeDockWanted;
-
     private void OnBrandClicked(object sender, RoutedEventArgs e) => LibraryRequested?.Invoke();
 
     /// <summary>
@@ -357,27 +372,31 @@ internal partial class BarWindow : Window
         StartBarDrag(e, clickWhenStill: true);
     }
 
-    /// <summary>拖动落点定去留（用户需求 2026-10-20 的位置语义）：贴着工作区顶缘
-    /// （<see cref="DockCaptureDip"/> 内，含越顶）松手 = 开启贴边隐藏，设置跟着走、
-    /// 立刻缩成细边；落在别处则取消贴边（拖过 = 改位置）。两条拖动路径共用。</summary>
+    /// <summary>
+    /// 拖动落点定去留（用户需求 2026-10-22：拖动只改位置，不改开关）。贴边开着时拖到顶缘松手就收成
+    /// 细条，落在别处就停在那里照常显示（开关不动，拖回顶缘再收）；贴边关着时拖到顶缘只是停在顶缘，
+    /// 越过顶的那截拉回屏幕内。两条拖动路径共用。
+    /// </summary>
     private void ApplyEdgeDockAfterDrag(ScreenRect after)
     {
-        // 顶缘用落点所在屏的工作区（多屏时主屏工作区的顶不一定是这一屏的顶）。
-        var work = ScreenGeometry.WorkAreaAt(new ScreenPoint(after.Left, after.Top));
-        if (after.Top - work.Top <= DockCaptureDip)
+        if (!RestsAtTopEdge(after))
         {
-            EdgeDockWanted?.Invoke(true);
+            return;
+        }
 
+        if (EdgeDockActive)
+        {
             // 从这一刻起它是常驻贴边的窄条，不再是一次呼出：留着呼出标记，鼠标进细条就弹不出来。
             _summoned = false;
             CollapseNow();   // 拖到顶缘的那一下就要缩进去——召出状态也不例外。
+            return;
         }
-        else if (_settings.BarEdgeDock)
+
+        var work = ScreenGeometry.WorkAreaAt(new ScreenPoint(after.Left, after.Bottom - 1));
+        if (after.Top < work.Top)
         {
-            // 收着拖、弹出来再拖都算（拖之前 PullOutForDrag 已把收着的整条拉出来，这里看不到收着）：
-            // 贴边还开着的话，落在下面的窄条鼠标一走又缩回顶缘，接着鼠标经过又滑出来——就是「闪一下」。
-            _edgeCollapsed = false;
-            EdgeDockWanted?.Invoke(false);
+            TransientWindow.MoveTo(new System.Windows.Interop.WindowInteropHelper(this).Handle,
+                new ScreenPoint(after.Left, work.Top), ZBandPolicy.FollowsHost(Topmost));
         }
     }
 
@@ -575,8 +594,8 @@ internal partial class BarWindow : Window
         _summoned = false;
 
         // 贴边模式（用户需求 2026-10-20）：不隐藏——回到顶缘细条。Esc/粘贴
-        // 都算「收回」；预览还开着时也不收（读完自然收）。
-        if (EdgeDockActive && IsVisible && _preview is not { IsVisible: true })
+        // 都算「收回」；预览还开着时也不收（读完自然收）。停在别处的窄条照常隐藏。
+        if (IsVisible && Docked && _preview is not { IsVisible: true })
         {
             RunPreviewCommand(_previewPolicy.BarHidden());
             DockCollapse();
@@ -642,7 +661,7 @@ internal partial class BarWindow : Window
     /// 预览还开着时等它收（预览自己关闭会再触发一次收回）。</summary>
     private void DockCollapse()
     {
-        if (!EdgeDockActive || !IsVisible || _summoned)
+        if (!Docked || !IsVisible || _summoned)
         {
             return;
         }
@@ -680,19 +699,19 @@ internal partial class BarWindow : Window
         var (_, scaleY) = ScreenGeometry.ScaleAt(corner);
         var strip = (int)Math.Round(DockedStrip * scaleY);
 
+        StopSlide();
         _edgeCollapsed = true;
         var targetTop = work.Top - (rect.Height - strip);
         TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, targetTop),
             ZBandPolicy.FollowsHost(Topmost));
     }
 
-    /// <summary>细边的滑入/滑出（用户需求 2026-10-20：细线上弹出要有动画）：16ms 步进的
-    /// ease-out 平移，时长与全应用动效一致；减少动效时一步到位。一次只滑一个方向，
-    /// 新滑动作先停旧的（进出交替不打架）。</summary>
+    /// <summary>细边的滑出（用户需求 2026-10-20：细线上弹出要有动画）：ease-out 平移，时长与全应用
+    /// 动效一致；减少动效时一步到位。每帧跟着 WPF 的渲染节拍走、按这一帧的渲染时刻定位置——16ms 的
+    /// DispatcherTimer 实测 31ms 才走一步、偶尔隔 90ms，160ms 里只落 5 帧，这就是「发卡」（2026-10-22）。</summary>
     private void SlideDockTo(IntPtr handle, int left, int targetTop)
     {
-        _dockSlide?.Stop();
-        _dockSlide = null;
+        StopSlide();
 
         if (!UiAnimation.Allowed())
         {
@@ -709,26 +728,44 @@ internal partial class BarWindow : Window
         var startTop = now.Top;
         var duration = MotionPlan.Duration(animationsAllowed: true).TotalMilliseconds;
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var slide = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _dockSlide = slide;
-        slide.Tick += (_, _) =>
+        TimeSpan? firstFrame = null;
+        var lastFrame = TimeSpan.MinValue;
+        EventHandler? onFrame = null;
+        Action stop = () => System.Windows.Media.CompositionTarget.Rendering -= onFrame;
+        onFrame = (_, args) =>
         {
-            var share = Math.Min(1.0, clock.Elapsed.TotalMilliseconds / duration);
+            // 同一帧可能来不止一次 Rendering：渲染时刻没变就不再挪。
+            var frame = ((System.Windows.Media.RenderingEventArgs)args).RenderingTime;
+            if (frame == lastFrame)
+            {
+                return;
+            }
+
+            lastFrame = frame;
+            firstFrame ??= frame;
+            var at = (frame - firstFrame.Value).TotalMilliseconds;
+            var share = Math.Min(1.0, at / duration);
             var eased = 1 - Math.Pow(1 - share, 3);
+            var moveStart = clock.Elapsed.TotalMilliseconds;
             TransientWindow.MoveTo(handle,
                 new ScreenPoint(left, startTop + (int)Math.Round((targetTop - startTop) * eased)),
                 ZBandPolicy.FollowsHost(Topmost));
+            NoteSlideFrame(moveStart, clock.Elapsed.TotalMilliseconds - moveStart);
             if (share >= 1.0)
             {
-                slide.Stop();
-                if (ReferenceEquals(_dockSlide, slide))
+                stop();
+                if (ReferenceEquals(_stopSlide, stop))
                 {
-                    _dockSlide = null;
+                    _stopSlide = null;
                 }
             }
         };
-        slide.Start();
+        System.Windows.Media.CompositionTarget.Rendering += onFrame;
+        _stopSlide = stop;
     }
+
+    /// <summary>滑动的一帧：起滑后第几毫秒、挪窗花了多久（Debug 探针量节奏用；发布构建里不存在）。</summary>
+    partial void NoteSlideFrame(double atMs, double moveMs);
 
     /// <summary>展开：完整落回工作区顶部。全屏应用在前台时不展开——鼠标扫过
     /// 顶缘不该把窄条滑到视频画面上。</summary>
@@ -760,8 +797,7 @@ internal partial class BarWindow : Window
             return;
         }
 
-        _dockSlide?.Stop();
-        _dockSlide = null;
+        StopSlide();
         TransientWindow.MoveTo(handle, new ScreenPoint(rect.Left, work.Top), ZBandPolicy.FollowsHost(Topmost));
     }
 
@@ -772,6 +808,14 @@ internal partial class BarWindow : Window
     public void ShowDocked()
     {
         if (!EdgeDockActive || IsVisible)
+        {
+            return;
+        }
+
+        // 上次退出时停在别处（拖离了顶缘）的窄条不放回来：贴边只管停在顶缘的那一扇。窗口还没显示，
+        // 先建出句柄才读得到它按记住的几何摆在哪。
+        new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+        if (!RestsAtTopEdge())
         {
             return;
         }
@@ -800,8 +844,7 @@ internal partial class BarWindow : Window
     /// <summary>鼠标离窗：收回细条。预览开着时等它收。</summary>
     private void OnDockMouseLeave(object sender, MouseEventArgs e)
     {
-        if (EdgeDockActive && !_edgeCollapsed && !_summoned
-            && _preview is not { IsVisible: true })
+        if (!_edgeCollapsed && !_summoned && _preview is not { IsVisible: true } && Docked)
         {
             // 菜单（StaysOpen=false 的 Popup）一开就把鼠标捕获拿走，窗口跟着报「离开」，人其实还在
             // 窄条上（用户实录 2026-10-22：一点标签下拉窄条就缩回顶缘，只剩菜单悬着）。等菜单收了再看。
@@ -836,7 +879,7 @@ internal partial class BarWindow : Window
         // 菜单项可能接着开下一层（卡片右键的子菜单、分组选择）：等这次点击处理完再看。
         Dispatcher.BeginInvoke(() =>
         {
-            if (!EdgeDockActive || _edgeCollapsed || _summoned)
+            if (_edgeCollapsed || _summoned || !Docked)
             {
                 return;
             }
@@ -1025,8 +1068,7 @@ internal partial class BarWindow : Window
     /// </summary>
     private void PullOutForDrag()
     {
-        _dockSlide?.Stop();
-        _dockSlide = null;
+        StopSlide();
 
         var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
         if (!WindowRects.TryGet(handle, out var rect))

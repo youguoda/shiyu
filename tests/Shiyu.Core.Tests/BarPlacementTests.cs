@@ -22,4 +22,13 @@ public class BarPlacementTests
     [Fact]
     public void Expand_restores_the_full_top()
         => Assert.Equal(WorkTop, BarPlacement.ExpandedTop(WorkTop));
+
+    [Theory]
+    [InlineData(40, true)]      // 贴着工作区顶
+    [InlineData(52, true)]      // 抓取范围的边上
+    [InlineData(-580, true)]    // 收起或滑到一半：顶边在工作区顶之上
+    [InlineData(53, false)]
+    [InlineData(300, false)]    // 拖到屏幕中间放下
+    public void Only_a_bar_at_the_top_edge_rests_there(int windowTop, bool rests)
+        => Assert.Equal(rests, BarPlacement.RestsAtTopEdge(windowTop, workTop: 40));
 }

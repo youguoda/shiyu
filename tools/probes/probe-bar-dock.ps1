@@ -83,9 +83,23 @@ Add-Check 'flow:bar-dock-restore' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 # The settings switch while the bar is open from a summon and pinned (the bar's gear leads to
 # settings in exactly that state): on must collapse it at once, off must bring it back whole.
 $on = $lines['toggleon']
-$ok = $on -and ([double]$on['strip'] -le 4) -and $on['collapsed'] -eq 'True'
-$detail = if ($on) { "switch turned on while the summoned bar is open: strip {0} DIP, collapsed {1}" -f $on['strip'], $on['collapsed'] } else { 'no toggleon line' }
+$ok = $on -and ([double]$on['strip'] -le 4) -and $on['collapsed'] -eq 'True' -and $on['hints'] -eq '0'
+$detail = if ($on) { "switch turned on while the summoned bar is open at the top: strip {0} DIP, collapsed {1}, drag hints {2}" -f $on['strip'], $on['collapsed'], $on['hints'] } else { 'no toggleon line' }
 Add-Check 'flow:bar-dock-switch-on-summoned' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+# User request 2026-10-22: edge-dock only acts on a bar resting at the top edge. Switched on
+# while the bar sits elsewhere, it stays put and the user is told once to drag it up.
+$away = $lines['toggleaway']
+$ok = $away -and $away['expanded'] -eq 'True' -and ([double]$away['strip'] -gt 100) -and $away['hints'] -eq '1'
+$detail = if ($away) { "switch turned on with the bar away from the top: expanded {0}, visible {1} DIP, drag hints {2}" -f $away['expanded'], $away['strip'], $away['hints'] } else { 'no toggleaway line' }
+Add-Check 'flow:bar-dock-switch-on-away' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
+
+# User report 2026-10-22: with the pin off, dragging the bar to the top switched pin and
+# edge-dock on. A drag only moves the bar: with edge-dock off it rests at the top, unhidden.
+$off0 = $lines['dropoff']
+$ok = $off0 -and $off0['pinned'] -eq 'False' -and $off0['dock'] -eq 'False' -and $off0['expanded'] -eq 'True' -and ([double]$off0['strip'] -gt 100)
+$detail = if ($off0) { "top drop with pin and edge-dock off: pinned {0}, edge-dock {1}, expanded {2}, visible {3} DIP" -f $off0['pinned'], $off0['dock'], $off0['expanded'], $off0['strip'] } else { 'no dropoff line' }
+Add-Check 'flow:bar-dock-drop-leaves-settings' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 $off = $lines['toggleoff']
 $ok = $off -and $off['top'] -eq '0' -and $off['expanded'] -eq 'True'
@@ -115,8 +129,8 @@ $ok = $drop -and $drop['topCollapsed'] -eq 'True'
 $detail = if ($drop) { "a drag ending at the top docks the bar: {0}" -f $drop['topCollapsed'] } else { 'no drop line' }
 Add-Check 'flow:bar-dock-droptop' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
-$ok = $drop -and $drop['awayUndocked'] -eq 'True'
-$detail = if ($drop) { "a drag ending away from the top undocks: {0}" -f $drop['awayUndocked'] } else { 'no drop line' }
+$ok = $drop -and $drop['awayExpanded'] -eq 'True' -and $drop['awaySettingOn'] -eq 'True' -and $drop['awayStaysOnLeave'] -eq 'True'
+$detail = if ($drop) { "a drag ending away from the top: shown {0}, edge-dock still on {1}, stays out when the mouse leaves {2}" -f $drop['awayExpanded'], $drop['awaySettingOn'], $drop['awayStaysOnLeave'] } else { 'no drop line' }
 Add-Check 'flow:bar-dock-dropaway' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 # The drag steps press the real left button, and only when the probe's own bar is under the
@@ -186,8 +200,9 @@ if ($drag -and $drag['cursor'] -eq 'False') {
     # After the release the pointer moves up but stays over the bar: the bar must not jump back
     # to the strip and slide out again (that was the remaining "flash", 2026-10-22).
     $moved = @(1..8 | ForEach-Object { & $topOf $samples["m$_"] } | Where-Object { ($null -eq $_) -or ([math]::Abs($_ - $dropped) -gt 2) })
-    $ok = ($null -ne $dropped) -and ($null -ne $after) -and ([math]::Abs($after - $dropped) -le 2) -and ($lit -eq 0) -and ($moved.Count -eq 0)
-    $detail = "top while dragging {0}, after release {1}; samples with key hints lit: {2}; samples after release where the bar moved: {3}" -f $dropped, $after, $lit, $moved.Count
+    $setting = $lines['dragdownsetting']
+    $ok = ($null -ne $dropped) -and ($null -ne $after) -and ([math]::Abs($after - $dropped) -le 2) -and ($lit -eq 0) -and ($moved.Count -eq 0) -and $setting -and $setting['dock'] -eq 'True'
+    $detail = "top while dragging {0}, after release {1}; samples with key hints lit: {2}; samples after release where the bar moved: {3}; edge-dock still on: {4}" -f $dropped, $after, $lit, $moved.Count, $(if ($setting) { $setting['dock'] } else { 'n/a' })
     Add-Check 'flow:bar-dock-dragdown-stays' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 }
 

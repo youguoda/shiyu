@@ -933,7 +933,7 @@ internal partial class BarWindow
 
             // 贴边的窄条贴完回到细条（「Esc、粘贴都算收回」）。贴边必先钉住，而钉住的窄条不走 Dismiss，
             // 收回只能在这里做；呼出也就此结束，鼠标进出细条的规则才重新生效。
-            if (EdgeDockActive)
+            if (Docked)
             {
                 _summoned = false;
                 DockCollapse();

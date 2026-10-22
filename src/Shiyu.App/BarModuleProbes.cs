@@ -15,6 +15,9 @@ internal sealed partial class BarModule
     /// 探针命令 bar-newest 的入口（见 BarWindow.ProbeStartsAtNewest）。先钉住："人在
     /// 别处、条还开着"只有钉住的窄条才有。
     /// </summary>
+    /// <summary>「拖到顶端」提示说过几次。</summary>
+    internal int ProbeDockHints => _dockHints;
+
     internal void ProbeStartsAtNewest()
     {
         ProbePin();

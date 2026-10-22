@@ -168,4 +168,41 @@ public class PreviewSizingTests
 
         Assert.Equal((681, 383), PreviewSizing.DecodeSize(3840, 2160, display!.Value, 1.5));
     }
+
+    // 图片面板随屏放宽（用户需求 2026-10-22：截图缩了三四倍，字看不清）。
+
+    [Fact]
+    public void Image_bounds_take_half_the_width_and_six_tenths_of_the_height()
+    {
+        // 2560×1400 的工作区在 150% 屏上是 1706.67×933.33 DIP。
+        Assert.Equal((853.0, 560.0), PreviewSizing.ImageBounds(1706.67, 933.33));
+        Assert.Equal((960.0, 630.0), PreviewSizing.ImageBounds(1920, 1050));
+    }
+
+    [Fact]
+    public void Image_bounds_never_shrink_below_the_text_panel()
+        => Assert.Equal((PreviewSizing.MaxWidth, PreviewSizing.MaxHeight), PreviewSizing.ImageBounds(800, 600));
+
+    [Fact]
+    public void A_screenshot_gets_the_wider_box_and_stays_whole_screen_pixels()
+    {
+        var bounds = PreviewSizing.ImageBounds(1920, 1050);
+        var display = PreviewSizing.ImageDisplay(1920, 1080, deviceScale: 1.0, bounds)!.Value;
+
+        // 宽受限：934 DIP 宽（960 - 26），比旧框的 454 大一倍多。
+        Assert.Equal(934.0, display.Width);
+        Assert.Equal(525.0, display.Height);
+        Assert.Equal((960.0, 583.0), PreviewSizing.ForImage(1920, 1080, 1.0, bounds));
+    }
+
+    [Fact]
+    public void A_small_image_is_still_shown_one_to_one_in_the_wider_box()
+        => Assert.Equal((300.0, 200.0), PreviewSizing.ImageDisplay(600, 400, deviceScale: 2.0, PreviewSizing.ImageBounds(1920, 1050)));
+
+    [Theory]
+    [InlineData(3840, 934.0, 1.0, 4.111)]   // 缩着显示：放大到一比一要 4 倍多
+    [InlineData(800, 533.333, 1.5, 1.0)]    // 本来就一比一
+    [InlineData(0, 300.0, 1.0, 1.0)]        // 没有尺寸的旧行
+    public void Actual_size_is_one_image_pixel_per_screen_pixel(int pixelWidth, double displayWidth, double scale, double expected)
+        => Assert.Equal(expected, PreviewSizing.ActualSizeScale(pixelWidth, displayWidth, scale), precision: 3);
 }
