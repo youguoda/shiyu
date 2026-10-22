@@ -98,7 +98,7 @@ public static class KeyMap
             On: KeySurfaceSet.Bar | KeySurfaceSet.Library, Condition: "删除后的片刻内"),
         new("preview", "预览全文", "E823", Bar: "按住 Space",
             On: KeySurfaceSet.Bar | KeySurfaceSet.Library),
-        new("numbered", "编号直达", null, Bar: "1–9、0", Condition: "列表前 10 行"),
+        new("numbered", "编号直达", null, Bar: "1–9、0", Condition: "列表前 10 行；搜索框里有字时按 Ctrl+数字"),
 
         // 窄条筛选行。标签在管理窗是 T（Tab 留给焦点导航，§5.2），动作同名
         // 同键——名字只留一个（"标签"），两窗的自动化名都从这里出。
@@ -118,6 +118,7 @@ public static class KeyMap
 
         // 两窗共用的教学与速查动作（§5.2 四级教学 L1）。
         new("hints", "显示键帽", "E765", Bar: "按住 Ctrl", Settings: "按住 Ctrl",
+            Condition: "窄条的卡片字母：搜索时按 Ctrl+字母，点卡片或按 ↑↓ 选中后直接按",
             On: KeySurfaceSet.Bar | KeySurfaceSet.Settings | KeySurfaceSet.Library),
         new("cheatsheet", "键位速查", "E765", Settings: "? 或 F1", Library: "F1 / ?",
             On: KeySurfaceSet.Settings | KeySurfaceSet.Library),

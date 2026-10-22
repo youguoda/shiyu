@@ -17,6 +17,51 @@ internal partial class BarWindow
     private static bool IsTyping
         => Keyboard.FocusedElement is TextBox;
 
+    /// <summary>此刻是在搜、在挑，还是在别的输入框里（见 <see cref="BarKeyboard.Focus"/>）。</summary>
+    private BarKeyboard.Focus KeyFocus
+        => ReferenceEquals(Keyboard.FocusedElement, SearchBox) ? BarKeyboard.Focus.Search
+            : IsTyping ? BarKeyboard.Focus.OtherField
+            : BarKeyboard.Focus.List;
+
+    private bool HasQuery => SearchBox.Text.Length > 0;
+
+    /// <summary>卡片动作字母这一下算不算动作（规则在 <see cref="BarKeyboard.LetterActs"/>）。</summary>
+    private bool LetterActs(bool isCopy = false)
+        => BarKeyboard.LetterActs(
+            KeyFocus,
+            plain: Keyboard.Modifiers == ModifierKeys.None,
+            controlOnly: Keyboard.Modifiers == ModifierKeys.Control,
+            searchHasSelection: SearchBox.SelectionLength > 0,
+            isCopy);
+
+    /// <summary>
+    /// 转进「挑」：焦点从搜索框交给卡片列表，字母从此是卡片动作，搜索框的光标也就不闪了。点卡片、
+    /// 搜索框空着时按 ↑↓ 走这里（用户需求 2026-10-22）。
+    /// </summary>
+    private void StartPicking()
+    {
+        if (KeyFocus == BarKeyboard.Focus.Search)
+        {
+            Cards.Focus();
+        }
+    }
+
+    /// <summary>回到「搜」：焦点交还搜索框，光标落在末尾，接下来的字接着打进去。</summary>
+    private void ResumeSearch()
+    {
+        SearchBox.Focus();
+        SearchBox.CaretIndex = SearchBox.Text.Length;
+    }
+
+    /// <summary>挑的时候按下会出字的键（不是卡片动作的字母、标点、IME 的字）：该回去搜了。</summary>
+    private static bool TypesText(Key key)
+        => (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) == 0
+            && (key is >= Key.A and <= Key.Z
+                || key is >= Key.D0 and <= Key.D9
+                || key is >= Key.NumPad0 and <= Key.NumPad9
+                || key is >= Key.Oem1 and <= Key.OemBackslash
+                || key is Key.Multiply or Key.Add or Key.Subtract or Key.Decimal or Key.Divide);
+
     /// <summary>
     /// There is always an active row while any row exists, so Enter and the
     /// letter actions always have something definite to act on.
@@ -279,12 +324,12 @@ internal partial class BarWindow
             // with an EMPTY query and the arrows did nothing at all (user
             // report 2026-10-05). Same shape as Space below: an empty query
             // hands the key to the window, mid-query it stays with the caret.
-            case Key.Left when SearchBox.Text.Length == 0 || !IsTyping:
+            case Key.Left when BarKeyboard.NavigationActs(KeyFocus, HasQuery):
                 e.Handled = true;
                 CycleKind(-1);
                 break;
 
-            case Key.Right when SearchBox.Text.Length == 0 || !IsTyping:
+            case Key.Right when BarKeyboard.NavigationActs(KeyFocus, HasQuery):
                 e.Handled = true;
                 CycleKind(+1);
                 break;
@@ -294,14 +339,15 @@ internal partial class BarWindow
             // single-line box has no caret rows of its own. The old guard
             // existed only to keep the tag ComboBox's own arrows — that
             // control is gone (U-04), so the guard went with it.
-            case Key.Up:
+            // 搜索框空着时按 ↑↓ 是在挑卡片，不是在搜：转进「挑」，字母从此是卡片动作。
+            case Key.Up or Key.Down when KeyFocus != BarKeyboard.Focus.OtherField:
                 e.Handled = true;
-                Move(-1);
-                break;
+                if (BarKeyboard.ArrowStartsPicking(KeyFocus, HasQuery))
+                {
+                    StartPicking();
+                }
 
-            case Key.Down:
-                e.Handled = true;
-                Move(+1);
+                Move(key == Key.Up ? -1 : +1);
                 break;
 
             // Held Space previews the active card in full (ticket 17). The
@@ -309,7 +355,7 @@ internal partial class BarWindow
             // tell an empty box from a query being typed: with nothing typed,
             // Space is free to mean "show me"; mid-query it stays a space.
             case Key.Space when Keyboard.Modifiers == ModifierKeys.None
-                && (SearchBox.Text.Length == 0 || !IsTyping):
+                && BarKeyboard.NavigationActs(KeyFocus, HasQuery):
                 e.Handled = true;
 
                 // 按住不放时键盘每 30 毫秒自动重复一次：那不是新的意图，只吞掉（用户实录
@@ -341,19 +387,18 @@ internal partial class BarWindow
             case Key.D9 or Key.NumPad9: NumberedRow(9, e); break;
             case Key.D0 or Key.NumPad0: NumberedRow(10, e); break;
 
-            // Letter actions only outside text fields — inside one, letters
-            // are the search the user is typing.
-            case Key.C when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            // 卡片动作字母：挑的时候单按即动作，搜的时候按 Ctrl+字母（规则见 BarKeyboard.LetterActs）。
+            case Key.C when LetterActs(isCopy: true):
                 e.Handled = true;
                 if (_selected is { } copy) ExecuteAction("copy", copy, feedback: null);
                 break;
 
-            case Key.O when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            case Key.O when LetterActs():
                 e.Handled = true;
                 if (_selected is { } open) ExecuteAction("open", open, feedback: null);
                 break;
 
-            case Key.P when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            case Key.P when LetterActs():
                 e.Handled = true;
                 if (_selected is { } pin) ExecuteAction("pin", pin, feedback: null);
                 break;
@@ -365,37 +410,63 @@ internal partial class BarWindow
                 FavoriteOnly.IsChecked = FavoriteOnly.IsChecked != true;
                 break;
 
-            case Key.S when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            case Key.S when LetterActs():
                 e.Handled = true;
                 if (_selected is { } favourite) ExecuteAction("favorite", favourite, feedback: null);
                 break;
 
-            case Key.N when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            case Key.N when LetterActs():
                 e.Handled = true;
                 if (_selected is { } note) ExecuteAction("note", note, feedback: null);
                 break;
 
-            case Key.G when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            case Key.G when LetterActs():
                 e.Handled = true;
                 if (_selected is { } group) ExecuteAction("group", group, feedback: null);
                 break;
 
-            case Key.D when !IsTyping && Keyboard.Modifiers == ModifierKeys.None:
+            case Key.D when LetterActs():
                 e.Handled = true;
                 if (_selected is { } del) ExecuteAction("delete", del, feedback: null);
                 break;
 
             // The undo window is narrow on purpose: it answers only while the
-            // footer is still showing the deletion it would reverse.
-            case Key.Z when !IsTyping && Keyboard.Modifiers == ModifierKeys.None && _undoPending is not null:
+            // footer is still showing the deletion it would reverse. 页脚的撤销钮写着 Ctrl+Z：
+            // 搜的时候 Ctrl+Z 也认（没有待撤销的删除时，它照常撤销搜索框里的输入）。
+            case Key.Z when LetterActs() && _undoPending is not null:
                 e.Handled = true;
                 RestoreUndo();
                 break;
+
+            // 挑的时候按退格：回到搜索框，删掉最后一个字。
+            case Key.Back when KeyFocus == BarKeyboard.Focus.List && Keyboard.Modifiers == ModifierKeys.None:
+                e.Handled = true;
+                ResumeSearch();
+                if (HasQuery)
+                {
+                    SearchBox.Text = SearchBox.Text[..^1];
+                    SearchBox.CaretIndex = SearchBox.Text.Length;
+                }
+
+                break;
+        }
+
+        // 挑的时候按下会出字的键（不是卡片动作的字母、标点、中文输入法打的字）：回去接着搜。焦点在
+        // 按下这一刻交还搜索框，随后到来的字符消息就落进搜索框，这个字不会丢。
+        if (!e.Handled && KeyFocus == BarKeyboard.Focus.List && TypesText(key))
+        {
+            ResumeSearch();
         }
     }
 
     private void NumberedRow(int oneBased, KeyEventArgs e)
     {
+        // 搜到一半时数字是打字（能搜「2024」、电话号码），Ctrl+数字照样粘贴。
+        if (!BarKeyboard.DigitPastes(KeyFocus, HasQuery, controlOnly: Keyboard.Modifiers == ModifierKeys.Control))
+        {
+            return;
+        }
+
         var rows = VisibleRows.ToList();
 
         if (oneBased <= rows.Count)

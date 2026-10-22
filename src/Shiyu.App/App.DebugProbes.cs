@@ -781,6 +781,41 @@ public partial class App
         }
     }
 
+    /// <summary>探针命令 bar-keys：钉住的窄条呼出后，用真实按键走一遍「搜 / 挑」的按键归属。</summary>
+    private async void ProbeBarKeys()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _shell!.TryUpdateSettings(s => s with { BarPinned = true, BarEdgeDock = false, LightweightWhenHidden = false });
+            _modules.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { IsVisible: true } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            log.Append(await bar.ProbeKeyRoutingAsync());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "bar-keys.log"), log.ToString());
+        }
+    }
+
     /// <summary>探针命令 bar-slide：贴边窄条收起、滑出十轮，量滑动每帧的节奏与挪窗耗时。</summary>
     private async void ProbeBarSlide()
     {
@@ -2186,6 +2221,11 @@ public partial class App
             // 细条滑出的节奏（用户反馈 2026-10-22：弹出发卡）。
             case "bar-slide":
                 ProbeBarSlide();
+                break;
+
+            // 按键归属（用户实录 2026-10-22：选中卡片按 P，P 打进了搜索框）。
+            case "bar-keys":
+                ProbeBarKeys();
                 break;
 
             // 预览工作台测试方案（用户实录 2026-10-20：叠显/串台/图片卡顿——复现与测量段）。

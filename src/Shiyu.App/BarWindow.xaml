@@ -787,6 +787,7 @@
                 -->
                 <local:BarCardsList x:Name="PinnedList" ItemTemplate="{StaticResource CardTemplate}"
                                     ItemContainerStyle="{StaticResource PinnedCardRow}"
+                                    FocusVisualStyle="{x:Null}"
                                     Background="Transparent" BorderThickness="0"
                                     HorizontalContentAlignment="Stretch"
                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
@@ -827,7 +828,9 @@
         <Grid>
             <!-- 滚动条常驻占道（Visible，见 Controls.xaml 滚动条注释）：筛到只剩几张、再放开，
                  卡片宽度不跳。 -->
+            <!-- 挑卡片时焦点在这里（用户需求 2026-10-22）：选中的卡片自己有高亮，整列不再套一圈虚线。 -->
             <local:BarCardsList x:Name="Cards" ItemTemplate="{StaticResource CardTemplate}"
+                                FocusVisualStyle="{x:Null}"
                                 Background="Transparent" BorderThickness="0"
                                 HorizontalContentAlignment="Stretch"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"

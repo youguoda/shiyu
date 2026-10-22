@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Shiyu.Core;
 
@@ -761,6 +762,149 @@ internal partial class BarWindow
 
         return FormattableString.Invariant(
             $"slide|animated={Shiyu.Windows.UiAnimation.Allowed()}|frames={(double)frames / rounds:F1}|gapMedian={Median(intervals):F1}|gapMax={(intervals.Count > 0 ? intervals.Max() : 0):F1}|moveAvg={(moves.Count > 0 ? moves.Average() : 0):F2}|moveMax={(moves.Count > 0 ? moves.Max() : 0):F2}|span={Median(spans):F0}|firstGap={Median(firstGaps):F1}|firstMove={Median(firstMoves):F2}");
+    }
+
+    // --- bar-keys（用户实录 2026-10-22：选中卡片按 P 置顶，P 却打进了搜索框）------------------
+    // 真实按键：只在这扇窄条就是前台窗口时才按，而且只按不会粘贴的键——字母动作、一个普通字母、↓、Esc。
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 40)]
+    private struct NativeKeyInput
+    {
+        [System.Runtime.InteropServices.FieldOffset(0)]
+        public uint Type;
+
+        [System.Runtime.InteropServices.FieldOffset(8)]
+        public ushort Vk;
+
+        [System.Runtime.InteropServices.FieldOffset(12)]
+        public uint Flags;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendInput")]
+    private static extern uint SendKeys(uint count, NativeKeyInput[] inputs, int size);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    private bool OwnsForeground => GetForegroundWindow() == new System.Windows.Interop.WindowInteropHelper(this).Handle;
+
+    /// <summary>按下一组键（依次按下、倒序抬起）。窄条不是前台就不按，返回假。</summary>
+    private async Task<bool> ProbeKeysAsync(params ushort[] chord)
+    {
+        if (!OwnsForeground)
+        {
+            return false;
+        }
+
+        var inputs = chord.Select(vk => new NativeKeyInput { Type = 1, Vk = vk })
+            .Concat(chord.Reverse().Select(vk => new NativeKeyInput { Type = 1, Vk = vk, Flags = 2 /* KEYEVENTF_KEYUP */ }))
+            .ToArray();
+        SendKeys((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<NativeKeyInput>());
+        await SettleInputAsync();
+        await Task.Delay(80);
+        return true;
+    }
+
+    /// <summary>
+    /// 走 WPF 自己的输入管线按一个键：PreviewKeyDown 由键盘设备送给此刻的焦点（没人处理就升成 KeyDown），
+    /// 按下没被处理、这个键又出字时，再把这个字作为一次文字输入送给「那时」的焦点——真实的 WM_CHAR 就是
+    /// 这样晚一步、按当时的焦点落地的。不碰前台窗口，人在用电脑也能跑。修饰键读的是真键盘，这里只能单按。
+    /// </summary>
+    private async Task<bool> ProbeSynthKeyAsync(Key key, string? text)
+    {
+        var down = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(this)!, Environment.TickCount, key)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent,
+        };
+        InputManager.Current.ProcessInput(down);
+        if (!down.Handled && text is not null && Keyboard.FocusedElement is { } focused)
+        {
+            TextCompositionManager.StartComposition(new TextComposition(InputManager.Current, focused, text));
+        }
+
+        await SettleInputAsync();
+        return down.Handled;
+    }
+
+    private bool ProbePinnedId(long id) => _pinned.Any(card => card.Id == id);
+
+    private bool ProbeSelectId(long id)
+    {
+        if (VisibleRows.FirstOrDefault(card => card.Id == id) is not { } card)
+        {
+            return false;
+        }
+
+        Select(card);
+        return true;
+    }
+
+    /// <summary>
+    /// 探针命令 bar-keys：点一张卡（走 OnCardPressed）→ 按 P → 按 K → Esc → Ctrl+P → ↓ → S，逐步记下焦点、
+    /// 搜索框内容、卡片的置顶与收藏。单按的键走合成的输入管线（<see cref="ProbeSynthKeyAsync"/>），Ctrl+P
+    /// 走真键盘。输入法在这一轮关掉：字母要以原样到达，不进拼音组字。
+    /// </summary>
+    internal async Task<string> ProbeKeyRoutingAsync()
+    {
+        var log = new StringBuilder();
+        InputMethod.SetIsInputMethodEnabled(this, false);
+        InputMethod.SetIsInputMethodEnabled(SearchBox, false);
+        try
+        {
+            if (_cards.FirstOrDefault() is not { } target
+                || Cards.ItemContainerGenerator.ContainerFromItem(target) is not FrameworkElement container)
+            {
+                log.AppendLine("keys|card=False");
+                return log.ToString();
+            }
+
+            var id = target.Id;
+            log.AppendLine(FormattableString.Invariant($"start|focus={KeyFocus}|fg={OwnsForeground}|pinned={ProbePinnedId(id)}"));
+
+            OnCardPressed(container, new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonDownEvent,
+                Source = container,
+            });
+            await SettleInputAsync();
+            log.AppendLine(FormattableString.Invariant($"click|focus={KeyFocus}"));
+
+            await ProbeSynthKeyAsync(Key.P, "p");
+            log.AppendLine(FormattableString.Invariant($"p|pinned={ProbePinnedId(id)}|query={SearchBox.Text.Length}|focus={KeyFocus}"));
+
+            await ProbeSynthKeyAsync(Key.K, "k");
+            log.AppendLine(FormattableString.Invariant($"k|focus={KeyFocus}|query={SearchBox.Text}"));
+
+            // Ctrl+P 要真键盘（修饰键合成不了）：窄条不是前台就不按。
+            await ProbeSynthKeyAsync(Key.Escape, null);
+            ProbeSelectId(id);
+            var pinnedBeforeCtrl = ProbePinnedId(id);
+            if (await ProbeKeysAsync(0x11 /* Ctrl */, 0x50 /* P */))
+            {
+                log.AppendLine(FormattableString.Invariant(
+                    $"ctrlp|before={pinnedBeforeCtrl}|pinned={ProbePinnedId(id)}|query={SearchBox.Text.Length}|focus={KeyFocus}"));
+            }
+            else
+            {
+                log.AppendLine("ctrlp|fg=False");
+            }
+
+            var favouriteBefore = VisibleRows.FirstOrDefault(card => card.Id == id)?.Favorite ?? false;
+            await ProbeSynthKeyAsync(Key.Down, null);
+            var focusAfterDown = KeyFocus;
+            ProbeSelectId(id);
+            await ProbeSynthKeyAsync(Key.S, "s");
+            var favouriteAfter = VisibleRows.FirstOrDefault(card => card.Id == id)?.Favorite ?? false;
+            log.AppendLine(FormattableString.Invariant(
+                $"down|focus={focusAfterDown}|favoriteToggled={favouriteAfter != favouriteBefore}|query={SearchBox.Text.Length}"));
+        }
+        finally
+        {
+            InputMethod.SetIsInputMethodEnabled(this, true);
+            InputMethod.SetIsInputMethodEnabled(SearchBox, true);
+        }
+
+        return log.ToString();
     }
 
     /// <summary>鼠标进细条却没弹出时，挡住它的几道闸此刻的状态。</summary>

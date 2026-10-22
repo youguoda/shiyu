@@ -309,6 +309,9 @@ internal partial class BarWindow
 
         Select(card);
 
+        // 点卡片就是在挑：焦点交给列表，接着按的字母是这张卡的动作，不再打进搜索框（用户实录 2026-10-22）。
+        StartPicking();
+
         // Border is not a Control and has no double-click of its own; the
         // count on the press is the same information.
         if (e.ClickCount == 2)
