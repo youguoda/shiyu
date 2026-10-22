@@ -156,6 +156,15 @@ jobs:
             } > release-notes.md
           fi
 
+      # 检查更新的退路（用户反馈 2026-10-22）：匿名 API 按出口 IP 每小时 60 次，公司网络里
+      # 一群人共用，额度见底就查不到。客户端问不到 API 时改取这份清单，走普通下载不占额度。
+      - name: 生成 latest.json
+        shell: pwsh
+        run: |
+          tools/release/write-latest-json.ps1 -Tag '${{ steps.version.outputs.tag }}' -Repository $env:GITHUB_REPOSITORY -NotesFile release-notes.md -Assets @(
+            'shiyu-win-x64-setup.exe', 'shiyu-win-x64-setup.exe.sha256', 'shiyu-win-x64-setup.exe.sig',
+            'shiyu-win-x64.zip', 'shiyu-win-x64.zip.sha256', 'shiyu-win-x64.zip.sig')
+
       - name: 创建 GitHub Release
         shell: bash
         env:
@@ -164,6 +173,7 @@ jobs:
           args=(release create "$GITHUB_REF_NAME"
                 shiyu-win-x64-setup.exe shiyu-win-x64-setup.exe.sha256 shiyu-win-x64-setup.exe.sig
                 shiyu-win-x64.zip shiyu-win-x64.zip.sha256 shiyu-win-x64.zip.sig
+                latest.json
                 --title "拾语 ${{ steps.version.outputs.version }}"
                 --notes-file release-notes.md)
           # rc 之类预发布：加 --prerelease，理由见"从 tag 取版本"步骤里的注释。

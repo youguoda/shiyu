@@ -185,4 +185,35 @@ public sealed record UpdateChannel(string Owner, string Repo, string AssetName)
     public static UpdateChannel Default { get; } = new("youguoda", "shiyu", "shiyu-win-x64.zip");
 
     public string LatestUrl => $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
+
+    /// <summary>发布流水线随每个正式版上传的清单，内容与 API 的 releases/latest 同形。</summary>
+    public const string ManifestAssetName = "latest.json";
+
+    /// <summary>
+    /// 检查更新的退路：匿名 API 按出口 IP 每小时 60 次，公司网络一群人共用一个出口，
+    /// 额度见底就查不到（用户反馈 2026-10-22）。这个地址走普通下载、不占 API 额度，
+    /// 也和预发布无关——releases/latest 本就跳过预发布。
+    /// </summary>
+    public string LatestManifestUrl => $"https://github.com/{Owner}/{Repo}/releases/latest/download/{ManifestAssetName}";
+}
+
+/// <summary>
+/// 一次检查的结局：拿到的发布；或者两条路各自的 HTTP 状态（0 = 没有回应）与限流解除时刻——
+/// 够给用户一句人话，也够日志分清「限流」「没有清单」「断网」（从前一律是「暂时拿不到」、日志无痕）。
+/// </summary>
+public sealed record UpdateCheck(
+    ReleaseManifest? Release,
+    int ApiStatus,
+    int ManifestStatus,
+    DateTimeOffset? LimitedUntil)
+{
+    public string Problem => this switch
+    {
+        { LimitedUntil: { } until } => $"GitHub 限制了这个网络的查询次数（同一网络出口每小时 60 次），约 {until.ToLocalTime():HH:mm} 恢复。",
+        { ApiStatus: 0, ManifestStatus: 0 } => "连不上 GitHub，检查网络后再试。",
+        _ => "暂时拿不到发布信息，稍后再试。",
+    };
+
+    public LogField[] LogFields =>
+        [("api", ApiStatus), ("manifest", ManifestStatus), ("limited", LimitedUntil is not null)];
 }

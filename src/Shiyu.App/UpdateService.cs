@@ -54,7 +54,7 @@ internal sealed class UpdateService
     /// <summary>The staged swap has this many attempts to see the old process out.</summary>
     private static readonly TimeSpan OldProcessTimeout = TimeSpan.FromSeconds(15);
 
-    public Task<ReleaseManifest?> CheckAsync(CancellationToken cancel = default)
+    public Task<UpdateCheck> CheckAsync(CancellationToken cancel = default)
         => _orchestrator.CheckAsync(cancel);
 
     public Task<(bool Ok, string Error)> DownloadAsync(

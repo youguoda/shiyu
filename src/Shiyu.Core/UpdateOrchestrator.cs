@@ -61,10 +61,17 @@ public sealed class UpdateOrchestrator(
         return await _http.SendAsync(request, completion, cancel);
     }
 
-    /// <summary>The latest release, or null when the channel said nothing usable.</summary>
-    public async Task<ReleaseManifest?> CheckAsync(CancellationToken cancel = default)
+    /// <summary>检查只取一个 KB 级清单：一条路十几秒没回应就换下一条，别让窗口转一分多钟。</summary>
+    private static readonly TimeSpan CheckBudget = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// 最新发布：先问 API，问不到（限流、坏了、断网）再取发布附带的 latest.json——直连打头、
+    /// 镜像垫后。清单不签名也无妨：信任只认安装包字节的验签，清单错了顶多装不上。
+    /// </summary>
+    public async Task<UpdateCheck> CheckAsync(CancellationToken cancel = default)
     {
-        var url = _channel.LatestUrl;
+        var apiUrl = _channel.LatestUrl;
+        IReadOnlyList<string> manifestUrls = CandidateUrls(_channel.LatestManifestUrl);
 #if DEBUG
         // Debug only: a release build takes its update source from nothing
         // but the compiled-in channel. 常量随读取一起住在 DEBUG 区（O-41）：
@@ -74,17 +81,71 @@ public sealed class UpdateOrchestrator(
 
         if (Environment.GetEnvironmentVariable(ApiOverrideVariable) is { Length: > 0 } overrideBase)
         {
-            url = overrideBase.TrimEnd('/') + "/releases/latest";
+            apiUrl = overrideBase.TrimEnd('/') + "/releases/latest";
+            manifestUrls = [overrideBase.TrimEnd('/') + "/releases/latest/download/" + UpdateChannel.ManifestAssetName];
         }
 #endif
 
-        using var response = await GetAsync(url, HttpCompletionOption.ResponseContentRead, cancel);
-        if (!response.IsSuccessStatusCode)
+        var (release, apiStatus, limitedUntil) = await FetchManifestAsync(apiUrl, cancel);
+        if (release is not null)
+        {
+            return new UpdateCheck(release, apiStatus, 0, null);
+        }
+
+        var manifestStatus = 0;
+        foreach (var url in manifestUrls)
+        {
+            (release, manifestStatus, _) = await FetchManifestAsync(url, cancel);
+            if (release is not null)
+            {
+                return new UpdateCheck(release, apiStatus, manifestStatus, null);
+            }
+        }
+
+        return new UpdateCheck(null, apiStatus, manifestStatus, limitedUntil);
+    }
+
+    private async Task<(ReleaseManifest? Release, int Status, DateTimeOffset? LimitedUntil)> FetchManifestAsync(
+        string url, CancellationToken cancel)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        budget.CancelAfter(CheckBudget);
+
+        try
+        {
+            using var response = await GetAsync(url, HttpCompletionOption.ResponseContentRead, budget.Token);
+            var status = (int)response.StatusCode;
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, status, RateLimitReset(response));
+            }
+
+            return (ReleaseManifest.Parse(await response.Content.ReadAsStringAsync(budget.Token)), status, null);
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure) when (failure is HttpRequestException or OperationCanceledException)
+        {
+            // expected: 断网、被墙、单路超时——记成「没有回应」，换下一条路；结局由调用方写日志。
+            return (null, 0, null);
+        }
+    }
+
+    /// <summary>GitHub 的限流回执：403/429 且剩余额度为 0，X-RateLimit-Reset 是解除时刻（Unix 秒）。</summary>
+    private static DateTimeOffset? RateLimitReset(HttpResponseMessage response)
+    {
+        if (response.StatusCode is not (System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests)
+            || !response.Headers.TryGetValues("X-RateLimit-Remaining", out var remaining)
+            || remaining.FirstOrDefault() != "0"
+            || !response.Headers.TryGetValues("X-RateLimit-Reset", out var reset)
+            || !long.TryParse(reset.FirstOrDefault(), out var seconds))
         {
             return null;
         }
 
-        return ReleaseManifest.Parse(await response.Content.ReadAsStringAsync(cancel));
+        return DateTimeOffset.FromUnixTimeSeconds(seconds);
     }
 
     /// <summary>

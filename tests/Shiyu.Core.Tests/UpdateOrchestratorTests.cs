@@ -252,12 +252,114 @@ public class UpdateOrchestratorTests
                 """,
         });
 
-        var release = await new UpdateOrchestrator(
-            new HttpClient(server), Path.GetTempPath(), Channel).CheckAsync();
+        var release = (await new UpdateOrchestrator(
+            new HttpClient(server), Path.GetTempPath(), Channel).CheckAsync()).Release;
 
         Assert.NotNull(release);
         Assert.Equal(new UpdateVersion(1, 4, 2), release.Version);
         Assert.NotNull(release.SignatureFor("shiyu-win-x64.zip"));
+    }
+
+    private const string ManifestJson = """
+        {
+          "tag_name": "v1.4.2",
+          "body": "说明",
+          "published_at": "2026-10-22T03:00:00Z",
+          "assets": [
+            { "name": "shiyu-win-x64.zip", "size": 10, "browser_download_url": "https://github.com/example/shiyu/releases/download/v1.4.2/shiyu-win-x64.zip" },
+            { "name": "shiyu-win-x64.zip.sig", "size": 72, "browser_download_url": "https://github.com/example/shiyu/releases/download/v1.4.2/shiyu-win-x64.zip.sig" }
+          ]
+        }
+        """;
+
+    private static readonly DateTimeOffset ResetAt = DateTimeOffset.FromUnixTimeSeconds(1_792_642_518);
+
+    /// <summary>用户反馈 2026-10-22：公司出口 IP 的匿名额度用光，API 403——清单这条路照样拿得到。</summary>
+    [Fact]
+    public async Task A_rate_limited_api_falls_back_to_the_release_manifest()
+    {
+        using var server = new GitHubLike(rateLimitedApi: true, new Dictionary<string, string>
+        {
+            ["/example/shiyu/releases/latest/download/latest.json"] = ManifestJson,
+        });
+
+        var check = await new UpdateOrchestrator(new HttpClient(server), Path.GetTempPath(), Channel).CheckAsync();
+
+        Assert.NotNull(check.Release);
+        Assert.Equal(new UpdateVersion(1, 4, 2), check.Release.Version);
+        Assert.NotNull(check.Release.SignatureFor("shiyu-win-x64.zip"));
+        Assert.Equal(403, check.ApiStatus);
+        Assert.Equal(200, check.ManifestStatus);
+    }
+
+    [Fact]
+    public async Task Rate_limited_with_no_manifest_says_when_the_limit_lifts()
+    {
+        using var server = new GitHubLike(rateLimitedApi: true, []);
+
+        var check = await new UpdateOrchestrator(new HttpClient(server), Path.GetTempPath(), Channel).CheckAsync();
+
+        Assert.Null(check.Release);
+        Assert.Equal(ResetAt, check.LimitedUntil);
+        Assert.Contains($"约 {ResetAt.ToLocalTime():HH:mm} 恢复", check.Problem);
+        Assert.Equal(404, check.ManifestStatus);
+        Assert.Equal(1, check.LogFields.Single(field => field.Key == "limited").Number);
+    }
+
+    [Fact]
+    public async Task A_404_from_every_road_is_not_mistaken_for_a_rate_limit()
+    {
+        using var server = new GitHubLike(rateLimitedApi: false, []);
+
+        var check = await new UpdateOrchestrator(new HttpClient(server), Path.GetTempPath(), Channel).CheckAsync();
+
+        Assert.Null(check.Release);
+        Assert.Null(check.LimitedUntil);
+        Assert.Equal((404, 404), (check.ApiStatus, check.ManifestStatus));
+        Assert.Equal("暂时拿不到发布信息，稍后再试。", check.Problem);
+    }
+
+    [Fact]
+    public async Task No_answer_from_anywhere_reads_as_offline_not_as_a_crash()
+    {
+        using var server = new Unreachable();
+
+        var check = await new UpdateOrchestrator(new HttpClient(server), Path.GetTempPath(), Channel).CheckAsync();
+
+        Assert.Null(check.Release);
+        Assert.Equal((0, 0), (check.ApiStatus, check.ManifestStatus));
+        Assert.Equal("连不上 GitHub，检查网络后再试。", check.Problem);
+    }
+
+    /// <summary>API 那条路可以是限流的 403（带 GitHub 的额度回执），其余按路径回放文本，没有就 404。</summary>
+    private sealed class GitHubLike(bool rateLimitedApi, Dictionary<string, string> files) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellation)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/repos/example/shiyu/releases/latest" && rateLimitedApi)
+            {
+                var limited = new HttpResponseMessage(HttpStatusCode.Forbidden)
+                {
+                    Content = new StringContent("""{"message":"API rate limit exceeded"}"""),
+                };
+                limited.Headers.Add("X-RateLimit-Remaining", "0");
+                limited.Headers.Add("X-RateLimit-Reset", ResetAt.ToUnixTimeSeconds().ToString());
+                return Task.FromResult(limited);
+            }
+
+            return Task.FromResult(files.TryGetValue(path, out var text)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(text) }
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class Unreachable : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellation)
+            => throw new HttpRequestException("No such host is known.");
     }
 
     /// <summary>

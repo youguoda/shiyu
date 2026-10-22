@@ -10,6 +10,9 @@ public class UpdateFeedTests
         Assert.Equal(
             "https://api.github.com/repos/youguoda/shiyu/releases/latest",
             UpdateChannel.Default.LatestUrl);
+        Assert.Equal(
+            "https://github.com/youguoda/shiyu/releases/latest/download/latest.json",
+            UpdateChannel.Default.LatestManifestUrl);
         Assert.Equal("shiyu-win-x64.zip", UpdateChannel.Default.AssetName);
     }
 

@@ -55,8 +55,13 @@ internal sealed class UpdateModule
 
             try
             {
-                var updates = new UpdateService(AppPaths.DataDirectory);
-                if (await updates.CheckAsync() is { } release && release.IsNewerThan(UpdateService.Current))
+                var check = await new UpdateService(AppPaths.DataDirectory).CheckAsync();
+                if (check.Release is not { } release)
+                {
+                    // 安静检查不打扰用户，但「已是最新」与「没查到」不能在日志里记成同一行。
+                    Log.Event(LogEvent.UpdateCheckFailed, check.LogFields);
+                }
+                else if (release.IsNewerThan(UpdateService.Current))
                 {
                     Log.Event(LogEvent.UpdateChecked, ("found", true));
                     shell.Notify(

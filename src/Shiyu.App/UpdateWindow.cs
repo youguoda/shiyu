@@ -143,11 +143,13 @@ internal sealed class UpdateWindow : Window
 
         try
         {
-            _release = await _updates.CheckAsync(_closing.Token);
+            var check = await _updates.CheckAsync(_closing.Token);
+            _release = check.Release;
 
             if (_release is null)
             {
-                _status.Text = "暂时拿不到发布信息，稍后再试。";
+                Log.Event(LogEvent.UpdateCheckFailed, [.. check.LogFields, ("window", 1)]);
+                _status.Text = check.Problem;
             }
             else if (!_release.IsNewerThan(UpdateService.Current))
             {
