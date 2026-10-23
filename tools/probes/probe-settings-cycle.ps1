@@ -45,6 +45,11 @@ try {
     if ($p2) { Stop-ProbeApp $p2 }
 }
 
+if (-not (Test-Path $cycleLog) -or -not (Test-Path $verifyLog)) {
+    foreach ($n in $names) { Add-Check $n 'FAIL' "no log from launch 1 or 2 within 60s (cycle log $(Test-Path $cycleLog), verify log $(Test-Path $verifyLog))" }
+    return $script:Checks
+}
+
 function Get-SetLines([string]$Path) {
     $result = @{}
     if (Test-Path $Path) {
