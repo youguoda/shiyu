@@ -395,6 +395,11 @@ public sealed partial class EntryStore : IDisposable
             WidenFullTextIndex();
         }
 
+        // translated_from 指向原条目、删原条目时置空（ON DELETE SET NULL）：没有索引时，每删一行 SQLite 都要扫一遍
+        // 全表找指向它的行——两万条的库按保留期清掉一万七千条要一分多钟（QA F-03，2026-10-23）。不看版本号：
+        // 旧版打开过的库也该有，IF NOT EXISTS 让它只建一次。
+        Execute("CREATE INDEX IF NOT EXISTS idx_entries_translated_from ON entries (translated_from);");
+
         if (from != SchemaVersion)
         {
             Execute($"PRAGMA user_version = {SchemaVersion};");

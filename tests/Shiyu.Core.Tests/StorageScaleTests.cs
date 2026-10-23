@@ -36,6 +36,40 @@ public class StorageScaleTests
         Assert.Equal(1L, check.ExecuteScalar());
     }
 
+    // --- deleting at scale (QA F-03, 2026-10-23) ------------------------------------
+
+    /// <summary>
+    /// Every deleted entry makes SQLite look for rows whose translated_from points at it
+    /// (ON DELETE SET NULL). Without an index that is a full-table scan per deleted row:
+    /// a 20 000-row history swept down by 17 000 took 68 s, with the index 0.6 s. The index
+    /// is created whatever the stamped version says — a database an older build already
+    /// stamped current still gets it.
+    /// </summary>
+    [Fact]
+    public void The_translation_link_is_indexed_even_on_a_database_stamped_current()
+    {
+        using var database = new TempDatabase();
+        using (var store = EntryStore.Open(database.FilePath))
+        {
+            using var drop = store.Connection.CreateCommand();
+            drop.CommandText = "DROP INDEX IF EXISTS idx_entries_translated_from;";
+            drop.ExecuteNonQuery();
+        }
+
+        using var reopened = EntryStore.Open(database.FilePath);
+
+        using var plan = reopened.Connection.CreateCommand();
+        plan.CommandText = "EXPLAIN QUERY PLAN SELECT id FROM entries WHERE translated_from = 1;";
+        using var reader = plan.ExecuteReader();
+        var steps = new List<string>();
+        while (reader.Read())
+        {
+            steps.Add(reader.GetString(3));
+        }
+
+        Assert.Contains(steps, step => step.Contains("idx_entries_translated_from"));
+    }
+
     // --- the subtype sentinel ---------------------------------------------------
 
     [Fact]
