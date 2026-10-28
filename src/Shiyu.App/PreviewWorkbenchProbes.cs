@@ -335,7 +335,7 @@ internal partial class BarWindow
             await Task.Delay(400);
             log.AppendLine(FormattableString.Invariant(
                 $"w|step=email-save|chips={chips}|added={_store.Count() - before}"));
-            _preview.TakeDown();
+            await ClosePreviewAsync();
             await Task.Delay(200);
         }
 
@@ -348,7 +348,7 @@ internal partial class BarWindow
             await Task.Delay(300);
             log.AppendLine(FormattableString.Invariant(
                 $"w|step=files-chips|chips={_preview.ProbeChipActions}"));
-            _preview.TakeDown();
+            await ClosePreviewAsync();
             await Task.Delay(200);
         }
 
