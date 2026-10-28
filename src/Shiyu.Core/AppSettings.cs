@@ -380,13 +380,26 @@ public sealed record AppSettings
     public bool ActionSound { get; init; }
 
     // --- narrow bar geometry, remembered between sessions ---
-    // Null means "never placed yet"; the width is fixed by design and not stored.
+    // Null means "never placed yet" / "never dragged": the window's own default.
 
     public double? BarLeft { get; init; }
 
     public double? BarTop { get; init; }
 
     public double? BarHeight { get; init; }
+
+    /// <summary>窄条拖右下角定的宽（用户需求 2026-10-28）。</summary>
+    public double? BarWidth { get; init; }
+
+    // --- 浮窗拖右下角定的尺寸（用户需求 2026-10-28）：宽度记住，高度是上限——内容少时照旧更矮 ---
+
+    public double? PanelWidth { get; init; }
+
+    public double? PanelMaxHeight { get; init; }
+
+    public double? ReverseWidth { get; init; }
+
+    public double? ReverseMaxHeight { get; init; }
 
     /// <summary>
     /// Blank means the default beside the application data. Changing it needs a

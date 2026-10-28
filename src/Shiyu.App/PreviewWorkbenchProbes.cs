@@ -360,6 +360,94 @@ internal partial class BarWindow
     /// <summary>直调私有 RemoveCard：删卡强制收起的真实路径（BarCards.cs:758-767）。</summary>
     internal void ProbeRemoveCard(BarCard card) => RemoveCard(card);
 
+    // --- preview-multipin：Ctrl+T 与同时钉住多扇（用户需求 2026-10-28）------------------------
+
+    /// <summary>此刻看得见的预览窗：(总数, 钉着的数)。</summary>
+    private static (int Visible, int Pinned) ProbePreviewWindows()
+    {
+        var shown = Application.Current.Windows.OfType<PreviewWindow>().Where(window => window.IsVisible).ToList();
+        return (shown.Count, shown.Count(window => window.IsPinned));
+    }
+
+    /// <summary>
+    /// 选中一张卡按 Ctrl+T（直调它触发的那个方法：修饰键合成不了）→ 再选一张按 Ctrl+T → 按住 Space 看第三张（走
+    /// 预览策略的真实打开路径）→ 取消钉住最早的一扇 → 连钉十扇看上限 → 删掉一张钉着的卡 → 再按 Ctrl+T 取消。
+    /// </summary>
+    internal async Task<string> ProbeMultiPinAsync()
+    {
+        var log = new StringBuilder();
+        var rows = VisibleRows.Where(card => card.Kind != EntryKind.Files).Take(13).ToList();
+        if (rows.Count < 13)
+        {
+            return FormattableString.Invariant($"multipin|cards={rows.Count}\n");
+        }
+
+        async Task Settle() => await Task.Delay(350);
+
+        Select(rows[0]);
+        PinPreviewFromKey();
+        await Settle();
+        var (visible, pinned) = ProbePreviewWindows();
+        log.AppendLine(FormattableString.Invariant(
+            $"pinkey|visible={visible}|pinned={pinned}|shows={_preview?.CardId == rows[0].Id}"));
+
+        Select(rows[1]);
+        PinPreviewFromKey();
+        await Settle();
+        (visible, pinned) = ProbePreviewWindows();
+        log.AppendLine(FormattableString.Invariant(
+            $"second|visible={visible}|pinned={pinned}|aside={_pinnedPreviews.Count}|shows={_preview?.CardId == rows[1].Id}"));
+
+        RunPreviewCommand(_previewPolicy.SpaceDown(rows[2].Id));
+        await Settle();
+        (visible, pinned) = ProbePreviewWindows();
+        log.AppendLine(FormattableString.Invariant(
+            $"hover|visible={visible}|pinned={pinned}|hoverPinned={_preview?.IsPinned}|shows={_preview?.CardId == rows[2].Id}"));
+        RunPreviewCommand(_previewPolicy.SpaceUp());
+        await Settle();
+
+        var oldest = _pinnedPreviews.FirstOrDefault();
+        oldest?.TogglePin();
+        await Task.Delay(600);
+        (visible, pinned) = ProbePreviewWindows();
+        log.AppendLine(FormattableString.Invariant(
+            $"unpin|visible={visible}|pinned={pinned}|aside={_pinnedPreviews.Count}|closed={oldest is not null && !Application.Current.Windows.OfType<PreviewWindow>().Contains(oldest)}"));
+
+        foreach (var card in rows.Skip(3).Take(10))
+        {
+            Select(card);
+            PinPreviewFromKey();
+            await Task.Delay(120);
+        }
+
+        await Settle();
+        (visible, pinned) = ProbePreviewWindows();
+        log.AppendLine(FormattableString.Invariant(
+            $"cap|visible={visible}|pinned={pinned}|aside={_pinnedPreviews.Count}|newest={_preview?.CardId == rows[12].Id}"));
+
+        // 删掉一张钉在一旁的卡：钉着它的那扇强制收起、关掉。
+        var doomedId = _pinnedPreviews.LastOrDefault()?.CardId;
+        if (doomedId is { } id && VisibleRows.FirstOrDefault(card => card.Id == id) is { } doomed)
+        {
+            RemoveCard(doomed);
+        }
+
+        await Task.Delay(600);
+        log.AppendLine(FormattableString.Invariant(
+            $"delete|stillShown={Application.Current.Windows.OfType<PreviewWindow>().Any(window => window.IsVisible && window.CardId == doomedId)}"));
+
+        // 开着的正钉着选中的卡：Ctrl+T 取消。
+        Select(rows[12]);
+        PinPreviewFromKey();
+        await Task.Delay(600);
+        log.AppendLine(FormattableString.Invariant(
+            $"toggle|newestPinned={Application.Current.Windows.OfType<PreviewWindow>().Any(window => window.IsVisible && window.IsPinned && window.CardId == rows[12].Id)}"));
+
+        ClosePinnedPreviews();
+        _preview?.TakeDown(force: true);
+        return log.ToString();
+    }
+
     // --- preview-anchor：缩放锚点漂移 --------------------------------------------
 
     /// <summary>平移后再在同一屏幕点滚轮：光标下的图像点该不动（漂移 = 前后读数差）。</summary>
@@ -399,14 +487,17 @@ internal partial class BarWindow
         }
 
         var scale1 = preview.ProbeScale;
-        var u1 = preview.ProbeLocalUnderCursor;
         await preview.ProbePressAtAsync(center.X, center.Y);
         await preview.ProbeMoveToAsync(center.X + 40, center.Y + 20);
         await preview.ProbeReleaseAsync();
         var originAfterPan = preview.ProbeOrigin;
 
-        // 第二段缩放钉在同一个屏幕点：漂移只许来自处理器自己的锚点算术。
-        var fixedScreen = preview.ProbeImageCenterOnScreen;
+        // 第二段缩放钉在同一个屏幕点——框的可见中心（放大后内容中心早已在框外，绕框外的点放大会撞上平移的边界）：
+        // 漂移只许来自处理器自己的锚点算术。起点读数在平移之后、就在这一点上读。
+        var fixedScreen = preview.ProbeBoxCenterOnScreen;
+        preview.ProbeCursorToScreen(fixedScreen.X, fixedScreen.Y);
+        await PreviewWindow.ProbePumpAsync();
+        var u1 = preview.ProbeLocalUnderCursor;
         for (var tick = 0; tick < 4; tick++)
         {
             if (!preview.ProbeCursorToScreen(fixedScreen.X, fixedScreen.Y))
@@ -544,6 +635,7 @@ internal partial class BarWindow
 
         // 适应时图源的像素数：放大一开始就会换全尺寸原图，得在放大前记下。
         var fitPixels = preview.ProbeSourcePixels;
+        var fitWindow = preview.ProbeWindowSize;
 
         // 放大段。
         var busyFrom = busy;
@@ -558,7 +650,10 @@ internal partial class BarWindow
 
         await Task.Delay(150);
         var scaleAfterUp = preview.ProbeScale;
+        var upWindow = preview.ProbeWindowSize;
+        var upOverflow = preview.ProbeOverflow;
         Emit("zoom", watch, latFrom, gapFrom, busyFrom);
+        log.AppendLine("zoomcost|img=" + label + "|" + preview.ProbeZoomCosts());
 
         // 放大后换上原图全部像素（用户反馈 2026-10-22：放大越看越糊）：等后台解码落位。
         for (var waited = 0; waited < 60 && preview.ProbeSourcePixels == fitPixels; waited++)
@@ -588,7 +683,7 @@ internal partial class BarWindow
             Emit("pan", watch, latFrom, gapFrom, busyFrom);
         }
 
-        // 收尾段：一路缩回 1.0（顺带核钳制与回零）。
+        // 收尾段：一路缩到底（顺带核钳制与回零：缩过适应档之后窗口跟着缩，框内不再有平移）。
         busyFrom = busy;
         latFrom = latencies.Count;
         gapFrom = gaps.Count;
@@ -604,17 +699,22 @@ internal partial class BarWindow
         log.AppendLine(FormattableString.Invariant(
             $"clamps|img={label}|scaleAfterUp={scaleAfterUp:F6}|scaleAfterDown={preview.ProbeScale:F6}|origin={preview.ProbeOrigin}"));
 
-        // 适应时双击 → 一比一，再双击 → 回到适应（用户需求 2026-10-22）。
+        // 弹窗跟着图片走（用户需求 2026-10-28）：放大时窗口长到上限、框内接着放大；缩到底窗口也跟着缩。
+        log.AppendLine(FormattableString.Invariant(
+            $"window|img={label}|fit={fitWindow}|up={upWindow}|upOverflow={upOverflow:F3}|down={preview.ProbeWindowSize}"));
+
+        // 双击 → 小方块，再双击 → 原图一比一（用户需求 2026-10-28）。
         await Task.Delay(600);
         var expectedActual = preview.ProbeActualSizeScale;
         await preview.ProbeDoubleClickAtAsync(center.X, center.Y);
         await Task.Delay(250);
-        var actualScale = preview.ProbeScale;
+        var square = preview.ProbeSquare;
+        var squareWindow = preview.ProbeWindowSize;
         await Task.Delay(600);
         await preview.ProbeDoubleClickAtAsync(center.X, center.Y);
         await Task.Delay(250);
         log.AppendLine(FormattableString.Invariant(
-            $"actual|img={label}|expected={expectedActual:F4}|scale={actualScale:F4}|back={preview.ProbeScale:F4}"));
+            $"actual|img={label}|square={square}|squareWindow={squareWindow}|expected={expectedActual:F4}|scale={preview.ProbeScale:F4}|stillSquare={preview.ProbeSquare}|window={preview.ProbeWindowSize}"));
 
         CompositionTarget.Rendering -= OnRendering;
         Dispatcher.Hooks.OperationStarted -= OnStarted;

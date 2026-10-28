@@ -65,6 +65,7 @@ internal sealed class TranslationModule
         {
             _speech ??= new SpeechSynthesis();
 
+            var created = _panel is null;
             _panel ??= new PanelWindow(
                 // O-43：面板持注册表取用口而非一次性捕获——注册表随设置
                 // 保存整体重建，退役实例现在会大声拒绝而不是悄悄失灵。
@@ -95,6 +96,13 @@ internal sealed class TranslationModule
                     (original, translated, template, card) => shell.TranslationLog.StarWord(original, translated, template, card),
                     headword => shell.TranslationLog.UnstarWord(headword),
                     headword => shell.TranslationLog.IsStarred(headword)));
+
+            // 右下角拖出来的尺寸（用户需求 2026-10-28）：记进设置，下次打开照用。
+            if (created)
+            {
+                _panel.SizeWanted += (width, height) => shell.TryUpdateSettings(s => s with { PanelWidth = width, PanelMaxHeight = height });
+            }
+
             await _panel.TranslateAsync(text, Displayed);
         }
         catch (Exception failure)

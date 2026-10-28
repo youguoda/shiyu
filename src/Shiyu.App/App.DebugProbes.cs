@@ -1462,6 +1462,142 @@ public partial class App
         }
     }
 
+    /// <summary>
+    /// 探针命令 window-resize（用户需求 2026-10-28：翻译剪贴板、反向输入、窄条都能拖右下角改尺寸）：三扇窗各
+    /// 合成一次拖把的「开始 → 拖动 → 松手」，记下拖着时、松手后的尺寸与高度上限，再读设置里记下的值。
+    /// </summary>
+    private async void ProbeWindowResize()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        var shell = _shell!;
+
+        static async Task<string> Drag(Window window, System.Windows.Controls.Primitives.Thumb grip, double dx, double dy)
+        {
+            // 先挪到工作区左上角：往右下拖不出屏幕，贴着屏幕底边的窗口拖不出要的那么高。
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (Shiyu.Windows.WindowRects.TryGet(handle, out var rect))
+            {
+                var work = Shiyu.Windows.ScreenGeometry.WorkAreaAt(new Shiyu.Core.ScreenPoint(rect.Left, rect.Top));
+                Shiyu.Windows.TransientWindow.MoveTo(handle, new Shiyu.Core.ScreenPoint(work.Left + 40, work.Top + 40), Shiyu.Core.ZBand.Topmost);
+                await Task.Delay(200);
+            }
+
+            var before = FormattableString.Invariant($"{window.ActualWidth:F0}x{window.ActualHeight:F0}");
+            grip.RaiseEvent(new System.Windows.Controls.Primitives.DragStartedEventArgs(0, 0));
+            grip.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(dx, dy));
+            await Task.Delay(250);
+            var during = FormattableString.Invariant($"{window.ActualWidth:F0}x{window.ActualHeight:F0}");
+            grip.RaiseEvent(new System.Windows.Controls.Primitives.DragCompletedEventArgs(dx, dy, false));
+            await Task.Delay(1500);
+            return FormattableString.Invariant(
+                $"before={before}|during={during}|after={window.ActualWidth:F0}x{window.ActualHeight:F0}");
+        }
+
+        try
+        {
+            shell.TryUpdateSettings(s => s with { BarPinned = true, BarEdgeDock = false });
+
+            _modules!.Translation.ShowPanel("probe resize");
+            for (var waited = 0; waited < 50 && Windows.OfType<PanelWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<PanelWindow>().FirstOrDefault() is { IsVisible: true } panel)
+            {
+                await Task.Delay(800);
+                panel.ProbeClickPin();
+                var line = await Drag(panel, panel.ResizeGrip, 120, 260);
+                log.AppendLine(FormattableString.Invariant(
+                    $"panel|{line}|savedWidth={shell.Settings.PanelWidth:F0}|savedMax={shell.Settings.PanelMaxHeight:F0}"));
+                panel.ProbeClickPin();
+                panel.ProbeEscape();
+            }
+            else
+            {
+                log.AppendLine("panel|missing");
+            }
+
+            shell.ShowReverseInput?.Invoke();
+            for (var waited = 0; waited < 50 && Windows.OfType<ReverseInputWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<ReverseInputWindow>().FirstOrDefault() is { IsVisible: true } reverse)
+            {
+                await Task.Delay(400);
+                reverse.ProbeClickPin();
+                var line = await Drag(reverse, reverse.ResizeGrip, 100, 240);
+                log.AppendLine(FormattableString.Invariant(
+                    $"reverse|{line}|maxHeight={reverse.MaxHeight:F0}|savedWidth={shell.Settings.ReverseWidth:F0}|savedMax={shell.Settings.ReverseMaxHeight:F0}"));
+                reverse.ProbeClickPin();
+                reverse.ProbeEscapeKey();
+            }
+            else
+            {
+                log.AppendLine("reverse|missing");
+            }
+
+            _modules.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is { IsVisible: true } bar)
+            {
+                await Task.Delay(400);
+                var line = await Drag(bar, bar.SizeGrip, 100, -80);
+                log.AppendLine(FormattableString.Invariant(
+                    $"bar|{line}|savedWidth={shell.Settings.BarWidth:F0}|savedHeight={shell.Settings.BarHeight:F0}"));
+            }
+            else
+            {
+                log.AppendLine("bar|missing");
+            }
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}|message={failure.Message}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "window-resize.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 preview-multipin（用户需求 2026-10-28）：Ctrl+T 与同时钉住多扇，见 BarWindow.ProbeMultiPinAsync。</summary>
+    private async void ProbePreviewMultiPin()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _modules!.Bar.ProbeShowPinned();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            log.Append(await _modules.Bar.ProbeMultiPin());
+        }
+        catch (Exception failure)
+        {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}|message={failure.Message}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "preview-multipin.log"), log.ToString());
+        }
+    }
+
     /// <summary>探针命令 preview-zoom-perf 的入口（见 BarWindow.ProbeZoomPerfAsync）：先照
     /// image-paste 的配方造一条 3840×2160 的大图（小图用种子里的 900×300）。</summary>
     private async void ProbePreviewZoomPerf()
@@ -2747,6 +2883,16 @@ public partial class App
             // 缩放锚点漂移：动真光标，脚本侧有 Test-UserPresent 守卫。
             case "preview-anchor":
                 ProbePreviewAnchor();
+                break;
+
+            // Ctrl+T 与同时钉住多扇（用户需求 2026-10-28）。
+            case "preview-multipin":
+                ProbePreviewMultiPin();
+                break;
+
+            // 右下角拖拽改尺寸（用户需求 2026-10-28）：翻译剪贴板、反向输入、窄条。
+            case "window-resize":
+                ProbeWindowResize();
                 break;
 
             // 滚轮/平移响应度：合成滚轮逐段量 UI 线程与渲染线程。

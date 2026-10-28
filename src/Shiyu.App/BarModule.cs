@@ -165,7 +165,8 @@ internal sealed partial class BarModule
         var settings = shell.Settings;
         if (settings.BarLeft == _bar.BarLeft
             && settings.BarTop == _bar.BarTop
-            && settings.BarHeight == _bar.BarHeight)
+            && settings.BarHeight == _bar.BarHeight
+            && settings.BarWidth == _bar.BarWidth)
         {
             return;
         }
@@ -175,6 +176,7 @@ internal sealed partial class BarModule
             BarLeft = _bar.BarLeft,
             BarTop = _bar.BarTop,
             BarHeight = _bar.BarHeight,
+            BarWidth = _bar.BarWidth,
         });
     }
 

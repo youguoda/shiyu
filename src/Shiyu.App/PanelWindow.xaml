@@ -19,6 +19,7 @@
         <!-- 票 22（UI 报告 §6.2）：头部与 footer 固定，中间走同一个滚动区——
              译文三态、逐句对照与词典卡都在它里面，词典卡晚到时不再把
              面板顶出屏幕底部，只是滚出来。 -->
+        <Grid>
         <StackPanel Margin="16,12">
 
             <!-- 头部：源语言名 · 换方向（挨着它改变的东西）· 目标语言名 ·
@@ -385,5 +386,8 @@
                 </Button>
             </DockPanel>
         </StackPanel>
+            <!-- 右下角拖拽改宽高（用户需求 2026-10-28）：宽度记住，高度是上限，内容少时照旧更矮。 -->
+            <Thumb x:Name="ResizeGrip" Style="{DynamicResource ResizeCorner}" Margin="0,0,2,2"/>
+        </Grid>
     </Border>
 </Window>

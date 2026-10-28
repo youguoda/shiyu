@@ -43,7 +43,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <DockPanel Grid.Row="0" Margin="0,0,0,6">
+            <DockPanel x:Name="HeaderRow" Grid.Row="0" Margin="0,0,0,6">
                 <!-- 钉住（用户需求 2026-10-19）：钉着就不随悬停收起，一直在屏幕最上；
                      元信息与教学行随之收起，只留干净的预览正文。 -->
                 <Button x:Name="PinButton" Style="{DynamicResource IconButton}"
@@ -71,7 +71,7 @@
                 <!-- 钉住工作台（用户需求 2026-10-20）：文字类可直接编辑；色值卡给颜色条。 -->
                 <TextBox x:Name="EditHost" Visibility="Collapsed"
                          AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" Padding="10,8"
+                         VerticalScrollBarVisibility="Auto" Padding="4,3"
                          Background="{DynamicResource Brush.SurfaceInput}"
                          BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1"
                          FontSize="{DynamicResource Type.Content}"

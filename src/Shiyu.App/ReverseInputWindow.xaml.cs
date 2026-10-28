@@ -128,6 +128,51 @@ internal partial class ReverseInputWindow : Window
                 CloseTemplateList();
             }
         };
+
+        ApplySize(settings);
+        CornerResize.Attach(this, ResizeGrip, new Size(MinWidthDip, ReverseInputPlacement.MinHeightDip),
+            resizing: (_, height) =>
+            {
+                _resizing = true;
+                OutputScroll.MaxHeight = Math.Max(60, height - (ActualHeight - OutputScroll.ActualHeight));
+            },
+            committed: (width, height) =>
+            {
+                _resizing = false;
+                _userMaxHeight = height;
+                FitHeightCap();
+                KeepWhereDragged();
+                SizeWanted?.Invoke(width, height);
+            });
+    }
+
+    // --- 右下角拖拽改尺寸（用户需求 2026-10-28）-------------------------------------------
+
+    private const double DefaultWidthDip = 440;
+    private const double MinWidthDip = 320;
+
+    /// <summary>用户拖出来的整窗高度上限；null = 没拖过，照旧只受工作区限制。</summary>
+    private double? _userMaxHeight;
+
+    /// <summary>正拖着右下角：这时候不按插入符那套规则挪窗（翻到上方时它会钉住底边往上长）。</summary>
+    private bool _resizing;
+
+    /// <summary>拖完了：宽、高上限（DIP），由拥有者写进设置。</summary>
+    public event Action<double, double>? SizeWanted;
+
+    private void ApplySize(AppSettings settings)
+    {
+        Width = Math.Max(MinWidthDip, settings.ReverseWidth ?? DefaultWidthDip);
+        _userMaxHeight = settings.ReverseMaxHeight is { } height ? Math.Max(ReverseInputPlacement.MinHeightDip, height) : null;
+    }
+
+    /// <summary>整窗上限 = min(工作区那一档, 拖出来的高度)；输出区的上限随之收放。</summary>
+    private void FitHeightCap()
+    {
+        var (_, scaleY) = ScreenGeometry.ScaleAt(new ScreenPoint(_workArea.Left, _workArea.Top));
+        var workHeightDip = _workArea.Height > 0 ? _workArea.Height / scaleY : double.MaxValue;
+        MaxHeight = Math.Min(ReverseInputPlacement.ClampHeightDip(double.MaxValue, workHeightDip), _userMaxHeight ?? double.MaxValue);
+        OutputScroll.MaxHeight = Math.Max(60, MaxHeight - InputMaxDip - ChromeReserveDip);
     }
 
     /// <summary>
@@ -138,6 +183,7 @@ internal partial class ReverseInputWindow : Window
     {
         _template = PromptTemplates.ReconcileReverse(_settings, settings, _template);
         _settings = settings;
+        ApplySize(settings);
     }
 
     // --- 呼出与收起 ---------------------------------------------------------------------
@@ -198,10 +244,10 @@ internal partial class ReverseInputWindow : Window
         var (scaleX, scaleY) = ScreenGeometry.ScaleAt(anchor);
         var workHeightDip = _workArea.Height / scaleY;
 
-        // 整窗 80–800，矮屏上随工作区；输出区的上限随之收紧，免得输入框与输出加起来超过整窗上限。
+        // 整窗 80–800，矮屏上随工作区，拖过右下角就不超过拖出来的高度；输出区的上限随之收紧，
+        // 免得输入框与输出加起来超过整窗上限。
         MinHeight = ReverseInputPlacement.MinHeightDip;
-        MaxHeight = ReverseInputPlacement.ClampHeightDip(double.MaxValue, workHeightDip);
-        OutputScroll.MaxHeight = Math.Max(60, MaxHeight - InputMaxDip - ChromeReserveDip);
+        FitHeightCap();
 
         // 还没显示过：没有 ActualHeight，量一遍内容拿到真实的起始高度。
         Measure(new Size(Width, double.PositiveInfinity));
@@ -229,7 +275,7 @@ internal partial class ReverseInputWindow : Window
     /// </summary>
     private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!IsVisible || _placement is not { } placement)
+        if (!IsVisible || _resizing || _placement is not { } placement)
         {
             return;
         }

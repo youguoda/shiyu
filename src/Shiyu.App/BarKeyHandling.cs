@@ -312,6 +312,12 @@ internal partial class BarWindow
                 SearchBox.SelectAll();
                 break;
 
+            // 钉住预览（用户需求 2026-10-28）：搜、挑两种状态都认；规则见 PinPreviewFromKey。
+            case Key.T when Keyboard.Modifiers == ModifierKeys.Control && KeyFocus != BarKeyboard.Focus.OtherField:
+                e.Handled = true;
+                PinPreviewFromKey();
+                break;
+
             // Tab trades focus navigation for filter cycling: Ctrl+F is the
             // way back to the search box, so nothing is lost.
             case Key.Tab:

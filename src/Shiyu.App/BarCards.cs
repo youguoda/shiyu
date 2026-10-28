@@ -785,6 +785,8 @@ internal partial class BarWindow
             RunPreviewCommand(_previewPolicy.Escape());
         }
 
+        TakeDownPinnedPreviewsOf(card.Id);
+
         var inRest = _cards.IndexOf(card);
         if (inRest >= 0)
         {

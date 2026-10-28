@@ -78,6 +78,7 @@ internal sealed class ReverseInputModule
 
         try
         {
+            var created = _window is null;
             _window ??= new ReverseInputWindow(
                 shell.Settings,
                 BuildBackend,
@@ -90,6 +91,13 @@ internal sealed class ReverseInputModule
                 // 翻译记录（用户需求 2026-10-09）：贴回时、或带着落定的结果关窗时记一笔。
                 (original, translated, template)
                     => shell.LogTranslation(original, translated, TranslationOrigin.ReverseInput, template));
+
+            // 右下角拖出来的尺寸（用户需求 2026-10-28）：记进设置，下次呼出照用。
+            if (created)
+            {
+                _window.SizeWanted += (width, height) => shell.TryUpdateSettings(s => s with { ReverseWidth = width, ReverseMaxHeight = height });
+            }
+
             _window.Summon();
         }
         catch (Exception failure)

@@ -122,8 +122,10 @@ $clamps = Get-Line 'clamps:large'
 $up = ConvertTo-InvariantDouble (Field $clamps 'scaleAfterUp' '-1')
 $down = ConvertTo-InvariantDouble (Field $clamps 'scaleAfterDown' '-1')
 $origin = Field $clamps 'origin' '?'
-$ok = ([math]::Abs($up - 8.0) -le 0.001) -and ([math]::Abs($down - 1.0) -le 0.001) -and ($origin -eq '0.000;0.000')
-Add-Check 'flow:preview-zoom-clamps' $(if ($ok) { 'PASS' } else { 'FAIL' }) "120 ticks up -> $up, 40 down -> $down, origin=$origin"
+# Up clamps at 8x the fitted size; down goes below fit now (the window shrinks with the picture,
+# user request 2026-10-28) and stops at a 64-DIP long side, with nothing left to pan.
+$ok = ([math]::Abs($up - 8.0) -le 0.001) -and ($down -gt 0) -and ($down -lt 1.0) -and ($origin -eq '0.000;0.000')
+Add-Check 'flow:preview-zoom-clamps' $(if ($ok) { 'PASS' } else { 'FAIL' }) "120 ticks up -> $up, 40 down -> $down (below fit), origin=$origin"
 
 # User report 2026-10-22: zooming in only magnified the box-sized decode and got blurrier.
 # Once zoomed, the panel must swap in the original's full pixels.
@@ -142,12 +144,30 @@ $ok = $sharp.Count -gt 0 -and $sharp['zoomPx'] -eq $sharp['cardPx'] -and $sharp[
 $detail = if ($sharp.Count -gt 0) { "3840x2160 source pixels at fit {0}, after zooming {1} (original {2})" -f $sharp['fitPx'], $sharp['zoomPx'], $sharp['cardPx'] } else { 'no sharp line' }
 Add-Check 'flow:preview-zoom-sharp' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
-# Double-click at fit goes to one image pixel per screen pixel, and back to fit again.
+# User request 2026-10-28: double-click shrinks the preview to a small square, double-click again
+# shows the picture one image pixel per screen pixel.
 $expected = ConvertTo-InvariantDouble (Field $actual 'expected' '-1')
 $scale = ConvertTo-InvariantDouble (Field $actual 'scale' '-1')
-$back = ConvertTo-InvariantDouble (Field $actual 'back' '-1')
-$ok = ($expected -gt 1.01) -and ([math]::Abs($scale - $expected) -le 0.01) -and ([math]::Abs($back - 1.0) -le 0.001)
-Add-Check 'flow:preview-dblclick-actual-size' $(if ($ok) { 'PASS' } else { 'FAIL' }) "double-click at fit -> $scale (1:1 is $expected), again -> $back"
+$ok = ((Field $actual 'square' '?') -eq 'True') -and ((Field $actual 'stillSquare' '?') -eq 'False') -and ($expected -gt 1.01) -and ([math]::Abs($scale - $expected) -le 0.01)
+Add-Check 'flow:preview-dblclick-actual-size' $(if ($ok) { 'PASS' } else { 'FAIL' }) "double-click -> square $(Field $actual 'square' '?') ($(Field $actual 'squareWindow' '?') DIP), again -> $scale (1:1 is $expected), window $(Field $actual 'window' '?')"
+
+# The window follows the picture: it grows while zooming in (up to the work area, where the rest
+# zooms inside the box) and shrinks again when zooming out past fit.
+$win = @{}
+foreach ($line in Get-Content $log -Encoding UTF8) {
+    if ($line -match '^window\|img=large\|(.*)$') {
+        foreach ($pair in $Matches[1].Split('|')) {
+            $kv = $pair.Split('=', 2)
+            if ($kv.Count -eq 2) { $win[$kv[0]] = $kv[1] }
+        }
+    }
+}
+$area = { param($s) if ($s -match '^([\d.]+)x([\d.]+)$') { [double]$Matches[1] * [double]$Matches[2] } else { -1 } }
+$fitArea = & $area $win['fit']
+$upArea = & $area $win['up']
+$downArea = & $area $win['down']
+$ok = ($fitArea -gt 0) -and ($upArea -gt $fitArea) -and ($downArea -gt 0) -and ($downArea -lt $fitArea) -and ((ConvertTo-InvariantDouble (Field $win 'upOverflow' '-1')) -gt 1.0)
+Add-Check 'flow:preview-window-follows-zoom' $(if ($ok) { 'PASS' } else { 'FAIL' }) "3840x2160 window at fit $($win['fit']), zoomed in $($win['up']) (box overflow $($win['upOverflow'])), zoomed out $($win['down'])"
 
 $longest = ConvertTo-InvariantDouble (Field $zoomLarge 'longestOpMs' '-1')
 $ok = ($longest -ge 0) -and ($longest -le 150)

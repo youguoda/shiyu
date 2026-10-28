@@ -814,9 +814,8 @@
                                FontSize="{DynamicResource Type.Caption}"
                                Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </DockPanel>
-                <Thumb x:Name="SizeGrip" HorizontalAlignment="Right" Width="22" Height="14"
-                       Cursor="SizeNS" DragDelta="OnGripDrag" Background="Transparent"
-                       Style="{StaticResource InvisibleGrip}"/>
+                <Thumb x:Name="SizeGrip" DragDelta="OnGripDrag" Style="{DynamicResource ResizeCorner}"
+                       Margin="0,0,-4,-2"/>
             </Grid>
         </Border>
 

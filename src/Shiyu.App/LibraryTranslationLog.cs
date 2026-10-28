@@ -309,6 +309,54 @@ public partial class LibraryWindow
         ShowLightFeedback(selected.Count == 1 ? $"已复制{what}" : $"已复制 {selected.Count} 条{what}");
     }
 
+    /// <summary>按下的地方：只有按在一行上、挪过系统的拖动距离，才算拖出（用户需求 2026-10-28）。</summary>
+    private Point? _logDragOrigin;
+
+    private void OnLogPressed(object sender, MouseButtonEventArgs e)
+        => _logDragOrigin = ItemsControl.ContainerFromElement(LogList, (DependencyObject)e.OriginalSource) is ListBoxItem
+            ? e.GetPosition(LogList)
+            : null;
+
+    /// <summary>
+    /// 把词条拖到别的窗口（用户需求 2026-10-28）：带的是译文，和双击 / Enter / C 复制的同一份；
+    /// 拖的那一行在多选里就带上全部选中的，多条之间空一行。
+    /// </summary>
+    private void OnLogMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _logDragOrigin = null;
+            return;
+        }
+
+        if (_logDragOrigin is not { } origin)
+        {
+            return;
+        }
+
+        var here = e.GetPosition(LogList);
+        if (Math.Abs(here.X - origin.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(here.Y - origin.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        // 一次按下只拖一次：模态的拖放循环一结束，后面的移动不许再进去。
+        _logDragOrigin = null;
+        if (ItemsControl.ContainerFromElement(LogList, (DependencyObject)e.OriginalSource) is not ListBoxItem { DataContext: TranslationLogItem pressed })
+        {
+            return;
+        }
+
+        var selected = SelectedLogItems();
+        var carried = selected.Contains(pressed) ? selected : [pressed];
+        var data = new DataObject();
+        data.SetText(string.Join(Environment.NewLine + Environment.NewLine, carried.Select(item => item.Record.Translated)),
+            TextDataFormat.UnicodeText);
+        e.Handled = true;
+        DragDrop.DoDragDrop(LogList, data, DragDropEffects.Copy);
+    }
+
     private void OnLogDelete(object sender, RoutedEventArgs e) => DeleteLogSelection();
 
     /// <summary>导出（评审 2026-10-16 F-19）：选中的按列表顺序，全部就是整份记录（保留期决定它有多长）。</summary>

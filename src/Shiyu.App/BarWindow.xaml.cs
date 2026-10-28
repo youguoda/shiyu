@@ -182,6 +182,7 @@ internal partial class BarWindow : Window
         {
             _preview?.TakeDown();
             _preview?.Close();
+            ClosePinnedPreviews();
         };
 
         _previewPolicy = PreviewPolicy.For(settings, () => Environment.TickCount64);
@@ -966,6 +967,11 @@ internal partial class BarWindow : Window
 
     public double BarHeight => Height;
 
+    public double BarWidth => Width;
+
+    /// <summary>窄条的宽（用户需求 2026-10-28 起可拖右下角改）：窄到卡片动作排不下就不行，宽到半屏为止。</summary>
+    private const double MinBarWidth = 320;
+
     private void RestoreGeometry()
     {
         if (_settings.BarLeft is { } left)
@@ -980,6 +986,7 @@ internal partial class BarWindow : Window
 
         var work = SystemParameters.WorkArea;
         Height = Math.Clamp(_settings.BarHeight ?? 620, 320, work.Height);
+        Width = Math.Clamp(_settings.BarWidth ?? Width, MinBarWidth, Math.Max(MinBarWidth, work.Width / 2));
 
         // Strand check against the WHOLE virtual desktop, not the primary
         // work area: the bar legitimately lives on either monitor of this
@@ -1024,10 +1031,12 @@ internal partial class BarWindow : Window
         GeometryChanged?.Invoke();
     }
 
+    /// <summary>右下角拖把（用户需求 2026-10-28：原来只能改高）：宽高一起改，左上角不动。</summary>
     private void OnGripDrag(object sender, DragDeltaEventArgs e)
     {
         var work = SystemParameters.WorkArea;
         Height = Math.Clamp(Height + e.VerticalChange, 320, work.Height);
+        Width = Math.Clamp(Width + e.HorizontalChange, MinBarWidth, Math.Max(MinBarWidth, work.Width / 2));
     }
 
     // --- background dragging -------------------------------------------------

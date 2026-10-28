@@ -187,6 +187,8 @@ internal partial class PreviewWindow : Window
             (anchor.Left + anchor.Right) / 2,
             (anchor.Top + anchor.Bottom) / 2));
         ImageBounds = PreviewSizing.ImageBounds(work.Width / scaleX, work.Height / scaleY);
+        _workArea = work;
+        _workScale = (scaleX, scaleY);
 
         var (width, height) = Measure(card, scaleX);
         Width = width;
@@ -347,7 +349,13 @@ internal partial class PreviewWindow : Window
     /// <summary>钉着时不走任何收起，也不被其他卡片夺走；只显示预览正文（元信息行与教学行收起）。</summary>
     private bool Pinned { get; set; }
 
-    private void OnPinToggle(object sender, RoutedEventArgs e)
+    /// <summary>此刻钉着（宿主据此把它挪到一旁，好让下一张卡开新的一扇）。</summary>
+    internal bool IsPinned => Pinned;
+
+    private void OnPinToggle(object sender, RoutedEventArgs e) => TogglePin();
+
+    /// <summary>图钉与 Ctrl+T（用户需求 2026-10-28）同一个动作：钉着就取消，没钉就钉上。</summary>
+    internal void TogglePin()
     {
         if (Pinned)
         {
@@ -403,8 +411,18 @@ internal partial class PreviewWindow : Window
 
     // --- 钉住工作台（用户需求 2026-10-20）：文字可编、图片可缩放，动作按形态出 ---------
 
-    private double _imageScale = 1;
+    // 图片的缩放状态（用户需求 2026-10-28，算术在 PreviewImageZoom）：_zoom 是显示尺寸 ÷ 原图一比一的尺寸，
+    // _natural 是一比一时的 DIP 尺寸，_fitZoom 是打开时塞进面板的那一档。屏幕装得下时框贴着图、弹窗跟着变；
+    // 装不下时框停在上限，_overflow（≥ 1）是框内还要放大的倍数，_imageOrigin 是框内平移。
+    private double _zoom = 1;
+    private double _fitZoom = 1;
+    private (double Width, double Height) _natural;
+    private double _overflow = 1;
     private Point _imageOrigin = new(0, 0);
+
+    /// <summary>双击缩成的小方块（再双击回到原图一比一）。</summary>
+    private bool _square;
+
     private bool _imageDragging;
     private Point _dragStart;
 
@@ -420,6 +438,11 @@ internal partial class PreviewWindow : Window
     // 芯片点击 handler 只登记一次（SetupWorkbench 每次 Pin 都跑——重复登记会让
     // 一次点击触发多次动作）。
     private bool _workbenchWired;
+
+    /// <summary>外框的内边距：阅读时（XAML 里的 12,10），与钉住后当编辑器用时。</summary>
+    private static readonly Thickness ReadingPadding = new(12, 10, 12, 10);
+
+    private static readonly Thickness EditingPadding = new(6, 6, 6, 6);
 
     /// <summary>
     /// 钉住那一刻把窗变成工作台：文本类正文换编辑框、颜色给色块、动作行按
@@ -447,6 +470,9 @@ internal partial class PreviewWindow : Window
         EditHost.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
         TextHost.Visibility = isText ? Visibility.Collapsed : TextHost.Visibility;
         EditHost.Text = card.Text;
+
+        // 当编辑器用时留白要少（用户需求 2026-10-28）：外框的 12/10 加编辑框自己的内边距，字四周空出二十多 DIP。
+        Root.Padding = isText ? EditingPadding : ReadingPadding;
 
         ActionRow.Items.Clear();
 
@@ -482,11 +508,15 @@ internal partial class PreviewWindow : Window
     private void TeardownWorkbench()
     {
         EditHost.Text = string.Empty;   // 草稿不跨显示——下一张不许带着上一张的编辑。
+        Root.Padding = ReadingPadding;
         ActionRow.Items.Clear();
         ActionRow.Visibility = Visibility.Collapsed;
         EditHost.Visibility = Visibility.Collapsed;
         SwatchHost.Visibility = Visibility.Collapsed;
-        _imageScale = 1;
+        _lastWorkbenchClick = default;   // 上一扇的最后一下点击不和下一扇的第一下拼成双击。
+        LeaveSquare();
+        _zoom = _fitZoom;
+        _overflow = 1;
         _imageOrigin = new Point(0, 0);
         ApplyImageTransform();
         _fullOriginalFor = null;
@@ -505,10 +535,10 @@ internal partial class PreviewWindow : Window
 
     private void ApplyImageTransform()
     {
-        // 变换组构造时建好、此后原地改值；交互期（放大状态）降 Linear 重采样——
-        // HighQuality 的 Fant 每拍全图重滤是渲染线程的大头，回到一比一换回 HighQuality。
-        _imageScaleTransform.ScaleX = _imageScale;
-        _imageScaleTransform.ScaleY = _imageScale;
+        // 变换组构造时建好、此后原地改值；框内放大时降 Linear 重采样——
+        // HighQuality 的 Fant 每拍全图重滤是渲染线程的大头，框贴着图时换回 HighQuality。
+        _imageScaleTransform.ScaleX = _overflow;
+        _imageScaleTransform.ScaleY = _overflow;
         _imageOriginTransform.X = _imageOrigin.X;
         _imageOriginTransform.Y = _imageOrigin.Y;
         if (!ReferenceEquals(ImageHost.RenderTransform, _imageTransform))
@@ -517,12 +547,148 @@ internal partial class PreviewWindow : Window
         }
 
         RenderOptions.SetBitmapScalingMode(
-            ImageHost, _imageScale > 1.001 ? BitmapScalingMode.Linear : BitmapScalingMode.HighQuality);
+            ImageHost, _overflow > 1.001 || _zoomingUntil > Environment.TickCount64 ? BitmapScalingMode.Linear : BitmapScalingMode.HighQuality);
 
-        if (_imageScale > 1.001)
+        // 显示出来的像素比解码出来的多了：换原图的全部像素，放大才是真像素。
+        var shownPixels = _natural.Width * _zoom * Math.Max(1.0, _deviceScale);
+        if (_zoom > _fitZoom * 1.001 && ImageHost.Source is BitmapSource source && shownPixels > source.PixelWidth + 1)
         {
             LoadFullOriginal();
         }
+    }
+
+    // --- 弹窗跟着图片走（用户需求 2026-10-28）---------------------------------------------
+
+    /// <summary>图片框四周的面板开销（DIP）：内边距、标题行，教学行显示时再加它那一行。</summary>
+    private (double Width, double Height) ImageChrome()
+        => (PreviewSizing.ChromeHorizontal,
+            PreviewSizing.ChromeVertical + (TeachHost.Visibility == Visibility.Visible ? TeachRowHeight : 0));
+
+    /// <summary>预览所在屏的工作区（物理像素）与它的缩放：图片框能长到多大、窗口往哪儿收，都看它。</summary>
+    private ScreenRect _workArea;
+
+    private (double X, double Y) _workScale = (1, 1);
+
+    /// <summary>
+    /// 缩放到 <paramref name="zoom"/>：光标下（<paramref name="anchor"/>，图片内容坐标；null = 框中心）那一点的
+    /// 图像位置不动。框贴着图时挪窗口来保持，框停在上限后改框内平移。窗口最后收进工作区。
+    /// </summary>
+    private void SetZoom(double zoom, Point? anchor)
+    {
+        if (_natural.Width <= 0 || _natural.Height <= 0)
+        {
+            return;
+        }
+
+        var (chromeWidth, chromeHeight) = ImageChrome();
+        var maxWidth = _workArea.Width / _workScale.X * 0.96 - chromeWidth;
+        var maxHeight = _workArea.Height / _workScale.Y * 0.96 - chromeHeight;
+        zoom = PreviewImageZoom.Clamp(zoom, _natural.Width, _natural.Height, _fitZoom);
+        var (boxWidth, boxHeight, overflow) =
+            PreviewImageZoom.Layout(_natural.Width, _natural.Height, zoom, maxWidth, maxHeight, _deviceScale);
+
+        // 光标下的那一点：内容坐标 p → 框里的位置 q = origin + overflow × p，图上的比例 f = p ÷ 旧框。
+        var oldWidth = ImageHost.ActualWidth > 0 ? ImageHost.ActualWidth : boxWidth;
+        var oldHeight = ImageHost.ActualHeight > 0 ? ImageHost.ActualHeight : boxHeight;
+        var p = anchor ?? new Point(oldWidth / 2, oldHeight / 2);
+        var (fx, fy) = (p.X / oldWidth, p.Y / oldHeight);
+        var (qx, qy) = (_imageOrigin.X + _overflow * p.X, _imageOrigin.Y + _overflow * p.Y);
+        var (shownWidth, shownHeight) = (boxWidth * overflow, boxHeight * overflow);
+
+        double shiftX = 0, shiftY = 0;
+        if (overflow <= 1.001)
+        {
+            _imageOrigin = new Point(0, 0);
+            (shiftX, shiftY) = (qx - fx * shownWidth, qy - fy * shownHeight);
+        }
+        else
+        {
+            _imageOrigin = new Point(
+                PreviewImageZoom.ClampOrigin(qx - fx * shownWidth, boxWidth, overflow),
+                PreviewImageZoom.ClampOrigin(qy - fy * shownHeight, boxHeight, overflow));
+        }
+
+        _zoom = zoom;
+        _overflow = overflow;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        ImageHost.MaxWidth = boxWidth;
+        ImageHost.MaxHeight = boxHeight;
+        ResizeAround(
+            Math.Max(PreviewSizing.MinWidth, boxWidth + chromeWidth),
+            Math.Max(PreviewSizing.MinHeight, boxHeight + chromeHeight),
+            shiftX, shiftY);
+        var resized = clock.Elapsed.TotalMilliseconds;
+        ApplyImageTransform();
+        NoteZoomCost(resized, clock.Elapsed.TotalMilliseconds - resized);
+    }
+
+    /// <summary>一次缩放的开销：改尺寸、换变换各多久（Debug 探针量；发布构建里不存在）。</summary>
+    partial void NoteZoomCost(double resizeMs, double transformMs);
+
+    /// <summary>换窗口大小（DIP），左上角挪 <paramref name="shiftX"/>/<paramref name="shiftY"/> DIP，再整个收进工作区。</summary>
+    private void ResizeAround(double width, double height, double shiftX, double shiftY)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var before = WindowRects.TryGet(handle, out var rect) ? rect : (ScreenRect?)null;
+        Width = width;
+        Height = height;
+        if (before is not { } old)
+        {
+            return;
+        }
+
+        var widthPx = (int)Math.Ceiling(width * _workScale.X);
+        var heightPx = (int)Math.Ceiling(height * _workScale.Y);
+        var left = old.Left + (int)Math.Round(shiftX * _workScale.X);
+        var top = old.Top + (int)Math.Round(shiftY * _workScale.Y);
+        left = Math.Clamp(left, _workArea.Left, Math.Max(_workArea.Left, _workArea.Right - widthPx));
+        top = Math.Clamp(top, _workArea.Top, Math.Max(_workArea.Top, _workArea.Bottom - heightPx));
+        TransientWindow.MoveTo(handle, new ScreenPoint(left, top), _band);
+    }
+
+    /// <summary>
+    /// 双击缩成小方块（用户需求 2026-10-28）：整扇窗是 <see cref="PreviewImageZoom.SquareSide"/> 见方，图片铺满裁中间，
+    /// 标题与教学行收起。再双击回到原图一比一；滚轮从小方块那么大接着缩放。
+    /// </summary>
+    private void EnterSquare()
+    {
+        _square = true;
+        HeaderRow.Visibility = Visibility.Collapsed;
+        TeachHost.Visibility = Visibility.Collapsed;
+        Root.Padding = new Thickness(SquarePadding);
+        var inner = PreviewImageZoom.SquareSide - 2 * SquarePadding;
+        ImageHost.Stretch = Stretch.UniformToFill;
+        ImageHost.ClipToBounds = true;
+        ImageHost.Width = inner;
+        ImageHost.Height = inner;
+        ImageHost.MaxWidth = inner;
+        ImageHost.MaxHeight = inner;
+        _overflow = 1;
+        _imageOrigin = new Point(0, 0);
+        _zoom = inner / Math.Max(_natural.Width, _natural.Height);
+        ResizeAround(PreviewImageZoom.SquareSide, PreviewImageZoom.SquareSide, 0, 0);
+        ApplyImageTransform();
+    }
+
+    private const double SquarePadding = 4;
+
+    /// <summary>出小方块：标题行、教学行、内边距、铺法都还原（钉没钉看 UpdatePinVisual）。</summary>
+    private void LeaveSquare()
+    {
+        if (!_square)
+        {
+            return;
+        }
+
+        _square = false;
+        HeaderRow.Visibility = Visibility.Visible;
+        UpdatePinVisual();
+        TeachHost.Visibility = _shown is { } card && ShowsTeaching(card) && !Pinned ? Visibility.Visible : Visibility.Collapsed;
+        Root.Padding = ReadingPadding;
+        ImageHost.Stretch = Stretch.Uniform;
+        ImageHost.ClipToBounds = false;
+        ImageHost.Width = double.NaN;
+        ImageHost.Height = double.NaN;
     }
 
     /// <summary>
@@ -569,7 +735,7 @@ internal partial class PreviewWindow : Window
 
             dispatcher.BeginInvoke(() =>
             {
-                if (_backfills.IsCurrent(generation) && CardId == wanted && Pinned)
+                if (_backfills.IsCurrent(generation) && CardId == wanted && IsVisible)
                 {
                     ImageHost.Source = full;
                 }
@@ -598,32 +764,54 @@ internal partial class PreviewWindow : Window
 
     private void OnWorkbenchWheel(object sender, MouseWheelEventArgs e)
     {
-        if (!Pinned || _shown is not { Kind: EntryKind.Image })
+        // 钉没钉都能缩放（用户需求 2026-10-28）：悬停的预览也是。
+        if (_shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
         {
             return;
         }
 
         // 朝光标缩放：光标下的图像点，缩放后仍落在光标下。光标取图像内容坐标
         // （GetPosition(ImageHost)）——渲染位置是 元素左上角 + origin + scale×内容点，
-        // 用父空间光标会差一个恒定的布局偏移项（实测残漂 2.6 DIP，票 29）。
-        var position = e.GetPosition(ImageHost);
-        (_imageScale, var ox, var oy) =
-            PreviewImageTransform.Wheel(_imageScale, _imageOrigin.X, _imageOrigin.Y, position.X, position.Y, e.Delta);
-        _imageOrigin = new Point(ox, oy);
+        // 用父空间光标会差一个恒定的布局偏移项（实测残漂 2.6 DIP，票 29）。小方块里按中心。
+        var position = _square ? (Point?)null : e.GetPosition(ImageHost);
+        LeaveSquare();
 
-        ApplyImageTransform();
+        // 滚着的时候用 Linear 重采样，停手一拍再换回 HighQuality：框贴着图时每一格都要按新尺寸把整张原图重滤一遍。
+        _zoomingUntil = Environment.TickCount64 + ZoomSettleMs;
+        _zoomSettle ??= NewZoomSettle();
+        _zoomSettle.Stop();
+        _zoomSettle.Start();
+        SetZoom(PreviewImageZoom.Step(_zoom, e.Delta), position);
         e.Handled = true;
+    }
+
+    private const int ZoomSettleMs = 150;
+
+    /// <summary>滚轮缩放进行到什么时候（TickCount64）：此前用 Linear。</summary>
+    private long _zoomingUntil;
+
+    private System.Windows.Threading.DispatcherTimer? _zoomSettle;
+
+    private System.Windows.Threading.DispatcherTimer NewZoomSettle()
+    {
+        var settle = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ZoomSettleMs + 10) };
+        settle.Tick += (_, _) =>
+        {
+            settle.Stop();
+            ApplyImageTransform();
+        };
+        return settle;
     }
 
     private void OnWorkbenchPress(object sender, MouseButtonEventArgs e)
     {
-        if (!Pinned || _shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
+        if (_shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
         {
             return;
         }
 
-        // 放大之后才有得拖：原始比例下拖动没有意义，点击穿到下面去。
-        if (_imageScale > 1.001)
+        // 框内放大之后才有得拖：框贴着图时拖动没有意义，点击穿到下面去（钉住时就是拖窗）。
+        if (_overflow > 1.001)
         {
             var pressRelativeTo = ImageHost.Parent as IInputElement;
             _imageDragging = true;
@@ -650,8 +838,8 @@ internal partial class PreviewWindow : Window
 
         var position = e.GetPosition(moveRelativeTo);
         _imageOrigin = new Point(
-            _imageOrigin.X + position.X - _dragStart.X,
-            _imageOrigin.Y + position.Y - _dragStart.Y);
+            PreviewImageZoom.ClampOrigin(_imageOrigin.X + position.X - _dragStart.X, ImageHost.ActualWidth, _overflow),
+            PreviewImageZoom.ClampOrigin(_imageOrigin.Y + position.Y - _dragStart.Y, ImageHost.ActualHeight, _overflow));
         _dragStart = position;
         ApplyImageTransform();
         e.Handled = true;
@@ -669,7 +857,7 @@ internal partial class PreviewWindow : Window
 
     private void OnWorkbenchDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (!Pinned || _shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
+        if (_shown is not { Kind: EntryKind.Image } || !ImageHost.IsVisible)
         {
             return;
         }
@@ -687,22 +875,18 @@ internal partial class PreviewWindow : Window
             return;
         }
 
-        // 适应 ⇄ 一比一（用户需求 2026-10-22）：放大着就回到适应；适应时放大到一个图像像素占一个
-        // 屏幕像素，绕双击点；本来就一比一的小图放大两倍。
-        if (_imageScale > 1.001)
+        // 小方块 ⇄ 原图一比一（用户需求 2026-10-28）：一个图像像素占一个屏幕像素，弹窗跟着长到那么大，
+        // 屏幕装不下就停在上限、框内看一比一（拖动平移）。
+        if (_square)
         {
-            _imageScale = 1;
-            _imageOrigin = new Point(0, 0);
+            LeaveSquare();
+            SetZoom(1.0, anchor: null);
         }
         else
         {
-            var actual = PreviewSizing.ActualSizeScale(_shown.PixelWidth, ImageHost.ActualWidth, _deviceScale);
-            (_imageScale, var ox, var oy) = PreviewImageTransform.Zoom(
-                1, 0, 0, at.X, at.Y, actual > 1.01 ? actual : 2.0);
-            _imageOrigin = new Point(ox, oy);
+            EnterSquare();
         }
 
-        ApplyImageTransform();
         _imageDragging = false;
         ImageHost.ReleaseMouseCapture();
         e.Handled = true;
@@ -890,8 +1074,21 @@ internal partial class PreviewWindow : Window
             // The box is the image at one image pixel per screen pixel at most.
             var display = PreviewSizing.ImageDisplay(card.PixelWidth, card.PixelHeight, deviceScale, ImageBounds);
             _deviceScale = deviceScale;
+            LeaveSquare();
             ImageHost.MaxWidth = display?.Width ?? double.PositiveInfinity;
             ImageHost.MaxHeight = display?.Height ?? double.PositiveInfinity;
+
+            // 缩放从「塞进面板的那一档」开始；没有尺寸的旧行不缩放（_natural 为 0）。
+            var device = Math.Max(1.0, deviceScale);
+            _natural = card.PixelWidth > 0 && card.PixelHeight > 0
+                ? (card.PixelWidth / device, card.PixelHeight / device)
+                : (0, 0);
+            _fitZoom = display is { } fitted && _natural.Width > 0 ? fitted.Width / _natural.Width : 1;
+            _zoom = _fitZoom;
+            _overflow = 1;
+            _imageOrigin = new Point(0, 0);
+            _lastWorkbenchClick = default;
+            ApplyImageTransform();
 
             // Decoded to exactly the screen pixels the box covers, both sides —
             // one bitmap pixel per screen pixel, edges flush with the box. A row

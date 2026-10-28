@@ -28,11 +28,13 @@ internal partial class BarWindow
         switch (command)
         {
             case PreviewCommand.Open when CardById(_previewPolicy.Card) is { } opening:
+                SetAsideIfPinned(opening);
                 EnsurePreview().ShowFor(opening, PlacementAnchor(AnchorFor(opening) ?? WindowRect()), slide: false,
                     scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
                 break;
 
             case PreviewCommand.Retarget when CardById(_previewPolicy.Card) is { } moving:
+                SetAsideIfPinned(moving);
                 EnsurePreview().ShowFor(moving, PlacementAnchor(AnchorFor(moving) ?? WindowRect()), slide: true,
                     scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
                 break;
@@ -70,8 +72,8 @@ internal partial class BarWindow
         if (_preview is null)
         {
             _preview = new PreviewWindow(_fileIcons, _fileProbe);
-            _preview.PointerRestingOnPanel += () => RunPreviewCommand(_previewPolicy.PreviewEntered());
-            _preview.PointerLeftPanel += () => RunPreviewCommand(_previewPolicy.PreviewLeft());
+            _preview.PointerRestingOnPanel += OnPreviewPointerResting;
+            _preview.PointerLeftPanel += OnPreviewPointerLeft;
             _preview.WorkbenchAction += RunWorkbenchAction;
 
             // Born into the bar's z-tier (票 39): the panel never hovers above
@@ -80,6 +82,105 @@ internal partial class BarWindow
         }
 
         return _preview;
+    }
+
+    private void OnPreviewPointerResting() => RunPreviewCommand(_previewPolicy.PreviewEntered());
+
+    private void OnPreviewPointerLeft() => RunPreviewCommand(_previewPolicy.PreviewLeft());
+
+    // --- 同时钉住多扇（用户需求 2026-10-28）--------------------------------------------------
+    //
+    // 钉住的那扇先照常挂在窄条上；要看另一张卡时才把它挪到一旁、另开一扇——只钉一扇时什么都不变。
+    // 挪到一旁的不再随悬停开收，取消钉住（它自己收起）就关掉；最多留 8 扇，再多先关最早钉的。
+
+    private readonly List<PreviewWindow> _pinnedPreviews = [];
+
+    private const int PinnedPreviewsKept = 8;
+
+    private void SetAsideIfPinned(BarCard card)
+    {
+        if (_preview is not { IsPinned: true } pinned || pinned.CardId == card.Id)
+        {
+            return;
+        }
+
+        pinned.PointerRestingOnPanel -= OnPreviewPointerResting;
+        pinned.PointerLeftPanel -= OnPreviewPointerLeft;
+        pinned.IsVisibleChanged += OnSetAsideVisibility;
+        _pinnedPreviews.Add(pinned);
+        _preview = null;
+
+        while (_pinnedPreviews.Count > PinnedPreviewsKept)
+        {
+            var oldest = _pinnedPreviews[0];
+            _pinnedPreviews.RemoveAt(0);
+            oldest.IsVisibleChanged -= OnSetAsideVisibility;
+            oldest.TakeDown(force: true);
+            oldest.Close();
+        }
+    }
+
+    /// <summary>挪到一旁的那扇取消钉住后自己收起：收完就关，不留着空窗。</summary>
+    private void OnSetAsideVisibility(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if ((bool)e.NewValue || sender is not PreviewWindow window)
+        {
+            return;
+        }
+
+        window.IsVisibleChanged -= OnSetAsideVisibility;
+        _pinnedPreviews.Remove(window);
+        window.Close();
+    }
+
+    /// <summary>
+    /// Ctrl+T（用户需求 2026-10-28）：开着一扇没钉的就钉它（看到什么钉什么）；开着的正钉着选中的卡就取消；
+    /// 别的情况把选中的卡片直接钉成一扇（原来钉着的另一扇挪到一旁）。
+    /// </summary>
+    private void PinPreviewFromKey()
+    {
+        if (_preview is { IsVisible: true } shown && (!shown.IsPinned || shown.CardId == _selected?.Id))
+        {
+            shown.TogglePin();
+            return;
+        }
+
+        if (_selected is not { } card)
+        {
+            return;
+        }
+
+        SetAsideIfPinned(card);
+        var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+        var preview = EnsurePreview();
+        preview.ShowFor(card, PlacementAnchor(AnchorFor(card) ?? WindowRect()), slide: false,
+            scaleX: scale.M11, scaleY: scale.M22, band: ZBandPolicy.FollowsHost(Topmost));
+        if (!preview.IsPinned)
+        {
+            preview.TogglePin();
+        }
+    }
+
+    /// <summary>这张卡被删了：钉着它的每一扇都强制收起（钉着一张已删条目是幽灵）。</summary>
+    private void TakeDownPinnedPreviewsOf(long id)
+    {
+        foreach (var window in _pinnedPreviews.Where(window => window.CardId == id).ToList())
+        {
+            window.TakeDown(force: true);
+        }
+    }
+
+    /// <summary>宿主关窗：挪到一旁的钉住预览一并关掉，不比窄条活得久。</summary>
+    private void ClosePinnedPreviews()
+    {
+        foreach (var window in _pinnedPreviews.ToList())
+        {
+            window.IsVisibleChanged -= OnSetAsideVisibility;
+            window.TakeDown(force: true);
+            window.Close();
+        }
+
+        _pinnedPreviews.Clear();
     }
 
     /// <summary>The panel follows the pointer only between realised cards; off-list the bar anchors it.</summary>

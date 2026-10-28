@@ -252,6 +252,10 @@ internal sealed partial class BarModule
     internal async Task<string> ProbeAnchor()
         => _bar is null ? "anchor|bar-missing\n" : await _bar.ProbeAnchorAsync();
 
+    /// <summary>探针命令 preview-multipin 的窄条一段（见 BarWindow.ProbeMultiPinAsync）。</summary>
+    internal async Task<string> ProbeMultiPin()
+        => _bar is null ? "multipin|bar-missing\n" : await _bar.ProbeMultiPinAsync();
+
     /// <summary>探针命令 preview-zoom-perf 的窄条一段（见 BarWindow.ProbeZoomPerfAsync）。</summary>
     internal async Task<string> ProbeZoomPerf()
         => _bar is null ? "zoom|bar-missing\n" : await _bar.ProbeZoomPerfAsync();

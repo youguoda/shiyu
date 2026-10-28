@@ -66,7 +66,31 @@ internal partial class PreviewWindow
         return false;
     }
 
-    internal double ProbeScale => _imageScale;
+    private readonly List<(double Resize, double Transform)> _zoomCosts = [];
+
+    partial void NoteZoomCost(double resizeMs, double transformMs) => _zoomCosts.Add((resizeMs, transformMs));
+
+    /// <summary>缩放开销的读数：次数、改尺寸的平均/最大、换变换的最大（毫秒）。</summary>
+    internal string ProbeZoomCosts()
+    {
+        var line = _zoomCosts.Count == 0
+            ? "n=0"
+            : FormattableString.Invariant(
+                $"n={_zoomCosts.Count}|resizeAvg={_zoomCosts.Average(c => c.Resize):F1}|resizeMax={_zoomCosts.Max(c => c.Resize):F1}|transformMax={_zoomCosts.Max(c => c.Transform):F1}");
+        _zoomCosts.Clear();
+        return line;
+    }
+
+    /// <summary>此刻的缩放，以打开时「塞进面板的那一档」为 1。</summary>
+    internal double ProbeScale => _fitZoom > 0 ? _zoom / _fitZoom : 1;
+
+    /// <summary>框内还要放大的倍数（框停在上限之后才大于 1）。</summary>
+    internal double ProbeOverflow => _overflow;
+
+    internal bool ProbeSquare => _square;
+
+    /// <summary>窗口此刻的 DIP 尺寸。</summary>
+    internal string ProbeWindowSize => FormattableString.Invariant($"{Width:F1}x{Height:F1}");
 
     internal string ProbeOrigin => FormattableString.Invariant($"{_imageOrigin.X:F3};{_imageOrigin.Y:F3}");
 
@@ -83,8 +107,7 @@ internal partial class PreviewWindow
         : "none";
 
     /// <summary>此刻适应框下放大到一比一要的倍数（双击该落到的位置）。</summary>
-    internal double ProbeActualSizeScale
-        => Shiyu.Core.PreviewSizing.ActualSizeScale(_shown?.PixelWidth ?? 0, ImageHost.ActualWidth, _deviceScale);
+    internal double ProbeActualSizeScale => _fitZoom > 0 ? 1 / _fitZoom : 1;
 
     /// <summary>图片内容坐标系的中心（驱动滚轮/拖拽用的落点）。</summary>
     internal Point ProbeImageCenter => new(ImageHost.ActualWidth / 2, ImageHost.ActualHeight / 2);
@@ -92,13 +115,18 @@ internal partial class PreviewWindow
     /// <summary>图片中心换算到屏幕物理像素（锚点漂移用的固定屏幕点）。</summary>
     internal Point ProbeImageCenterOnScreen => ImageHost.PointToScreen(ProbeImageCenter);
 
-    /// <summary>光标下的图片内容坐标（与处理器同一套映射——锚点漂移的读数）。</summary>
+    /// <summary>
+    /// 光标下是图上的哪一点，按原图一比一的 DIP 坐标（与处理器同一套映射——锚点漂移的读数）。不用框内的内容坐标：
+    /// 框贴着图时缩放是让框变大（用户需求 2026-10-28），同一个图像点的内容坐标跟着变，在原图上的位置不变。
+    /// </summary>
     internal string ProbeLocalUnderCursor
     {
         get
         {
             var at = Mouse.GetPosition(ImageHost);
-            return FormattableString.Invariant($"{at.X:F3};{at.Y:F3}");
+            var width = Math.Max(1, ImageHost.ActualWidth);
+            var height = Math.Max(1, ImageHost.ActualHeight);
+            return FormattableString.Invariant($"{at.X / width * _natural.Width:F3};{at.Y / height * _natural.Height:F3}");
         }
     }
 
@@ -163,8 +191,10 @@ internal partial class PreviewWindow
         });
     }
 
-    /// <summary>连点两下（真实事件路径；合成事件给不了 ClickCount=2，复位从未接线，
-    /// 两下也只会落进拖拽——复现不受影响）。</summary>
+    /// <summary>
+    /// 连点两下：第二下带上 ClickCount=2，与真实双击同一个读数。不能靠「500ms 内同一点两按」的后备：那要读真实
+    /// 光标，人在动鼠标时两按就落不到同一点上（2026-10-28 的偶发失败）。
+    /// </summary>
     internal async Task<bool> ProbeDoubleClickAtAsync(double x, double y)
     {
         if (!ProbeCursorTo(x, y))
@@ -179,13 +209,23 @@ internal partial class PreviewWindow
             RoutedEvent = UIElement.MouseLeftButtonDownEvent,
         });
         await Task.Delay(60);
-        this.RaiseEvent(new MouseButtonEventArgs(
+        var second = new MouseButtonEventArgs(
             InputManager.Current.PrimaryMouseDevice, Environment.TickCount, MouseButton.Left)
         {
             RoutedEvent = UIElement.MouseLeftButtonDownEvent,
-        });
+        };
+        typeof(MouseButtonEventArgs).GetProperty(nameof(MouseButtonEventArgs.ClickCount))!
+            .GetSetMethod(nonPublic: true)!.Invoke(second, [2]);
+        this.RaiseEvent(second);
         return true;
     }
+
+    /// <summary>图片框可见区域的中心，换到屏幕物理像素（不经 RenderTransform：放大后内容中心早已跑出框外）。</summary>
+    internal Point ProbeBoxCenterOnScreen
+        => ImageHost.Parent is UIElement parent
+            ? parent.PointToScreen(new Point(0, 0) + System.Windows.Media.VisualTreeHelper.GetOffset(ImageHost)
+                + new Vector(ImageHost.ActualWidth / 2, ImageHost.ActualHeight / 2))
+            : ImageHost.PointToScreen(ProbeImageCenter);
 
     /// <summary>编辑框里按 Esc（今日无 KeyDown 处理——「Esc 退出编辑」缺失的忠实复现）。</summary>
     internal void ProbeEscapeInEdit()

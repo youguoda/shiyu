@@ -306,6 +306,41 @@ public partial class PanelWindow : Window
         _templateState = PanelTemplateState.For(_template, _templatesApply, wordMode: false);
 
         Backdrop.AttachShell(this, Shell, () => BackdropKind.Acrylic);
+
+        ApplySize(settings);
+        CornerResize.Attach(this, ResizeGrip, new Size(MinPanelWidth, MinPanelHeight),
+            resizing: (_, height) => FitScrollTo(height),
+            committed: (width, height) =>
+            {
+                _userShellHeight = height;
+                FitScrollTo(height);
+                SizeWanted?.Invoke(width, height);
+            });
+    }
+
+    // --- 右下角拖拽改尺寸（用户需求 2026-10-28）-------------------------------------------
+
+    private const double DefaultPanelWidth = 420;
+    private const double MinPanelWidth = 360;
+    private const double MinPanelHeight = 160;
+
+    /// <summary>用户拖出来的外壳高度上限；null = 没拖过，照旧用 <see cref="MaxShellHeight"/>。</summary>
+    private double? _userShellHeight;
+
+    /// <summary>拖完了：宽、高上限（DIP），由拥有者写进设置。</summary>
+    public event Action<double, double>? SizeWanted;
+
+    private void ApplySize(AppSettings settings)
+    {
+        Width = Math.Max(MinPanelWidth, settings.PanelWidth ?? DefaultPanelWidth);
+        _userShellHeight = settings.PanelMaxHeight is { } height ? Math.Max(MinPanelHeight, height) : null;
+    }
+
+    /// <summary>中间滚动区放到整窗正好 <paramref name="shellHeight"/> 高为止：头尾固定，余下的给它。</summary>
+    private void FitScrollTo(double shellHeight)
+    {
+        var fixedChrome = ActualHeight - ContentScroll.ActualHeight;
+        ContentScroll.MaxHeight = Math.Max(60, Math.Floor(shellHeight - fixedChrome));
     }
 
     /// <summary>
@@ -328,6 +363,7 @@ public partial class PanelWindow : Window
         _template = PromptTemplates.Reconcile(_settings, settings, _template);
         _settings = settings;
         _templatesApply = settings.PromptTemplatesApply;
+        ApplySize(settings);
 
         // 整套布局而不只是头部：模板生不生效会改单词的摆法（引导卡上点「用免费引擎」就是
         // 这样——改写模板不再作数，单词回到词典布局，随后补的卡才有地方上屏）。
@@ -1390,14 +1426,17 @@ public partial class PanelWindow : Window
     private double DeviceScale()
         => PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 0;
 
-    /// <summary>中间滚动区的上限 = min(560, 工作区高 − 16) − 头尾固定高。只收不放。</summary>
+    /// <summary>
+    /// 中间滚动区的上限 = min(560, 工作区高 − 16) − 头尾固定高。只收不放。拖过右下角（用户需求 2026-10-28）
+    /// 就用拖出来的高度代替 560，收放都跟它走。
+    /// </summary>
     private void CapScrollToWorkArea(double scale)
     {
         var work = WorkAreaAroundWindow(scale);
-        var maxShell = Math.Min(MaxShellHeight, work.Height / scale - 16);
+        var maxShell = Math.Min(_userShellHeight ?? MaxShellHeight, work.Height / scale - 16);
         var fixedChrome = ActualHeight - ContentScroll.ActualHeight;
         var cap = maxShell - fixedChrome;
-        if (cap > 0 && ContentScroll.MaxHeight > cap)
+        if (cap > 0 && (_userShellHeight is not null || ContentScroll.MaxHeight > cap))
         {
             ContentScroll.MaxHeight = Math.Floor(cap);
         }

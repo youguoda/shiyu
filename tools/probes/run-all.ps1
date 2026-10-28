@@ -74,7 +74,7 @@ if (-not $SkipCoexistence) {
 
 # --- window probes ------------------------------------------------------------
 
-foreach ($name in @('bar', 'bar-newest', 'bar-sharp', 'panel', 'settings', 'library', 'quickbar', 'preview', 'tray', 'caret', 'tooltip', 'reverse-select', 'reverse-enter', 'settings-front', 'source-icons', 'content-size', 'panel-templates', 'translation-log', 'preview-image', 'credentials', 'badge', 'bar-pin', 'scroll-lane', 'markdown', 'stream-jank', 'auto-backup', 'panel-dictionary', 'settings-more', 'panel-speech', 'ocr', 'vocabulary', 'degraded-shell', 'overlay-pin', 'preview-pin', 'folder-open-locate', 'bar-dock', 'retention', 'backup-nonempty', 'settings-cycle', 'bar-dock-start', 'bar-slide', 'bar-keys', 'bar-keys2', 'preview-workbench', 'preview-anchor', 'preview-zoom-perf', 'preview-decode-cost', 'preview-churn')) {
+foreach ($name in @('bar', 'bar-newest', 'bar-sharp', 'panel', 'settings', 'library', 'quickbar', 'preview', 'tray', 'caret', 'tooltip', 'reverse-select', 'reverse-enter', 'settings-front', 'source-icons', 'content-size', 'panel-templates', 'translation-log', 'preview-image', 'credentials', 'badge', 'bar-pin', 'scroll-lane', 'markdown', 'stream-jank', 'auto-backup', 'panel-dictionary', 'settings-more', 'panel-speech', 'ocr', 'vocabulary', 'degraded-shell', 'overlay-pin', 'preview-pin', 'folder-open-locate', 'bar-dock', 'retention', 'backup-nonempty', 'settings-cycle', 'bar-dock-start', 'bar-slide', 'bar-keys', 'bar-keys2', 'preview-workbench', 'preview-multipin', 'window-resize', 'preview-anchor', 'preview-zoom-perf', 'preview-decode-cost', 'preview-churn')) {
     Write-Host "== probe-$name =="
     $script = Join-Path $PSScriptRoot "probe-$name.ps1"
     $checks = & $script -Exe $Exe

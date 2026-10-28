@@ -896,6 +896,30 @@
       具名 + 隐式双份：WPF 隐式样式不沿基类回退，LibraryList 这类派生
       列表必须显式引用 BareList（DynamicResource 跨字典）。
     -->
+    <!--
+      右下角的拖拽改尺寸（用户需求 2026-10-28）：浮层家族共用。六个小点排成直角三角，三级字色；
+      14×14 落在外壳内边距里，不压内容。
+    -->
+    <Style x:Key="ResizeCorner" TargetType="Thumb">
+        <Setter Property="Width" Value="14"/>
+        <Setter Property="Height" Value="14"/>
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Bottom"/>
+        <Setter Property="Cursor" Value="SizeNWSE"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="ToolTip" Value="拖动改变大小"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Grid Background="Transparent">
+                        <Path Data="M10,2 h2 v2 h-2 Z M6,6 h2 v2 h-2 Z M10,6 h2 v2 h-2 Z M2,10 h2 v2 h-2 Z M6,10 h2 v2 h-2 Z M10,10 h2 v2 h-2 Z"
+                              Fill="{DynamicResource Brush.TextTertiary}"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="BareList" TargetType="ListBox">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>

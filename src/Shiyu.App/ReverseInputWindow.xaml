@@ -30,6 +30,7 @@
     -->
     <Border x:Name="Shell" CornerRadius="{DynamicResource Radius.Overlay}"
             Background="{DynamicResource Brush.SurfaceMaterial}" BorderThickness="0">
+        <Grid>
         <StackPanel Margin="10">
 
             <!-- 输入框：隐式 TextBox 样式（SurfaceInput 底、聚焦转 Accent 描边）。多行：
@@ -132,5 +133,8 @@
                            Foreground="{DynamicResource Brush.TextTertiary}"/>
             </DockPanel>
         </StackPanel>
+            <!-- 右下角拖拽改宽高（用户需求 2026-10-28）：宽度记住，高度是上限，内容少时照旧更矮。 -->
+            <Thumb x:Name="ResizeGrip" Style="{DynamicResource ResizeCorner}" Margin="0,0,2,2"/>
+        </Grid>
     </Border>
 </Window>

@@ -98,6 +98,7 @@ public static class KeyMap
             On: KeySurfaceSet.Bar | KeySurfaceSet.Library, Condition: "删除后的片刻内"),
         new("preview", "预览全文", "E823", Bar: "按住 Space",
             On: KeySurfaceSet.Bar | KeySurfaceSet.Library),
+        new("pin-preview", "钉住预览", "E718", Bar: "Ctrl+T", Condition: "开着的预览直接钉；没开就把选中的卡片钉成一扇，可同时钉多扇"),
         new("numbered", "编号直达", null, Bar: "1–9、0", Condition: "列表前 10 行；搜索框里有字时按 Ctrl+数字"),
 
         // 窄条筛选行。标签在管理窗是 T（Tab 留给焦点导航，§5.2），动作同名

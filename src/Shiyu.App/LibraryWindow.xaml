@@ -386,6 +386,8 @@
                      VirtualizingPanel.VirtualizationMode="Recycling"
                      VirtualizingPanel.ScrollUnit="Pixel"
                      ItemTemplate="{StaticResource LogRowTemplate}"
+                     PreviewMouseLeftButtonDown="OnLogPressed"
+                     PreviewMouseMove="OnLogMouseMove"
                      MouseDoubleClick="OnLogDoubleClick"
                      SelectionChanged="OnLogSelectionChanged"/>
             <local:EmptyState x:Name="LogEmpty" Glyph="&#xE81C;" Visibility="Collapsed"
