@@ -22,8 +22,21 @@ if ($Exe -eq '') { $Exe = Get-DefaultProbeExe }
 Reset-Checks
 
 # The drop/livedrag steps couple to the REAL cursor (SetCursorPos + synthetic
-# events): with someone at the machine they flake, so they stand down instead.
+# events), and the hover/leave steps react to the REAL pointer at the top edge:
+# with someone at the machine their cursor fights the probe's, so the whole probe
+# stands down (the same rule as probe-reverse).
 $userPresent = Test-UserPresent
+if ($userPresent) {
+    foreach ($c in @('flow:bar-dock-strip', 'flow:bar-dock-expand', 'flow:bar-dock-recollapse', 'flow:bar-dock-restore',
+        'flow:bar-dock-switch-on-summoned', 'flow:bar-dock-switch-on-away', 'flow:bar-dock-drop-leaves-settings',
+        'flow:bar-dock-switch-off', 'flow:bar-dock-summon-from-strip', 'flow:bar-dock-droptop',
+        'flow:bar-dock-dropaway', 'flow:bar-dock-livedrag', 'flow:bar-dock-capture-lost',
+        'flow:bar-dock-summondrop', 'flow:bar-dock-summon-hover', 'flow:bar-dock-dragdown-stays',
+        'flow:bar-dock-menu-keeps-bar')) {
+        Add-Check $c 'SKIP' 'user present (cursor moved between samples) - the whole probe stood down'
+    }
+    return $script:Checks
+}
 
 $dataDir = Join-Path $env:TEMP 'shiyu-probe-run\bar-dock'
 & (Join-Path $PSScriptRoot 'seed.ps1') -DataDir $dataDir -AppBin (Split-Path -Parent $Exe) | Out-Null
@@ -113,18 +126,6 @@ $detail = if ($sc) { "quick paste on the strip: visible {0} DIP before, {1} DIP 
 Add-Check 'flow:bar-dock-summon-from-strip' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail
 
 $drop = $lines['drop']
-if ($userPresent) {
-    Add-Check 'flow:bar-dock-droptop' 'SKIP' 'user present (cursor moved between samples) - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-dropaway' 'SKIP' 'user present - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-livedrag' 'SKIP' 'user present - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-summondrop' 'SKIP' 'user present - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-capture-lost' 'SKIP' 'user present - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-summon-hover' 'SKIP' 'user present - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-dragdown-stays' 'SKIP' 'user present - cursor-coupled steps skipped'
-    Add-Check 'flow:bar-dock-menu-keeps-bar' 'SKIP' 'user present - cursor-coupled steps skipped'
-    return $script:Checks
-}
-
 $ok = $drop -and $drop['topCollapsed'] -eq 'True'
 $detail = if ($drop) { "a drag ending at the top docks the bar: {0}" -f $drop['topCollapsed'] } else { 'no drop line' }
 Add-Check 'flow:bar-dock-droptop' $(if ($ok) { 'PASS' } else { 'FAIL' }) $detail

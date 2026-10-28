@@ -1173,6 +1173,235 @@ public partial class App
         File.WriteAllText(Path.Combine(directory, "soak.log"), log.ToString());
     }
 
+    /// <summary>探针命令 bigdata（测试调研 P1：大数据量压力曲线）：把历史库种到目标
+    /// 条数（SHIYU_PROBE_COUNT，默认 20000；数据目录跨次保留，已有存量跳过重种），
+    /// 然后量三件事——窄条呼出耗时×3、管理窗同路的搜索耗时×4、保留期 7 天档的清扫
+    /// 耗时与删除量。预算由探针脚本判（呼出 ≤2s、搜索单查 ≤500ms、清扫 ≤10s）。</summary>
+    private async void BigData()
+    {
+        var shell = _shell!;
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            var target = 20000;
+            if (int.TryParse(Environment.GetEnvironmentVariable("SHIYU_PROBE_COUNT"),
+                    System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+                    out var parsed) && parsed > 0)
+            {
+                target = parsed;
+            }
+
+            var seedWatch = System.Diagnostics.Stopwatch.StartNew();
+            var seeded = 0;
+            while (shell.Store.Count() < target)
+            {
+                shell.Store.Append(
+                    $"bigdata-{shell.Store.Count()} " + new string('占', 20 + seeded % 60),
+                    "probe", DateTimeOffset.UtcNow.AddDays(-(seeded % 45)));
+                seeded++;
+                if (seeded % 5000 == 0)
+                {
+                    log.AppendLine(FormattableString.Invariant(
+                        $"seed|count={shell.Store.Count()}|ms={seedWatch.Elapsed.TotalMilliseconds:F0}"));
+                    File.WriteAllText(Path.Combine(directory, "bigdata.log"), log.ToString());
+                }
+            }
+
+            seedWatch.Stop();
+            log.AppendLine(FormattableString.Invariant(
+                $"seed|count={shell.Store.Count()}|ms={seedWatch.Elapsed.TotalMilliseconds:F0}"));
+
+            for (var run = 1; run <= 3; run++)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                _modules!.Bar.ShowQuickPaste();
+                for (var waited = 0; waited < 100 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+                {
+                    await Task.Delay(50);
+                }
+
+                await Task.Delay(400);
+                log.AppendLine(FormattableString.Invariant(
+                    $"summon|run={run}|ms={watch.Elapsed.TotalMilliseconds:F0}"));
+                if (Windows.OfType<BarWindow>().FirstOrDefault() is { } bar)
+                {
+                    bar.Dismiss();
+                }
+
+                await Task.Delay(300);
+            }
+
+            foreach (var term in new[] { "bigdata-1", "bigdata-200", "占", "missing-term-xyz" })
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var hits = shell.Store.Search(term, limit: 20);
+                watch.Stop();
+                log.AppendLine(FormattableString.Invariant(
+                    $"search|hits={hits.Count}|ms={watch.Elapsed.TotalMilliseconds:F1}"));
+            }
+
+            shell.TryUpdateSettings(s => s with { HistoryRetentionDays = 7 });
+            var retentionWatch = System.Diagnostics.Stopwatch.StartNew();
+            for (var waited = 0; waited < 40 && shell.Store.Count() > target - (target / 5); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            retentionWatch.Stop();
+            log.AppendLine(FormattableString.Invariant(
+                $"retention|ms={retentionWatch.Elapsed.TotalMilliseconds:F0}|count={shell.Store.Count()}"));
+        }
+        catch (Exception failure)
+        {
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(directory, "bigdata.log"), log.ToString());
+    }
+
+    /// <summary>探针命令 bar-keys2（测试调研 P1：键态×窗态矩阵）：四种窗态各走一遍
+    /// P/K/↓/S/Esc 的路由——钉住搜索、钉住选中、未钉搜索、未钉选中——加上贴边收起
+    /// 的「按了也没事」。每行一行读数，窗态由编排先行设好。</summary>
+    private async void ProbeBarKeysMatrix()
+    {
+        var directory = DebugOverrides.ProbeDirectory!;
+        var log = new StringBuilder();
+        try
+        {
+            _shell!.TryUpdateSettings(s => s with { BarPinned = true, BarEdgeDock = false, LightweightWhenHidden = false });
+            _modules.Bar.ShowQuickPaste();
+            for (var waited = 0; waited < 50 && Windows.OfType<BarWindow>().All(window => !window.IsVisible); waited++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(600);
+            if (Windows.OfType<BarWindow>().FirstOrDefault() is not { IsVisible: true } bar)
+            {
+                log.AppendLine("bar|missing");
+                return;
+            }
+
+            var target = bar.ProbeSoakCards().FirstOrDefault(card => card.Kind == Shiyu.Core.EntryKind.Text)
+                ?? throw new InvalidOperationException("没有文本卡片可驱动");
+            var targetId = target.Id;
+
+            // 行 1：钉住搜索（默认焦点在搜索框，P 打字）。
+            log.Append(await bar.ProbeKeyMatrixRowAsync("pinned-search", targetId));
+            bar.ProbeClearSearch();
+
+            // 行 2：钉住选中（点卡片进挑，P 置顶卡片、不打字）。
+            bar.ProbeClickCard(targetId);
+            await Task.Delay(300);
+            log.Append(await bar.ProbeKeyMatrixRowAsync("pinned-pick", targetId));
+            bar.ProbeClearSearch();
+            await bar.CloseSummonedBar();
+
+            // 行 3：未钉搜索（未钉召出，焦点仍在搜索框）。
+            _shell.TryUpdateSettings(s => s with { BarPinned = false });
+            _modules.Bar.ShowQuickPaste();
+            await Task.Delay(600);
+            log.Append(await bar.ProbeKeyMatrixRowAsync("unpinned-search", targetId));
+            bar.ProbeClearSearch();
+
+            // 行 4：未钉选中（空搜索 ↓ 进挑，P 置顶卡片）。
+            await bar.ProbeMatrixDownAsync();
+            await Task.Delay(200);
+            log.Append(await bar.ProbeKeyMatrixRowAsync("unpinned-pick", targetId));
+            await bar.ProbeMatrixEscapeAsync();
+            await bar.CloseSummonedBar();
+
+            // 行 5：贴边收起（窄条缩成细条，无焦点）——按键不该改变任何状态。
+            _shell.TryUpdateSettings(s => s with { BarPinned = true, BarEdgeDock = true });
+            _modules.Bar.ShowQuickPaste();
+            await Task.Delay(600);
+            bar.ProbeDockCollapseNow();
+            await Task.Delay(300);
+            var collapsedBefore = bar.ProbeDockExpanded() == false;
+            await bar.ProbeKeyMatrixRowAsync("docked-collapsed", targetId);
+            var stillCollapsed = bar.ProbeDockExpanded() == false;
+            var dockedQueryEmpty = bar.ProbeSearchText().Length == 0;
+            log.AppendLine(FormattableString.Invariant(
+                $"docked|collapsedBefore={collapsedBefore}|stillCollapsed={stillCollapsed}|queryEmpty={dockedQueryEmpty}"));
+            _shell.TryUpdateSettings(s => s with { BarEdgeDock = false });
+        }
+        catch (Exception failure)
+        {
+            log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
+        }
+        finally
+        {
+            log.AppendLine("done");
+            File.WriteAllText(Path.Combine(directory, "bar-keys2.log"), log.ToString());
+        }
+    }
+
+    /// <summary>探针命令 settings-cycle（测试调研 P1：设置开关「改-重启-生效」闭环）：
+    /// 逐个翻转四个域的代表性开关并记录落盘值。探针脚本第二次启动时经
+    /// settings-verify 读回核对（跨启动持久化）。</summary>
+    private void SettingsCycle()
+    {
+        var shell = _shell!;
+        var log = new StringBuilder();
+        var logLine = (string name, object value) => log.AppendLine(FormattableString.Invariant(
+            $"set|{name}={value}"));
+
+        logLine("BarPinned", shell.Settings.BarPinned);
+        logLine("BarEdgeDock", shell.Settings.BarEdgeDock);
+        logLine("RecordImages", shell.Settings.RecordImages);
+        logLine("RecordFiles", shell.Settings.RecordFiles);
+        logLine("TranslateBadge", shell.Settings.TranslateBadge);
+        logLine("TranslationLogEnabled", shell.Settings.TranslationLogEnabled);
+        logLine("AutoBackupEnabled", shell.Settings.AutoBackupEnabled);
+        logLine("ProtectEntries", shell.Settings.ProtectEntries);
+        logLine("ImageRetentionDays", shell.Settings.ImageRetentionDays);
+        logLine("HistoryRetentionDays", shell.Settings.HistoryRetentionDays);
+
+        // 四个域各翻一个代表开关。有依赖的开关分步翻转：edge-dock 的父开关
+        // （钉住）先行；定期备份开启时补文件夹路径（store 的字段依赖，见 F-07）。
+        shell.TryUpdateSettings(s => s with { BarPinned = true });
+        shell.TryUpdateSettings(s => s with
+        {
+            BarEdgeDock = true,
+            RecordImages = false,
+            TranslateBadge = false,
+        });
+        shell.TryUpdateSettings(s => s with
+        {
+            AutoBackupEnabled = true,
+            AutoBackupFolder = System.IO.Path.Combine(DebugOverrides.ProbeDirectory!, "backup-folder"),
+        });
+
+        logLine("BarEdgeDock", shell.Settings.BarEdgeDock);
+        logLine("RecordImages", shell.Settings.RecordImages);
+        logLine("TranslateBadge", shell.Settings.TranslateBadge);
+        logLine("AutoBackupEnabled", shell.Settings.AutoBackupEnabled);
+        logLine("AutoBackupFolder", shell.Settings.AutoBackupFolder);
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "settings-cycle.log"), log.ToString());
+    }
+
+    /// <summary>探针命令 settings-verify（settings-cycle 的第二段：重启后读回核对）。</summary>
+    private void SettingsVerify()
+    {
+        var shell = _shell!;
+        var log = new StringBuilder();
+        void logLine(string name, object value) => log.AppendLine(FormattableString.Invariant($"set|{name}={value}"));
+        logLine("BarEdgeDock", shell.Settings.BarEdgeDock);
+        logLine("RecordImages", shell.Settings.RecordImages);
+        logLine("TranslateBadge", shell.Settings.TranslateBadge);
+        logLine("AutoBackupEnabled", shell.Settings.AutoBackupEnabled);
+        logLine("AutoBackupFolder", shell.Settings.AutoBackupFolder);
+        log.AppendLine("done");
+        File.WriteAllText(Path.Combine(DebugOverrides.ProbeDirectory!, "settings-verify.log"), log.ToString());
+    }
+
+    /// <summary>探针命令 settings-cycle 的私有记录函数。</summary>
+    private void LogSetting(StringBuilder log, string name, object value)
+        => log.AppendLine(FormattableString.Invariant($"set|{name}={value}"));
+
     /// <summary>探针命令 preview-workbench 的入口（见 BarWindow.ProbeWorkbenchMatrixAsync）。</summary>
     private async void ProbePreviewWorkbench()
     {
@@ -2276,6 +2505,9 @@ public partial class App
     /// </summary>
     private void RunProbeCommand()
     {
+        File.AppendAllText(
+            Path.Combine(DebugOverrides.ProbeDirectory ?? AppPaths.DataDirectory, "dispatch.log"),
+            $"cmd={DebugOverrides.ProbeCommand} isProbe={DebugOverrides.IsProbe} shell={_shell is not null}" + Environment.NewLine);
         if (_shell is not { } shell || !DebugOverrides.IsProbe)
         {
             return;
@@ -2472,6 +2704,16 @@ public partial class App
                 ProbePreviewWorkbench();
                 break;
 
+            // 设置开关的「改-重启-生效」闭环（测试调研 P1）：launch 1 翻转四个域的
+            // 代表开关，launch 2 重启后读回核对持久化。
+            case "settings-cycle":
+                SettingsCycle();
+                break;
+
+            case "settings-verify":
+                SettingsVerify();
+                break;
+
             // 保留期边界联动清扫（测试调研 P0-1）：retention-seed 种边界数据并设保留期；
             // retention-check 在第二次启动的清扫之后读取现状。两段由探针脚本分两次启动驱动。
             case "retention-seed":
@@ -2488,6 +2730,14 @@ public partial class App
 
             case "soak":
                 Soak();
+                break;
+
+            case "bigdata":
+                BigData();
+                break;
+
+            case "bar-keys2":
+                ProbeBarKeysMatrix();
                 break;
 
             // 缩放锚点漂移：动真光标，脚本侧有 Test-UserPresent 守卫。

@@ -506,6 +506,50 @@ internal partial class BarWindow
     /// <summary>探针：收起预览（soak 的开收循环用）。</summary>
     internal void ProbeSoakTakeDown() => _preview?.TakeDown();
 
+    /// <summary>探针：点一张卡（走真实的 OnCardPressed——键态矩阵的「进挑」用）。</summary>
+    internal void ProbeClickCard(long id)
+    {
+        if (_cards.FirstOrDefault(card => card.Id == id) is { } card
+            && Cards.ItemContainerGenerator.ContainerFromItem(card) is FrameworkElement container)
+        {
+            OnCardPressed(container, new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonDownEvent,
+                Source = container,
+            });
+        }
+    }
+
+    /// <summary>探针：合成一次 ↓（键态矩阵的进挑用）。</summary>
+    internal async Task ProbeMatrixDownAsync()
+    {
+        await ProbeSynthKeyAsync(Key.Down, null);
+        await SettleInputAsync();
+    }
+
+    /// <summary>探针：合成一次 Esc（键态矩阵的收尾用）。</summary>
+    internal async Task ProbeMatrixEscapeAsync()
+    {
+        await ProbeSynthKeyAsync(Key.Escape, null);
+        await SettleInputAsync();
+    }
+
+    /// <summary>探针：清空搜索框（键态矩阵行间的复位）。</summary>
+    internal void ProbeClearSearch() => SearchBox.Text = string.Empty;
+
+    /// <summary>探针读数：搜索框当前内容（贴边行的「按键没打进去」断言用）。</summary>
+    internal string ProbeSearchText() => SearchBox.Text;
+
+    /// <summary>探针：立即收边（键态矩阵贴边行的合拢，不看出时状态）。</summary>
+    internal void ProbeDockCollapseNow() => CollapseNow();
+
+    /// <summary>探针：收起召出的窄条（键态矩阵行间的复位）。</summary>
+    internal async Task CloseSummonedBar()
+    {
+        Dismiss();
+        await Task.Delay(300);
+    }
+
     /// <summary>窗口当前物理位置（整窗拖动的读数，用户实录 2026-10-20 的外框问题）。</summary>
     internal string ProbeWindowXY
         => Shiyu.Windows.WindowRects.TryGet(new System.Windows.Interop.WindowInteropHelper(this).Handle, out var rect)
@@ -908,6 +952,38 @@ internal partial class BarWindow
         {
             InputMethod.SetIsInputMethodEnabled(this, true);
             InputMethod.SetIsInputMethodEnabled(SearchBox, true);
+        }
+
+        return log.ToString();
+    }
+
+    /// <summary>
+    /// 键态矩阵的一行（测试调研 P1）：在「此刻」的窗态下走 P/K/↓/S/Esc 的路由，回一行读数
+    /// （焦点、查询框内容、目标卡的置顶）。窗态由编排方先行设好；输入法在这一轮关掉。
+    /// </summary>
+    internal async Task<string> ProbeKeyMatrixRowAsync(string state, long targetId)
+    {
+        var log = new StringBuilder();
+        InputMethod.SetIsInputMethodEnabled(this, false);
+        InputMethod.SetIsInputMethodEnabled(SearchBox, false);
+        try
+        {
+            await ProbeSynthKeyAsync(Key.P, "p");
+            var afterP = FormattableString.Invariant($"query={SearchBox.Text}|focus={KeyFocus}|pinned={ProbePinnedId(targetId)}");
+            await ProbeSynthKeyAsync(Key.K, "k");
+            var afterK = FormattableString.Invariant($"query={SearchBox.Text}|focus={KeyFocus}");
+            await ProbeSynthKeyAsync(Key.Down, null);
+            var afterDown = FormattableString.Invariant($"focus={KeyFocus}");
+            await ProbeSynthKeyAsync(Key.S, "s");
+            var favouriteAfter = VisibleRows.FirstOrDefault(card => card.Id == targetId)?.Favorite ?? false;
+            await ProbeSynthKeyAsync(Key.Escape, null);
+            var afterEsc = FormattableString.Invariant($"visible={IsVisible}|query={SearchBox.Text}");
+            log.AppendLine(FormattableString.Invariant(
+                $"row|state={state}|afterP={afterP}|afterK={afterK}|afterDown={afterDown}|favourite={favouriteAfter}|afterEsc={afterEsc}"));
+        }
+        finally
+        {
+            InputMethod.SetIsInputMethodEnabled(this, true);
         }
 
         return log.ToString();

@@ -93,6 +93,19 @@ $imgChips = Field $d 'imgChips' 'missing'
 $ok = $imgChips -eq 'copy-image'
 Add-Check 'flow:workbench-chip-table-image' $(if ($ok) { 'PASS' } else { 'FAIL' }) "pinned image card chips: $imgChips"
 
+$colorChips = Field (Get-Step 'color-chips') 'chips' 'missing'
+$ok = $colorChips -eq 'copy'
+Add-Check 'flow:workbench-chip-table-color' $(if ($ok) { 'PASS' } else { 'FAIL' }) "pinned color card chips: $colorChips"
+
+$emailChips = Field (Get-Step 'email-save') 'chips' 'missing'
+$emailAdded = Field (Get-Step 'email-save') 'added' '-1'
+$ok = $emailChips -like '*save-as-new*' -and ([int]$emailAdded -ge 1)
+Add-Check 'flow:workbench-email-save' $(if ($ok) { 'PASS' } else { 'FAIL' }) "email save-as-new landed in the store: chips=$emailChips, added=$emailAdded"
+
+$filesChips = Field (Get-Step 'files-chips') 'chips' 'missing'
+$ok = $filesChips -eq 'open-path,locate-path,copy'
+Add-Check 'flow:workbench-chip-table-files' $(if ($ok) { 'PASS' } else { 'FAIL' }) "pinned files card chips: $filesChips"
+
 $ok = $done -and (-not $errored) -and ($steps.Count -ge 7)
 Add-Check 'flow:workbench-log-complete' $(if ($ok) { 'PASS' } else { 'FAIL' }) "done=$done errorLine=$errored steps=$($steps.Count)"
 

@@ -308,6 +308,50 @@ internal partial class BarWindow
         log.AppendLine(FormattableString.Invariant(
             $"w|step=H-window-drag|xy0={xy0}|xy1={xy1}|xy2={xy2}"));
         await ClosePreviewAsync();
+
+        // I. 颜色条目：芯片表只有「复制色值」——不碰剪贴板，只验表。
+        var color = ProbeFindCard(card => card.Subtype == Shiyu.Core.EntrySubtype.Color);
+        if (color is not null)
+        {
+            await ProbeShowPreviewForAsync(color);
+            _preview!.ProbeClickPin();
+            await Task.Delay(300);
+            log.AppendLine(FormattableString.Invariant(
+                $"w|step=color-chips|chips={_preview.ProbeChipActions}"));
+            _preview.TakeDown();
+            await Task.Delay(200);
+        }
+
+        // J. 邮箱条目：芯片含「存为新条目」——点它入探针库（不碰剪贴板）。
+        var email = ProbeFindCard(card => card.Subtype == Shiyu.Core.EntrySubtype.Email);
+        if (email is not null)
+        {
+            var before = _store.Count();
+            await ProbeShowPreviewForAsync(email);
+            _preview!.ProbeClickPin();
+            await Task.Delay(300);
+            var chips = _preview.ProbeChipActions;
+            _preview.ProbeChipClick("save-as-new");
+            await Task.Delay(400);
+            log.AppendLine(FormattableString.Invariant(
+                $"w|step=email-save|chips={chips}|added={_store.Count() - before}"));
+            _preview.TakeDown();
+            await Task.Delay(200);
+        }
+
+        // K. 文件条目（芯片表「打开/定位/复制路径」——只验表，不真开）。
+        var files = ProbeFindCard(card => card.Kind == EntryKind.Files);
+        if (files is not null)
+        {
+            await ProbeShowPreviewForAsync(files);
+            _preview!.ProbeClickPin();
+            await Task.Delay(300);
+            log.AppendLine(FormattableString.Invariant(
+                $"w|step=files-chips|chips={_preview.ProbeChipActions}"));
+            _preview.TakeDown();
+            await Task.Delay(200);
+        }
+
         return log.ToString();
     }
 
