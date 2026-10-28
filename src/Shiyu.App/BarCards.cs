@@ -259,6 +259,7 @@ internal partial class BarWindow
         _cardBackfills.Invalidate();
         _pendingBackfills.Clear();
 
+        var kept = _selected?.Id;
         _pinned.Clear();
         _cards.Clear();
         _selected = null;
@@ -266,7 +267,25 @@ internal partial class BarWindow
         PinnedHost.Visibility = _pinned.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateCount();
         UpdateEmptyState();
-        EnsureActiveItem();
+
+        // 挑卡片时重建不换选中（QA F-06，2026-10-23）：点了第五张、列表恰好重建一次（搜索防抖到点、置顶后重载、
+        // 新内容写进来），选中就跳回第一张——接着按 D 删掉的是别人。搜的时候照旧回到第一条：Enter 贴的是最匹配的那条。
+        if (KeyFocus != BarKeyboard.Focus.List || kept is not { } id || !SelectId(id))
+        {
+            EnsureActiveItem();
+        }
+    }
+
+    /// <summary>选中这一条（它此刻在列表里的话）。</summary>
+    private bool SelectId(long id)
+    {
+        if (VisibleRows.FirstOrDefault(card => card.Id == id) is not { } card)
+        {
+            return false;
+        }
+
+        Select(card);
+        return true;
     }
 
     /// <summary>

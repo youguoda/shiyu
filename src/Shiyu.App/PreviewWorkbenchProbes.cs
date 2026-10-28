@@ -318,7 +318,9 @@ internal partial class BarWindow
             await Task.Delay(300);
             log.AppendLine(FormattableString.Invariant(
                 $"w|step=color-chips|chips={_preview.ProbeChipActions}"));
-            _preview.TakeDown();
+
+            // 拔钉再收：钉着的预览不认 TakeDown，带着钉住态进下一行，下一行的「钉住」点下去反而是拔钉（QA F-08）。
+            await ClosePreviewAsync();
             await Task.Delay(200);
         }
 

@@ -702,6 +702,9 @@ internal partial class BarWindow
             case "pin":
                 SelfWrite(() => _store.SetPinned(card.Id, !card.IsPinned));
                 ReloadData();
+
+                // 搜的时候按 Ctrl+P 也一样：选中跟着这张卡去置顶区（或回到原处），再按一次就是取消。
+                SelectId(card.Id);
                 break;
 
             case "favorite":

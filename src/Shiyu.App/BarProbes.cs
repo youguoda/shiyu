@@ -968,18 +968,22 @@ internal partial class BarWindow
         InputMethod.SetIsInputMethodEnabled(SearchBox, false);
         try
         {
+            // 每一步的读数各用各的键（afterP_focus、afterK_focus……）：同名的 focus/query 一行里出现几次，
+            // 脚本按「|」拆开时后面的会盖掉前面的，读到的就不是那一步。
+            var selectedBefore = _selected?.Id == targetId;
             await ProbeSynthKeyAsync(Key.P, "p");
-            var afterP = FormattableString.Invariant($"query={SearchBox.Text}|focus={KeyFocus}|pinned={ProbePinnedId(targetId)}");
+            var afterP = FormattableString.Invariant(
+                $"afterP_query={SearchBox.Text}|afterP_focus={KeyFocus}|afterP_pinned={ProbePinnedId(targetId)}|afterP_selected={_selected?.Id == targetId}");
             await ProbeSynthKeyAsync(Key.K, "k");
-            var afterK = FormattableString.Invariant($"query={SearchBox.Text}|focus={KeyFocus}");
+            var afterK = FormattableString.Invariant($"afterK_query={SearchBox.Text}|afterK_focus={KeyFocus}");
             await ProbeSynthKeyAsync(Key.Down, null);
-            var afterDown = FormattableString.Invariant($"focus={KeyFocus}");
+            var afterDown = FormattableString.Invariant($"afterDown_focus={KeyFocus}");
             await ProbeSynthKeyAsync(Key.S, "s");
             var favouriteAfter = VisibleRows.FirstOrDefault(card => card.Id == targetId)?.Favorite ?? false;
             await ProbeSynthKeyAsync(Key.Escape, null);
-            var afterEsc = FormattableString.Invariant($"visible={IsVisible}|query={SearchBox.Text}");
+            var afterEsc = FormattableString.Invariant($"afterEsc_visible={IsVisible}|afterEsc_query={SearchBox.Text}");
             log.AppendLine(FormattableString.Invariant(
-                $"row|state={state}|afterP={afterP}|afterK={afterK}|afterDown={afterDown}|favourite={favouriteAfter}|afterEsc={afterEsc}"));
+                $"row|state={state}|targetSelected={selectedBefore}|{afterP}|{afterK}|{afterDown}|favourite={favouriteAfter}|{afterEsc}"));
         }
         finally
         {

@@ -109,7 +109,17 @@ try {
     # The window is resized to both extremes and the FULL control tree is
     # pairwise-checked the same way the bottom band is above.
     $widthFailures = @()
+    $widthSkipped = @()
+    Add-Type -AssemblyName System.Windows.Forms
+    $workWidth = [System.Windows.Forms.Screen]::FromHandle($hwnd).WorkingArea.Width
     foreach ($dipWidth in @(720, 940, 1400)) {
+        # A width the screen cannot hold (1400 DIP on a 1280-pixel screen) is never reached:
+        # Windows clamps the window, and "window not found" would blame the layout for the monitor.
+        if ([Math]::Round($dipWidth * $rect.Scale) -gt $workWidth) {
+            $widthSkipped += $dipWidth
+            continue
+        }
+
         # SWP_NOZORDER(0x4) | SWP_NOACTIVATE(0x10): size only, keep position.
         [void][Shiyu.Probe.Native]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0,
             [int][Math]::Round($dipWidth * $rect.Scale),
@@ -149,6 +159,9 @@ try {
     }
 
     $sweepDetail = ("swept 720/940/1400 DIP; {0} overlapping pair(s)" -f $widthFailures.Count)
+    if ($widthSkipped.Count -gt 0) {
+        $sweepDetail += ("; not reachable on this {0}-pixel-wide screen: {1} DIP" -f $workWidth, ($widthSkipped -join '/'))
+    }
     if ($widthFailures.Count -gt 0) {
         $sweepDetail += '; ' + ($widthFailures[0..([Math]::Min(2, $widthFailures.Count) - 1)] -join ' | ')
         Add-Check 'defect:library-width-sweep-overlap' 'FAIL' $sweepDetail

@@ -1,6 +1,6 @@
 # probe-settings-cycle.ps1 - the settings toggles' change-restart-takes-effect loop
-# (research report P1 §1 设置): four representative toggles across four domains
-# (bar edge-dock, image recording, translate badge, scheduled backup) are flipped
+# (research report P1 section 1, settings): four representative toggles across four domains
+# (bar edge-dock on, image recording off, translate badge on, scheduled backup on) are flipped
 # in launch 1, and launch 2 reads them back from a fresh process - the persisted
 # settings must survive the restart exactly.
 #
@@ -73,10 +73,10 @@ function Get-Line([string]$Path, [string]$Key) {
     return '?'
 }
 
-$ok = (Get-Line $cycleLog 'BarEdgeDock') -eq 'True' -and (Get-Line $cycleLog 'RecordImages') -eq 'False' -and (Get-Line $cycleLog 'TranslateBadge') -eq 'False' -and (Get-Line $cycleLog 'AutoBackupEnabled') -eq 'True'
+$ok = (Get-Line $cycleLog 'BarEdgeDock') -eq 'True' -and (Get-Line $cycleLog 'RecordImages') -eq 'False' -and (Get-Line $cycleLog 'TranslateBadge') -eq 'True' -and (Get-Line $cycleLog 'AutoBackupEnabled') -eq 'True'
 Add-Check 'flow:settings-cycle-flipped' $(if ($ok) { 'PASS' } else { 'FAIL' }) "launch 1 flipped: BarEdgeDock=$(Get-Line $cycleLog 'BarEdgeDock' '?'), RecordImages=$(Get-Line $cycleLog 'RecordImages' '?'), TranslateBadge=$(Get-Line $cycleLog 'TranslateBadge' '?'), AutoBackup=$(Get-Line $cycleLog 'AutoBackupEnabled' '?')"
 
-$ok = (Get-Line $verifyLog 'BarEdgeDock') -eq 'True' -and (Get-Line $verifyLog 'RecordImages') -eq 'False' -and (Get-Line $verifyLog 'TranslateBadge') -eq 'False' -and (Get-Line $verifyLog 'AutoBackupEnabled') -eq 'True' -and ((Get-Line $verifyLog 'AutoBackupFolder') -like '*backup-folder*')
+$ok = (Get-Line $verifyLog 'BarEdgeDock') -eq 'True' -and (Get-Line $verifyLog 'RecordImages') -eq 'False' -and (Get-Line $verifyLog 'TranslateBadge') -eq 'True' -and (Get-Line $verifyLog 'AutoBackupEnabled') -eq 'True' -and ((Get-Line $verifyLog 'AutoBackupFolder') -like '*backup-folder*')
 Add-Check 'flow:settings-cycle-persisted' $(if ($ok) { 'PASS' } else { 'FAIL' }) "launch 2 read the flipped values back: $(Get-Line $verifyLog 'BarEdgeDock' '?')/$(Get-Line $verifyLog 'RecordImages' '?')/$(Get-Line $verifyLog 'TranslateBadge' '?')/$(Get-Line $verifyLog 'AutoBackupEnabled' '?'), folder=$(Get-Line $verifyLog 'AutoBackupFolder' '?')"
 
 return $script:Checks

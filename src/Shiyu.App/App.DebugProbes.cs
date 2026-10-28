@@ -1254,6 +1254,7 @@ public partial class App
         }
         catch (Exception failure)
         {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
             log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
         }
 
@@ -1329,6 +1330,7 @@ public partial class App
         }
         catch (Exception failure)
         {
+            // expected: 探针把意外写进自己的日志（脚本据此判 FAIL），吞下是为了日志照样落地。
             log.AppendLine(FormattableString.Invariant($"error|type={failure.GetType().Name}"));
         }
         finally
@@ -1366,7 +1368,9 @@ public partial class App
         {
             BarEdgeDock = true,
             RecordImages = false,
-            TranslateBadge = false,
+
+            // 默认就是关：翻成关什么也证明不了。
+            TranslateBadge = true,
         });
         shell.TryUpdateSettings(s => s with
         {
